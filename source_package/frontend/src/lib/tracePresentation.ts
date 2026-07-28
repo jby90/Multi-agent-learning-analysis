@@ -69,6 +69,7 @@ const RULE_LABELS: Record<string, string> = {
   'R-03': '难度错配',
   'R-04': '结论未申报',
   'R-05': '查询证据异常',
+  'R-06': '表达可读性问题',
 }
 
 const SANDBOX_LABELS: Record<string, string> = {

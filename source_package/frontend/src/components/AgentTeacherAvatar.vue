@@ -77,6 +77,18 @@ const portraits: Record<AgentActivityId, Record<TeacherState, string>> = {
     collaborating: knowledgeCollaborating,
     done: knowledgeDone,
   },
+  data_safety_review: {
+    idle: verificationIdle,
+    working: verificationWorking,
+    collaborating: verificationCollaborating,
+    done: verificationDone,
+  },
+  readability_review: {
+    idle: diagnosisIdle,
+    working: diagnosisWorking,
+    collaborating: diagnosisCollaborating,
+    done: diagnosisDone,
+  },
 }
 
 const teacherState = computed<TeacherState>(() => {

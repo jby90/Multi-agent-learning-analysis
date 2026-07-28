@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from agents.quality_protocol import (
+    DeterministicAxisReviewResult,
     EvidenceReviewResult,
     PedagogyReviewResult,
     ReviewArbitration,
@@ -16,12 +17,20 @@ class DeterministicReviewArbiter:
         self,
         evidence: EvidenceReviewResult,
         pedagogy: PedagogyReviewResult,
+        data_safety: DeterministicAxisReviewResult,
+        readability: DeterministicAxisReviewResult,
     ) -> ReviewArbitration:
-        if evidence.artifact_id != pedagogy.artifact_id:
+        reviews = (evidence, pedagogy, data_safety, readability)
+        if len({review.artifact_id for review in reviews}) != 1:
             raise ValueError("specialist reviews refer to different artifacts")
-        if evidence.contract_id != pedagogy.contract_id:
+        if len({review.contract_id for review in reviews}) != 1:
             raise ValueError("specialist reviews refer to different contracts")
-        hits = evidence.hits + (() if pedagogy.hit is None else (pedagogy.hit,))
+        hits = (
+            evidence.hits
+            + (() if pedagogy.hit is None else (pedagogy.hit,))
+            + data_safety.hits
+            + readability.hits
+        )
         if not hits:
             decision = "approve"
         elif (

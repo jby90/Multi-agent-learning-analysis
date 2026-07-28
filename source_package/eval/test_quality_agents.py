@@ -5,9 +5,14 @@ from typing import Any, Mapping, Sequence
 import pytest
 
 from agents.evidence_review_agent import EvidenceReviewAgent
+from agents.deterministic_review_agents import (
+    DataSafetyReviewAgent,
+    ReadabilityReviewAgent,
+)
 from agents.pedagogy_review_agent import PedagogyReviewAgent
 from agents.quality_protocol import (
     EvidenceReviewResult,
+    DeterministicAxisReviewResult,
     PedagogyReviewResult,
     ReviewRuleHit,
 )
@@ -91,18 +96,44 @@ def _pedagogy_result(
     )
 
 
+def _axis_result(
+    agent_id: str,
+    *hits: ReviewRuleHit,
+    artifact_id: str = "product-1",
+) -> DeterministicAxisReviewResult:
+    return DeterministicAxisReviewResult(
+        agent_id=agent_id,  # type: ignore[arg-type]
+        artifact_id=artifact_id,
+        contract_id="lc-quality",
+        hits=hits,
+        checks=2,
+    )
+
+
 def test_model_free_arbiter_applies_canonical_decision_table() -> None:
     arbiter = DeterministicReviewArbiter()
     r03 = ReviewRuleHit("R-03", "difficulty gap", "diagnosis-1")
     r02 = ReviewRuleHit("R-02", "unsupported fact", "kb-1")
 
-    assert arbiter.decide(_evidence_result(), _pedagogy_result()).decision == "approve"
+    safety = _axis_result("data_safety_review")
+    readability = _axis_result("readability_review")
+    assert arbiter.decide(_evidence_result(), _pedagogy_result(), safety, readability).decision == "approve"
     assert (
-        arbiter.decide(_evidence_result(), _pedagogy_result(r03, gap=1)).decision
+        arbiter.decide(_evidence_result(), _pedagogy_result(r03, gap=1), safety, readability).decision
         == "approve_with_fix"
     )
     assert (
-        arbiter.decide(_evidence_result(r02), _pedagogy_result(r03, gap=1)).decision
+        arbiter.decide(_evidence_result(r02), _pedagogy_result(r03, gap=1), safety, readability).decision
+        == "reject"
+    )
+    r06 = ReviewRuleHit("R-06", "internal marker leaked", "product-1")
+    assert (
+        arbiter.decide(
+            _evidence_result(),
+            _pedagogy_result(),
+            safety,
+            _axis_result("readability_review", r06),
+        ).decision
         == "reject"
     )
 
@@ -120,4 +151,30 @@ def test_arbiter_rejects_cross_artifact_results() -> None:
     )
 
     with pytest.raises(ValueError, match="different artifacts"):
-        DeterministicReviewArbiter().decide(_evidence_result(), mismatched)
+        DeterministicReviewArbiter().decide(
+            _evidence_result(),
+            mismatched,
+            _axis_result("data_safety_review"),
+            _axis_result("readability_review"),
+        )
+
+
+def test_deterministic_specialists_enforce_rule_authority() -> None:
+    artifact = _artifact()
+    safety = DataSafetyReviewAgent(
+        "trace-quality",
+        lambda _: (({"rule_id": "R-05", "reason": "unsafe SQL", "evidence_ref": "q-1"},), 2),
+    ).review(artifact)
+    readability = ReadabilityReviewAgent(
+        "trace-quality",
+        lambda _: ((), 3),
+    ).review(artifact)
+
+    assert safety.agent_id == "data_safety_review"
+    assert safety.hits[0].rule_id == "R-05"
+    assert readability.agent_id == "readability_review"
+    with pytest.raises(ValueError, match="outside its authority"):
+        ReadabilityReviewAgent(
+            "trace-quality",
+            lambda _: (({"rule_id": "R-02", "reason": "wrong axis", "evidence_ref": "q-1"},), 1),
+        ).review(artifact)

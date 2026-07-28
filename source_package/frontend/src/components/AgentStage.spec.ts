@@ -71,7 +71,7 @@ describe('AgentStage', () => {
           'reviewing',
           '正在执行质量审查',
           ['knowledge'],
-          { fan_out: 2, aggregation: 'deterministic' },
+          { fan_out: 4, aggregation: 'deterministic' },
         ),
         activity: 'parallel_quality_review',
       },
@@ -81,39 +81,45 @@ describe('AgentStage', () => {
     expect(wrapper.get('[data-agent="review"]').classes()).toContain('is-reviewing')
     expect(wrapper.get('[data-teacher-agent="review"]').attributes('data-teacher-state')).toBe('collaborating')
     expect(wrapper.text()).toContain('正在执行质量审查')
-    expect(wrapper.text()).toContain('2 路并发审核')
+    expect(wrapper.text()).toContain('4 路并发审核')
     expect(wrapper.find('.parallel-proof').exists()).toBe(true)
     expect(wrapper.findAll('.agent-packet')).toHaveLength(4)
   })
 
-  it('shows live evidence for both parallel review branches', () => {
+  it('shows live evidence for all four parallel review branches', () => {
     const parallel = {
       ...event(
         5,
         'review',
         'collaborating',
-        '事实证据与难度适配正在双路并行审核',
+        '事实、教学、数据安全与表达正在四维并行审核',
         ['knowledge'],
-        { fan_out: 2, aggregation: 'pending' },
+        { fan_out: 4, aggregation: 'pending' },
       ),
       activity: 'parallel_quality_review',
     }
     const wrapper = mount(AgentStage, { props: { view, events: [parallel] } })
 
-    expect(wrapper.text()).toContain('2 路并发审核')
-    expect(wrapper.text()).toContain('事实证据与难度适配正在双路并行审核')
+    expect(wrapper.text()).toContain('4 路并发审核')
+    expect(wrapper.text()).toContain('事实、教学、数据安全与表达正在四维并行审核')
     expect(wrapper.get('.parallel-proof').classes()).toContain('is-running')
     expect(wrapper.text()).toContain('R-02')
     expect(wrapper.text()).toContain('R-03')
+    expect(wrapper.text()).toContain('R-05')
+    expect(wrapper.text()).toContain('R-06')
     expect(wrapper.text()).toContain('证据审核 Agent')
     expect(wrapper.text()).toContain('教学适配 Agent')
+    expect(wrapper.text()).toContain('数据安全 Agent')
+    expect(wrapper.text()).toContain('表达校阅 Agent')
     const reviewGroup = wrapper.get('[data-agent="review"]')
     expect(reviewGroup.find('.review-agent-team').exists()).toBe(true)
     expect(reviewGroup.find('[data-agent="evidence_review"]').exists()).toBe(true)
     expect(reviewGroup.find('[data-agent="pedagogy_review"]').exists()).toBe(true)
+    expect(reviewGroup.find('[data-agent="data_safety_review"]').exists()).toBe(true)
+    expect(reviewGroup.find('[data-agent="readability_review"]').exists()).toBe(true)
     expect(reviewGroup.find('.review-agent-team').classes()).toContain('is-parallel')
     expect(wrapper.find('.proof-branch').exists()).toBe(false)
-    expect(wrapper.text()).toContain('双路并行执行中')
+    expect(wrapper.text()).toContain('四维并行执行中')
   })
 
   it('shows the shared resource fork/join stage without adding another proof panel', () => {
@@ -215,10 +221,10 @@ describe('AgentStage', () => {
         6,
         'review',
         'reviewing',
-        '双路审核已汇聚，正在执行确定性裁决',
+        '四维审核已汇聚，正在执行确定性裁决',
         ['knowledge'],
         {
-          fan_out: 2,
+          fan_out: 4,
           aggregation: 'deterministic',
           stage_id: 'quality-review-axes',
           contract_id: 'lc-1234567890abcdefghijkl',
@@ -228,6 +234,8 @@ describe('AgentStage', () => {
           branches: [
             { branch_id: 'evidence_review', status: 'succeeded', required: true, elapsed_ms: 790 },
             { branch_id: 'pedagogy_review', status: 'succeeded', required: true, elapsed_ms: 610 },
+            { branch_id: 'data_safety_review', status: 'succeeded', required: true, elapsed_ms: 80 },
+            { branch_id: 'readability_review', status: 'succeeded', required: true, elapsed_ms: 50 },
           ],
         },
       ),
@@ -248,22 +256,26 @@ describe('AgentStage', () => {
     expect(wrapper.get('[data-agent="review"] .review-agent-team').classes()).toContain('is-complete')
     expect(wrapper.get('[data-agent="evidence_review"]').classes()).toContain('is-done')
     expect(wrapper.get('[data-agent="pedagogy_review"]').classes()).toContain('is-done')
+    expect(wrapper.get('[data-agent="data_safety_review"]').classes()).toContain('is-done')
+    expect(wrapper.get('[data-agent="readability_review"]').classes()).toContain('is-done')
     expect(wrapper.text()).toContain('已汇聚 · 确定性裁决')
     expect(wrapper.text()).toContain('790 ms')
     expect(wrapper.text()).toContain('610 ms')
     expect(wrapper.text()).toContain('820 ms')
-    expect(wrapper.text()).toContain('≈ 580 ms')
+    expect(wrapper.text()).toContain('≈ 710 ms')
     expect(wrapper.text()).toContain('lc-1234567…ghijkl')
   })
 
   it('shows only the routed specialist during targeted dispute review', () => {
     const completed = {
-      ...event(10, 'review', 'reviewing', '双路审核已汇聚，正在执行确定性裁决', ['task'], {
-        fan_out: 2,
+      ...event(10, 'review', 'reviewing', '四维审核已汇聚，正在执行确定性裁决', ['task'], {
+        fan_out: 4,
         aggregation: 'deterministic',
         branches: [
           { branch_id: 'evidence_review', status: 'succeeded', required: true },
           { branch_id: 'pedagogy_review', status: 'succeeded', required: true },
+          { branch_id: 'data_safety_review', status: 'succeeded', required: true },
+          { branch_id: 'readability_review', status: 'succeeded', required: true },
         ],
       }),
       activity: 'parallel_quality_review',
@@ -294,17 +306,21 @@ describe('AgentStage', () => {
     expect(wrapper.get('.review-agent-team').classes()).toContain('is-debating')
     expect(wrapper.get('[data-agent="evidence_review"]').classes()).toContain('is-debating')
     expect(wrapper.get('[data-agent="pedagogy_review"]').classes()).toContain('is-done')
+    expect(wrapper.get('[data-agent="data_safety_review"]').classes()).toContain('is-done')
+    expect(wrapper.get('[data-agent="readability_review"]').classes()).toContain('is-done')
     expect(wrapper.text()).toContain('争议点定向复核中')
     expect(wrapper.text()).toContain('3 活跃')
   })
 
   it('shows hard-rule rejects as direct regeneration instead of debate', () => {
     const completed = {
-      ...event(20, 'review', 'reviewing', '双路审核已汇聚', ['knowledge'], {
+      ...event(20, 'review', 'reviewing', '四维审核已汇聚', ['knowledge'], {
         aggregation: 'deterministic',
         branches: [
           { branch_id: 'evidence_review', status: 'succeeded', required: true },
           { branch_id: 'pedagogy_review', status: 'succeeded', required: true },
+          { branch_id: 'data_safety_review', status: 'succeeded', required: true },
+          { branch_id: 'readability_review', status: 'succeeded', required: true },
         ],
       }),
       activity: 'parallel_quality_review',

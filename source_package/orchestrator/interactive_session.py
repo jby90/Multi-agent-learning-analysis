@@ -443,7 +443,7 @@ class InteractiveSessionManager:
                     "review",
                     "collaborating",
                     "parallel_quality_review",
-                    "事实证据与难度适配正在双路并行审核",
+                    "事实、教学、数据安全与表达正在四维并行审核",
                     peers=(producer_agent,),
                     details=event_details,
                 )
@@ -453,7 +453,7 @@ class InteractiveSessionManager:
                     "review",
                     "reviewing",
                     "parallel_quality_review",
-                    "双路审核已汇聚，正在执行确定性裁决",
+                    "四维审核已汇聚，正在执行确定性裁决",
                     peers=(producer_agent,),
                     details=event_details,
                 )
@@ -1334,7 +1334,7 @@ class InteractiveSessionManager:
                     "review",
                     "collaborating",
                     "parallel_quality_review",
-                    "事实证据与难度适配正在双路并行审核",
+                    "事实、教学、数据安全与表达正在四维并行审核",
                     peers=("task",),
                     details=details,
                 )
@@ -1344,7 +1344,7 @@ class InteractiveSessionManager:
                     "review",
                     "reviewing",
                     "parallel_quality_review",
-                    "双路审核已汇聚，正在执行确定性裁决",
+                    "四维审核已汇聚，正在执行确定性裁决",
                     peers=("task",),
                     details=details,
                 )
@@ -2253,7 +2253,13 @@ class InteractiveSessionManager:
         }:
             return False
         agent = details.get("agent")
-        if agent not in {"evidence_review", "pedagogy_review"}:
+        specialist_labels = {
+            "evidence_review": "事实与证据审核执行中",
+            "pedagogy_review": "教学适配审核执行中",
+            "data_safety_review": "数据与安全审核执行中",
+            "readability_review": "表达与可读性审核执行中",
+        }
+        if agent not in specialist_labels:
             return False
         completed = event == "specialist_review_completed"
         raw_status = details.get("status")
@@ -2264,11 +2270,7 @@ class InteractiveSessionManager:
         )
         label = details.get("label")
         if not isinstance(label, str) or not label.strip():
-            label = (
-                "事实与证据审核执行中"
-                if agent == "evidence_review"
-                else "教学适配审核执行中"
-            )
+            label = specialist_labels[str(agent)]
         InteractiveSessionManager._publish_activity(
             session,
             agent,

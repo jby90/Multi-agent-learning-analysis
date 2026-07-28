@@ -8,7 +8,12 @@ from typing import Any, Literal, Mapping
 from orchestrator.llm import LLMResult
 
 
-QualityAgentId = Literal["evidence_review", "pedagogy_review"]
+QualityAgentId = Literal[
+    "evidence_review",
+    "pedagogy_review",
+    "data_safety_review",
+    "readability_review",
+]
 
 
 def _required_string(value: Any, field_name: str) -> str:
@@ -61,6 +66,16 @@ class PedagogyReviewResult:
     llm_result: LLMResult | None
     difficulty_action: str
     difficulty_gap: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DeterministicAxisReviewResult:
+    agent_id: Literal["data_safety_review", "readability_review"]
+    artifact_id: str
+    contract_id: str
+    hits: tuple[ReviewRuleHit, ...]
+    checks: int
+
 
 @dataclass(frozen=True, slots=True)
 class ReviewArbitration:

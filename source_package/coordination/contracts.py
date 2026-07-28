@@ -124,7 +124,7 @@ class LearnerProfileSnapshot:
 class QualityPolicy:
     """Deterministic quality boundary shared by producers and reviewers."""
 
-    hard_veto_rules: tuple[str, ...] = ("R-01", "R-04", "R-05")
+    hard_veto_rules: tuple[str, ...] = ("R-01", "R-04", "R-05", "R-06")
     debatable_rules: tuple[str, ...] = ("R-02", "R-03")
     max_review_cycles: int = 4
     fail_closed: bool = True

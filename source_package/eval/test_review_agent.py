@@ -35,6 +35,38 @@ EXPECTED_R03_PROMPT = (
     "前置技能时required_skills必须为空数组。"
     "[结构化权威]...[学情报告]...[产物摘要]...\n"
 )
+
+
+def test_readability_axis_rejects_internal_protocol_leaks() -> None:
+    product = {
+        "msg_id": "lecture-readable-1",
+        "payload": {
+            "type": "lecture_note",
+            "content": {"lecture_md": "请查看内部 trace_id 后再继续学习。"},
+        },
+    }
+
+    hits, checks = _review_module()._readability_reviews(product)
+
+    assert checks == 2
+    assert [hit["rule_id"] for hit in hits] == ["R-06"]
+
+
+def test_readability_axis_keeps_normal_structured_content() -> None:
+    product = {
+        "msg_id": "lecture-readable-2",
+        "payload": {
+            "type": "lecture_note",
+            "content": {
+                "lecture_md": "# 完成率\n\n先确认计划量，再核对实际量，最后计算完成率。"
+            },
+        },
+    }
+
+    hits, checks = _review_module()._readability_reviews(product)
+
+    assert hits == ()
+    assert checks == 2
 LEARNING_REPORT = {
     "msg_id": "trace-soft-report-001",
     "trace_id": "trace-soft",

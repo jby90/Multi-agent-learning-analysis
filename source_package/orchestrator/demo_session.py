@@ -264,7 +264,7 @@ class _DemoRuntime:
             llm_call=self.cache,
             parallel_executor=bounded_llm_executor(
                 self.cache,
-                max_concurrency=2,
+                max_concurrency=3,
             ),
         )
         self.rebuttal = RebuttalGenerator(options.trace_id, llm_call=self.cache)

@@ -32,7 +32,11 @@ const reducedMotion = ref(false)
 let motionTimer: number | undefined
 let previousTick = 0
 
-type PrimaryAgentActivityId = Exclude<AgentActivityId, 'evidence_review' | 'pedagogy_review'>
+type ReviewAgentActivityId = Extract<
+  AgentActivityId,
+  'evidence_review' | 'pedagogy_review' | 'data_safety_review' | 'readability_review'
+>
+type PrimaryAgentActivityId = Exclude<AgentActivityId, ReviewAgentActivityId>
 
 type AgentCard = {
   id: PrimaryAgentActivityId
@@ -127,8 +131,8 @@ const parallelStageMetric = computed(() => {
 })
 
 type ReviewBranchProof = {
-  agentId: 'evidence_review' | 'pedagogy_review'
-  ruleId: 'R-02' | 'R-03'
+  agentId: ReviewAgentActivityId
+  ruleId: 'R-02' | 'R-03' | 'R-05' | 'R-06'
   axisLabel: string
   label: string
   status: 'running' | 'succeeded' | 'failed'
@@ -154,6 +158,8 @@ type ReviewTeamMember = ReviewBranchProof & {
 const branchLabels: Record<ReviewBranchProof['ruleId'], string> = {
   'R-02': '事实与证据核验',
   'R-03': '难度与岗位适配',
+  'R-05': '数据边界与安全',
+  'R-06': '表达与可读性',
 }
 
 const specialistDefinitions = {
@@ -165,17 +171,36 @@ const specialistDefinitions = {
     ruleId: 'R-03',
     label: '教学适配 Agent',
   },
+  data_safety_review: {
+    ruleId: 'R-05',
+    label: '数据安全 Agent',
+  },
+  readability_review: {
+    ruleId: 'R-06',
+    label: '表达校阅 Agent',
+  },
 } as const
+
+const specialistOrder = [
+  'evidence_review',
+  'pedagogy_review',
+  'data_safety_review',
+  'readability_review',
+] as const satisfies readonly ReviewAgentActivityId[]
 
 function specialistAgentId(value: unknown): ReviewBranchProof['agentId'] | undefined {
   if (value === 'evidence_review' || value === 'R-02') return 'evidence_review'
   if (value === 'pedagogy_review' || value === 'R-03') return 'pedagogy_review'
+  if (value === 'data_safety_review' || value === 'R-05') return 'data_safety_review'
+  if (value === 'readability_review' || value === 'R-06') return 'readability_review'
   return undefined
 }
 
 function eventAgentLabel(agent: AgentActivityId): string {
   if (agent === 'evidence_review') return specialistDefinitions.evidence_review.label
   if (agent === 'pedagogy_review') return specialistDefinitions.pedagogy_review.label
+  if (agent === 'data_safety_review') return specialistDefinitions.data_safety_review.label
+  if (agent === 'readability_review') return specialistDefinitions.readability_review.label
   return agentLabel(agent)
 }
 
@@ -225,7 +250,7 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
   const elapsedMs = isComplete
     ? detailNumber(details, 'parallel_elapsed_ms')
     : undefined
-  const branches = (['evidence_review', 'pedagogy_review'] as const).map((agentId): ReviewBranchProof => {
+  const branches = specialistOrder.map((agentId): ReviewBranchProof => {
     const completed = completedBranches.get(agentId)
     const specialistEvent = latestEvents.value.get(agentId)
     const liveStatus = specialistEvent?.status === 'blocked'
@@ -278,7 +303,7 @@ const reviewGroupPhase = computed<ReviewGroupPhase>(() => {
 const reviewPhaseLabel = computed(() => ({
   idle: '待机',
   dispatching: '正在调度专项审核',
-  parallel: '双 Agent 并行审核',
+  parallel: '四维并行审核',
   arbitrating: '结果已汇聚 · 正在仲裁',
   debating: '争议点定向复核中',
   regenerating: '硬规则命中 · 跳过辩论',
@@ -298,7 +323,7 @@ const reviewTeamMembers = computed<ReviewTeamMember[]>(() => {
     }))
   }
   if (reviewGroupPhase.value !== 'dispatching') return []
-  return (['evidence_review', 'pedagogy_review'] as const).map((agentId) => {
+  return specialistOrder.map((agentId) => {
     const definition = specialistDefinitions[agentId]
     return {
       agentId,
@@ -653,7 +678,7 @@ function statusLabel(status: AgentActivityStatus): string {
           </div>
           <b class="proof-state">
             <i aria-hidden="true"></i>
-            {{ parallelReviewProof.isComplete ? '已汇聚 · 确定性裁决' : '双路并行执行中' }}
+            {{ parallelReviewProof.isComplete ? '已汇聚 · 确定性裁决' : '四维并行执行中' }}
           </b>
         </header>
 
@@ -786,18 +811,22 @@ function statusLabel(status: AgentActivityStatus): string {
 .is-blocked { color: #ff7e7e !important; border-color: rgba(255,126,126,.48) !important; }
 .agent-slot-3.has-review-team { z-index: 6; }
 .agent-slot-3.has-review-team.is-approaching { transform: translate(calc(-50% - 12px),-50%); }
-.review-agent-team { position: absolute; top: calc(100% + 8px); right: 0; display: grid; gap: 4px; width: 132px; padding: 6px; color: #91b5c7; background: linear-gradient(155deg,rgba(7,28,43,.98),rgba(10,34,49,.97)); border: 1px solid rgba(88,213,250,.24); border-radius: 11px; box-shadow: 0 15px 30px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.025); transform-origin: top right; }
+.review-agent-team { position: absolute; top: calc(100% + 6px); right: -5px; display: grid; gap: 4px; width: 208px; padding: 6px; color: #91b5c7; background: linear-gradient(155deg,rgba(7,28,43,.98),rgba(10,34,49,.97)); border: 1px solid rgba(88,213,250,.24); border-radius: 11px; box-shadow: 0 15px 30px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.025); transform-origin: top right; }
 .review-agent-team::before { position: absolute; top: -5px; right: 17px; width: 9px; height: 9px; content: ''; background: #092033; border-top: 1px solid rgba(88,213,250,.24); border-left: 1px solid rgba(88,213,250,.24); transform: rotate(45deg); }
 .review-agent-team > header { display: grid; gap: 1px; padding: 0 2px 3px; border-bottom: 1px solid rgba(108,188,219,.1); }
 .review-agent-team > header b { color: #dff6ff; font-size: 9px; }
 .review-agent-team > header small { overflow: hidden; color: #63cfea; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .review-team-connector { position: absolute; top: -12px; right: 20px; width: 2px; height: 10px; overflow: hidden; background: rgba(80,219,255,.18); }
 .review-team-connector i { position: absolute; left: -1px; width: 4px; height: 4px; background: #e5fbff; border-radius: 50%; box-shadow: 0 0 7px #4bdcff; transform: translateY(-50%); }
-.review-team-members { display: grid; gap: 4px; }
+.review-team-members { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
 .review-team-members article { position: relative; display: grid; grid-template-columns: 34px minmax(0,1fr); grid-template-rows: auto auto; gap: 1px 4px; align-items: center; min-height: 40px; padding: 2px 4px 2px 2px; color: #50daf7; background: rgba(12,44,59,.82); border: 1px solid rgba(75,211,245,.24); border-radius: 8px; box-shadow: none; transition: border-color .25s,box-shadow .25s,opacity .25s; }
 .review-team-members article[data-agent="pedagogy_review"] { color: #bda0ff; background: rgba(32,27,66,.78); border-color: rgba(178,145,255,.3); }
+.review-team-members article[data-agent="data_safety_review"] { color: #66e0ae; background: rgba(12,52,50,.78); border-color: rgba(102,224,174,.28); }
+.review-team-members article[data-agent="readability_review"] { color: #ffc56e; background: rgba(61,43,20,.74); border-color: rgba(255,197,110,.28); }
 .review-team-members article.is-working { box-shadow: 0 0 15px rgba(53,207,243,.13); }
 .review-team-members article[data-agent="pedagogy_review"].is-working { box-shadow: 0 0 15px rgba(166,128,255,.15); }
+.review-team-members article[data-agent="data_safety_review"].is-working { box-shadow: 0 0 15px rgba(82,220,166,.15); }
+.review-team-members article[data-agent="readability_review"].is-working { box-shadow: 0 0 15px rgba(255,180,91,.15); }
 .review-team-members article.is-done { color: #58dba0; opacity: .88; }
 .review-team-members article.is-blocked { color: #ff8181; }
 .review-specialist-avatar { position: relative; grid-row: 1/3; display: grid; place-items: center; width: 34px; height: 34px; overflow: hidden; border-radius: 8px; }

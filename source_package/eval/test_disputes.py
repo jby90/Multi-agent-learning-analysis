@@ -33,7 +33,10 @@ def test_soft_rules_route_only_the_required_specialists() -> None:
     assert both.as_event_details()["rule_ids"] == ["R-02", "R-03"]
 
 
-@pytest.mark.parametrize("rules", [("R-01",), ("R-04",), ("R-05",), ("R-02", "R-04")])
+@pytest.mark.parametrize(
+    "rules",
+    [("R-01",), ("R-04",), ("R-05",), ("R-06",), ("R-02", "R-04")],
+)
 def test_hard_or_mixed_rejects_skip_debate(rules: tuple[str, ...]) -> None:
     plan = plan_review_dispute(_verdict("reject", *rules))
 

@@ -66,7 +66,7 @@ def build_review_agent(trace_id: str) -> ReviewAgent:
     return ReviewAgent(
         trace_id=trace_id,
         llm_call=call_llm,
-        parallel_executor=bounded_llm_executor(call_llm, max_concurrency=2),
+        parallel_executor=bounded_llm_executor(call_llm, max_concurrency=3),
     )
 
 

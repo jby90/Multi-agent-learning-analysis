@@ -15,6 +15,8 @@ AGENT_IDS = frozenset(
         "verification",
         "evidence_review",
         "pedagogy_review",
+        "data_safety_review",
+        "readability_review",
         "review",
     }
 )

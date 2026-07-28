@@ -299,7 +299,7 @@ class _EvaluationRuntime:
             knowledge_chunks=self.chunks,
             parallel_executor=bounded_llm_executor(
                 self.cache,
-                max_concurrency=2,
+                max_concurrency=3,
             ),
         )
         self.rebuttal = RebuttalGenerator(trace_id, llm_call=self.cache)

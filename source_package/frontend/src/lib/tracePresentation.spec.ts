@@ -85,12 +85,13 @@ describe('trace presentation mappings', () => {
     expect(stateLabel('S0_INIT')).toBe('会话建立')
     expect(stateLabel('S10_DONE')).toBe('培养目标达成')
     expect(stateLabel('S_FAIL')).toBe('安全终止')
-    expect(['R-01', 'R-02', 'R-03', 'R-04', 'R-05'].map(ruleLabel)).toEqual([
+    expect(['R-01', 'R-02', 'R-03', 'R-04', 'R-05', 'R-06'].map(ruleLabel)).toEqual([
       '口径混淆',
       '引用不足',
       '难度错配',
       '结论未申报',
       '查询证据异常',
+      '表达可读性问题',
     ])
     expect([
       'M-01', 'M-02', 'M-03', 'M-04', 'M-05',
@@ -253,7 +254,7 @@ describe('trace presentation mappings', () => {
     ['raw', '现有资料'],
     ['chunk / chunks', '资料片段 / 资料片段'],
     ['SEC-001 与 KB-003', '资料来源 与 资料来源'],
-    ['R-01 / R-02 / R-03 / R-04 / R-05', '口径混淆 / 引用不足 / 难度错配 / 结论未申报 / 查询证据异常'],
+    ['R-01 / R-02 / R-03 / R-04 / R-05 / R-06', '口径混淆 / 引用不足 / 难度错配 / 结论未申报 / 查询证据异常 / 表达可读性问题'],
     ['审核驳回 · R-02引用不足', '审核驳回 · 引用不足'],
     ['审核驳回 · R-02 引用不足', '审核驳回 · 引用不足'],
     [

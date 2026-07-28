@@ -23,6 +23,10 @@ from sqlglot.errors import ParseError
 
 from agents.kb_loader import KnowledgeChunk, require_valid_chunks
 from agents.evidence_review_agent import EvidenceReviewAgent
+from agents.deterministic_review_agents import (
+    DataSafetyReviewAgent,
+    ReadabilityReviewAgent,
+)
 from agents.pedagogy_review_agent import PedagogyReviewAgent
 from agents.sandbox import validate_and_rewrite
 from agents.query_authority import QueryAuthority, query_authority_from_mapping
@@ -129,6 +133,11 @@ _FORMULA_NEGATION_TERMS = (
     "避免",
     "而不是",
     "≠",
+)
+_INTERNAL_PRESENTATION_RE = re.compile(
+    r"(?:trace_id|msg_id|evidence_bundle_ref|learning_contract|payload\.content|"
+    r"S\d+_[A-Z_]+)",
+    re.IGNORECASE,
 )
 _METRIC_VALUE_PATTERNS = {
     "plan_qty": re.compile(
@@ -1014,6 +1023,70 @@ def evaluate_hard_rules(product: Mapping[str, Any]) -> tuple[dict[str, str], ...
     )
 
 
+def _data_safety_reviews(
+    product: Mapping[str, Any],
+) -> tuple[tuple[dict[str, str], ...], int]:
+    """Re-attest data semantics and SQL safety inside the parallel gate."""
+    hits = tuple(
+        hit
+        for evaluator in (_r01, _r05)
+        for hit in (evaluator(product),)
+        if hit is not None
+    )
+    return hits, 2
+
+
+def _readability_reviews(
+    product: Mapping[str, Any],
+) -> tuple[tuple[dict[str, str], ...], int]:
+    """Reject only severe presentation defects; ordinary style stays non-blocking."""
+    content = _content(product)
+    bodies = tuple(
+        value
+        for field in (
+            "lecture_md",
+            "practice_guide",
+            "guide_md",
+            "contextualized_stem",
+            "question",
+        )
+        for value in (content.get(field),)
+        if isinstance(value, str) and value.strip()
+    )
+    if not bodies:
+        return (), 1
+    for body in bodies:
+        leaked = _INTERNAL_PRESENTATION_RE.search(body)
+        if leaked is not None:
+            return (
+                (
+                    _rule_hit(
+                        "R-06",
+                        f"面向学员的内容泄露内部协议标识：{leaked.group(0)}。",
+                        _evidence_ref(product),
+                    ),
+                ),
+                len(bodies) + 1,
+            )
+        paragraphs = tuple(
+            line.strip()
+            for line in body.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        if paragraphs and max(len(paragraph) for paragraph in paragraphs) > 480:
+            return (
+                (
+                    _rule_hit(
+                        "R-06",
+                        "面向学员的内容存在超过480字的连续段落，需要分段后重新生成。",
+                        _evidence_ref(product),
+                    ),
+                ),
+                len(bodies) + 1,
+            )
+    return (), len(bodies) + 1
+
+
 def _call_result(
     llm_call: Callable[..., Any],
     *,
@@ -1613,6 +1686,14 @@ class ReviewAgent:
                 knowledge_chunks=self._knowledge_chunks,
             ),
         )
+        self._data_safety_review_agent = DataSafetyReviewAgent(
+            trace_id,
+            evaluator=_data_safety_reviews,
+        )
+        self._readability_review_agent = ReadabilityReviewAgent(
+            trace_id,
+            evaluator=_readability_reviews,
+        )
         self._arbiter = DeterministicReviewArbiter()
         self._r04_preflight_results: dict[
             str,
@@ -1743,6 +1824,14 @@ class ReviewAgent:
                         learned_knowledge_points=learned_knowledge_points,
                     ),
                 ),
+                BranchSpec(
+                    branch_id=self._data_safety_review_agent.agent_id,
+                    task=lambda: self._data_safety_review_agent.review(artifact),
+                ),
+                BranchSpec(
+                    branch_id=self._readability_review_agent.agent_id,
+                    task=lambda: self._readability_review_agent.review(artifact),
+                ),
             ),
         )
         is_parallel = self._parallel_executor.max_concurrency > 1
@@ -1750,6 +1839,8 @@ class ReviewAgent:
             for agent_id, rule_id, label in (
                 ("evidence_review", "R-02", "正在独立核验事实与证据"),
                 ("pedagogy_review", "R-03", "正在独立审核难度与岗位适配"),
+                ("data_safety_review", "R-05", "正在独立校验数据口径与安全边界"),
+                ("readability_review", "R-06", "正在独立检查表达与可读性"),
             ):
                 activity_observer(
                     "specialist_review_started",
@@ -1766,9 +1857,14 @@ class ReviewAgent:
                 "parallel_review_started",
                 {
                     "stage_id": stage.stage_id,
-                    "axes": ["R-02", "R-03"],
-                    "agents": ["evidence_review", "pedagogy_review"],
-                    "fan_out": 2,
+                    "axes": ["R-02", "R-03", "R-05", "R-06"],
+                    "agents": [
+                        "evidence_review",
+                        "pedagogy_review",
+                        "data_safety_review",
+                        "readability_review",
+                    ],
+                    "fan_out": 4,
                     "aggregation": "pending",
                     "contract_id": contract_id,
                     "artifact_id": artifact.artifact_id,
@@ -1781,20 +1877,23 @@ class ReviewAgent:
             if event not in {"branch_completed", "branch_failed"}:
                 return
             branch_id = details.get("branch_id")
-            if branch_id not in {"evidence_review", "pedagogy_review"}:
+            specialist_meta = {
+                "evidence_review": ("R-02", "事实与证据核验完成"),
+                "pedagogy_review": ("R-03", "难度与岗位适配审核完成"),
+                "data_safety_review": ("R-05", "数据口径与安全边界校验完成"),
+                "readability_review": ("R-06", "表达与可读性检查完成"),
+            }
+            if branch_id not in specialist_meta:
                 return
+            rule_id, label = specialist_meta[str(branch_id)]
             activity_observer(
                 "specialist_review_completed",
                 {
                     **dict(details),
                     "agent": branch_id,
-                    "rule_id": "R-02" if branch_id == "evidence_review" else "R-03",
+                    "rule_id": rule_id,
                     "status": "done" if event == "branch_completed" else "blocked",
-                    "label": (
-                        "事实与证据核验完成"
-                        if branch_id == "evidence_review"
-                        else "难度与岗位适配审核完成"
-                    ),
+                    "label": label,
                     "contract_id": contract_id,
                     "artifact_id": artifact.artifact_id,
                 },
@@ -1807,7 +1906,14 @@ class ReviewAgent:
         ).require_success()
         evidence_result = stage_result.require("evidence_review")
         pedagogy_result = stage_result.require("pedagogy_review")
-        arbitration = self._arbiter.decide(evidence_result, pedagogy_result)
+        data_safety_result = stage_result.require("data_safety_review")
+        readability_result = stage_result.require("readability_review")
+        arbitration = self._arbiter.decide(
+            evidence_result,
+            pedagogy_result,
+            data_safety_result,
+            readability_result,
+        )
         r02_results = evidence_result.llm_results
         r02_checks = evidence_result.checks
         r03_result = pedagogy_result.llm_result
@@ -1817,11 +1923,16 @@ class ReviewAgent:
                 "parallel_review_completed",
                 {
                     "stage_id": stage.stage_id,
-                    "axes": ["R-02", "R-03"],
-                    "agents": ["evidence_review", "pedagogy_review"],
+                    "axes": ["R-02", "R-03", "R-05", "R-06"],
+                    "agents": [
+                        "evidence_review",
+                        "pedagogy_review",
+                        "data_safety_review",
+                        "readability_review",
+                    ],
                     "r02_checks": r02_checks,
                     "r03_checked": r03_result is not None,
-                    "fan_out": 2,
+                    "fan_out": 4,
                     "aggregation": "deterministic",
                     "parallel_elapsed_ms": stage_result.elapsed_ms,
                     "correlation_id": stage_result.correlation_id,
@@ -1867,6 +1978,24 @@ class ReviewAgent:
                     "status": "completed",
                     "checked": pedagogy_result.llm_result is not None,
                     "hit_count": 0 if pedagogy_result.hit is None else 1,
+                },
+                {
+                    "agent": data_safety_result.agent_id,
+                    "rule_id": "R-05",
+                    "artifact_id": data_safety_result.artifact_id,
+                    "contract_id": data_safety_result.contract_id,
+                    "status": "completed",
+                    "checks": data_safety_result.checks,
+                    "hit_count": len(data_safety_result.hits),
+                },
+                {
+                    "agent": readability_result.agent_id,
+                    "rule_id": "R-06",
+                    "artifact_id": readability_result.artifact_id,
+                    "contract_id": readability_result.contract_id,
+                    "status": "completed",
+                    "checks": readability_result.checks,
+                    "hit_count": len(readability_result.hits),
                 },
             ),
             started=started,
