@@ -333,6 +333,7 @@ function advanceMotion(): void {
 onMounted(() => {
   reducedMotion.value = typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reducedMotion.value) motionEnabled.value = false
   if (import.meta.env.MODE !== 'test') {
     previousTick = Date.now()
     motionTimer = window.setInterval(advanceMotion, 50)
@@ -365,20 +366,22 @@ function routeMotionStyle(route: typeof agentRoutes[number], offset = 0) {
 }
 
 function avatarMotionStyle(agent: AgentCard, index: number) {
-  if (reducedMotion.value || agent.status === 'blocked') return undefined
+  if (agent.status === 'blocked') return undefined
   const phase = cycle(index * .137) * Math.PI * 2
   const isActive = ['working', 'collaborating', 'reviewing', 'debating'].includes(agent.status)
   const isComplete = ['approved', 'done'].includes(agent.status)
-  const amplitude = isActive ? 5 : isComplete ? 1.8 : 1.1
+  const amplitude = isActive ? 5 : isComplete ? 4.2 : 2.8
   const lift = Math.sin(phase) * amplitude
+  const drift = isActive ? 0 : Math.cos(phase) * (isComplete ? 1.5 : 1.1)
+  const tilt = isActive ? 0 : Math.cos(phase) * (isComplete ? 1.4 : .8)
   const scale = isActive
     ? 1.06 + Math.abs(lift) / 70
     : isComplete
-      ? 1.01 + (Math.sin(phase) + 1) * .006
-      : 1 + (Math.sin(phase) + 1) * .003
+      ? 1.014 + (Math.sin(phase) + 1) * .009
+      : 1.004 + (Math.sin(phase) + 1) * .006
   return {
     animation: 'none',
-    transform: `translateY(${lift.toFixed(1)}px) scale(${scale.toFixed(3)})`,
+    transform: `translate(${drift.toFixed(1)}px,${lift.toFixed(1)}px) rotate(${tilt.toFixed(1)}deg) scale(${scale.toFixed(3)})`,
     background: isComplete
       ? `radial-gradient(circle at 50% 62%,rgba(83,224,158,${(.1 + (Math.sin(phase) + 1) * .025).toFixed(3)}),transparent 68%)`
       : undefined,
@@ -391,7 +394,6 @@ function hasAmbientMotion(agent: AgentCard): boolean {
 }
 
 function ambientMoteStyle(agent: AgentCard, index: number) {
-  if (reducedMotion.value) return { display: 'none' }
   const isComplete = ['approved', 'done'].includes(agent.status)
   const phase = cycle(index * .173) * Math.PI * 2
   const radius = isComplete ? 23 : 19

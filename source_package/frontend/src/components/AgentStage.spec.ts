@@ -55,8 +55,10 @@ describe('AgentStage', () => {
     expect(doneMote.attributes('style')).toContain('left:')
     expect(doneMote.attributes('style')).toContain('top:')
     expect(standbyMote.classes()).not.toContain('is-complete')
-    expect(wrapper.get('[data-agent="diagnosis"] .agent-avatar').attributes('style')).toContain('translateY')
-    expect(wrapper.get('[data-agent="task"] .agent-avatar').attributes('style')).toContain('translateY')
+    expect(wrapper.get('[data-agent="diagnosis"] .agent-avatar').attributes('style')).toContain('translate(')
+    expect(wrapper.get('[data-agent="diagnosis"] .agent-avatar').attributes('style')).toContain('rotate(')
+    expect(wrapper.get('[data-agent="task"] .agent-avatar').attributes('style')).toContain('translate(')
+    expect(wrapper.get('[data-agent="task"] .agent-avatar').attributes('style')).toContain('rotate(')
   })
 
   it('renders collaboration and approach states from live events', () => {
