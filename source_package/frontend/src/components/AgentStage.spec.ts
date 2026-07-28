@@ -64,11 +64,11 @@ describe('AgentStage', () => {
     expect(wrapper.get('[data-teacher-agent="review"]').attributes('data-teacher-state')).toBe('collaborating')
     expect(wrapper.text()).toContain('正在执行质量审查')
     expect(wrapper.text()).toContain('2 路并发审核')
-    expect(wrapper.find('.parallel-review-flow').exists()).toBe(false)
+    expect(wrapper.find('.parallel-proof').exists()).toBe(true)
     expect(wrapper.findAll('.agent-packet')).toHaveLength(4)
   })
 
-  it('summarizes parallel review without adding a central overlay', () => {
+  it('shows live evidence for both parallel review branches', () => {
     const parallel = {
       ...event(
         5,
@@ -84,8 +84,46 @@ describe('AgentStage', () => {
 
     expect(wrapper.text()).toContain('2 路并发审核')
     expect(wrapper.text()).toContain('事实证据与难度适配正在双路并行审核')
-    expect(wrapper.find('.parallel-review-flow').exists()).toBe(false)
-    expect(wrapper.findAll('.audit-packet')).toHaveLength(0)
+    expect(wrapper.get('.parallel-proof').classes()).toContain('is-running')
+    expect(wrapper.text()).toContain('R-02')
+    expect(wrapper.text()).toContain('R-03')
+    expect(wrapper.text()).toContain('双路并行执行中')
+  })
+
+  it('keeps deterministic join evidence visible after review completes', () => {
+    const completed = {
+      ...event(
+        6,
+        'review',
+        'reviewing',
+        '双路审核已汇聚，正在执行确定性裁决',
+        ['knowledge'],
+        {
+          fan_out: 2,
+          aggregation: 'deterministic',
+          stage_id: 'quality-review-axes',
+          contract_id: 'lc-1234567890abcdefghijkl',
+          artifact_id: 'msg-artifact-1',
+          correlation_id: 'msg-artifact-1',
+          parallel_elapsed_ms: 820,
+          branches: [
+            { branch_id: 'R-02', status: 'succeeded', required: true, elapsed_ms: 790 },
+            { branch_id: 'R-03', status: 'succeeded', required: true, elapsed_ms: 610 },
+          ],
+        },
+      ),
+      activity: 'parallel_quality_review',
+    }
+    const later = event(7, 'task', 'working', '正在准备下一阶段任务')
+    const wrapper = mount(AgentStage, { props: { view, events: [completed, later] } })
+
+    expect(wrapper.get('.parallel-proof').classes()).toContain('is-complete')
+    expect(wrapper.text()).toContain('已汇聚 · 确定性裁决')
+    expect(wrapper.text()).toContain('790 ms')
+    expect(wrapper.text()).toContain('610 ms')
+    expect(wrapper.text()).toContain('820 ms')
+    expect(wrapper.text()).toContain('≈ 580 ms')
+    expect(wrapper.text()).toContain('lc-1234567…ghijkl')
   })
 
   it('lets the presenter pause and resume all stage motion', async () => {

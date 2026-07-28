@@ -358,7 +358,11 @@ onMounted(loadTraces)
         v-if="viewMode === 'collaboration' && liveView"
         class="collaboration-observatory"
       >
-        <AgentStage :view="liveView" :events="liveAgentEvents" />
+        <AgentStage
+          :view="liveView"
+          :events="liveAgentEvents"
+          :contract="liveState?.learning_contract ?? undefined"
+        />
         <TracePanel :view="liveView" />
       </div>
       <LearningPath v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />

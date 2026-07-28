@@ -3,6 +3,15 @@ export interface InteractiveProfile extends Record<string, unknown> {
   title: string
 }
 
+export interface InteractiveLearningContract extends Record<string, unknown> {
+  contract_id: string
+  domain_id: string
+  domain_package_sha256: string
+  difficulty: string
+  target_knowledge_points: string[]
+  misconceptions: string[]
+}
+
 export interface InteractivePretestQuestion {
   question_id: string
   knowledge_point: string
@@ -71,6 +80,7 @@ export interface InteractiveState {
   awaiting: string
   mode: string
   profile: InteractiveProfile
+  learning_contract?: InteractiveLearningContract | null
   messages: Record<string, unknown>[]
   artifact: Record<string, unknown> | null
   interaction: InteractiveInteraction | null
