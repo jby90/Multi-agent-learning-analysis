@@ -132,7 +132,7 @@ type ParallelReviewProof = {
   savedMs?: number
 }
 
-type ReviewGroupPhase = 'idle' | 'dispatching' | 'parallel' | 'arbitrating' | 'complete'
+type ReviewGroupPhase = 'idle' | 'dispatching' | 'parallel' | 'arbitrating' | 'debating' | 'regenerating' | 'complete'
 
 type ReviewTeamMember = ReviewBranchProof & {
   agentStatus: AgentActivityStatus
@@ -246,6 +246,11 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
 
 const reviewGroupPhase = computed<ReviewGroupPhase>(() => {
   const reviewEvent = latestEvents.value.get('review')
+  if (
+    reviewEvent?.status === 'debating'
+    && ['bounded_debate', 'follow_up_debate'].includes(reviewEvent.activity)
+  ) return 'debating'
+  if (reviewEvent?.activity === 'deterministic_rejection_route') return 'regenerating'
   if (!parallelReviewProof.value) {
     return reviewEvent?.activity === 'quality_gate' && reviewEvent.status === 'reviewing'
       ? 'dispatching'
@@ -262,6 +267,8 @@ const reviewPhaseLabel = computed(() => ({
   dispatching: '正在调度专项审核',
   parallel: '双 Agent 并行审核',
   arbitrating: '结果已汇聚 · 正在仲裁',
+  debating: '争议点定向复核中',
+  regenerating: '硬规则命中 · 跳过辩论',
   complete: '专项审核已完成',
 })[reviewGroupPhase.value])
 
@@ -270,9 +277,11 @@ const reviewTeamMembers = computed<ReviewTeamMember[]>(() => {
   if (branches) {
     return branches.map((branch) => ({
       ...branch,
-      agentStatus: branch.status === 'failed'
-        ? 'blocked'
-        : branch.status === 'succeeded' ? 'done' : 'working',
+      agentStatus: latestEvents.value.get(branch.agentId)?.activity === 'targeted_dispute_review'
+        ? latestEvents.value.get(branch.agentId)?.status ?? 'done'
+        : branch.status === 'failed'
+          ? 'blocked'
+          : branch.status === 'succeeded' ? 'done' : 'working',
     }))
   }
   if (reviewGroupPhase.value !== 'dispatching') return []
@@ -290,7 +299,7 @@ const reviewTeamMembers = computed<ReviewTeamMember[]>(() => {
 })
 
 const activeCount = computed(() => primaryActiveCount.value + reviewTeamMembers.value.filter(
-  (member) => member.agentStatus === 'working',
+  (member) => ['working', 'debating'].includes(member.agentStatus),
 ).length)
 
 function elapsedLabel(value: number | undefined): string {
@@ -354,7 +363,9 @@ function activeAvatarStyle(agent: AgentCard) {
 function reviewSpecialistStyle(member: ReviewTeamMember, index: number) {
   if (!motionEnabled.value || member.agentStatus === 'done' || member.agentStatus === 'blocked') return undefined
   const angle = cycle(index * .19) * Math.PI * 2
-  const amplitude = reviewGroupPhase.value === 'parallel' ? 3.5 : 1.7
+  const amplitude = reviewGroupPhase.value === 'debating'
+    ? 4.5
+    : reviewGroupPhase.value === 'parallel' ? 3.5 : 1.7
   const lift = Math.sin(angle) * amplitude
   const drift = Math.cos(angle) * amplitude * .55
   return {
@@ -363,7 +374,7 @@ function reviewSpecialistStyle(member: ReviewTeamMember, index: number) {
 }
 
 function reviewScanStyle(member: ReviewTeamMember, index: number) {
-  if (member.agentStatus !== 'working') return undefined
+  if (!['working', 'debating'].includes(member.agentStatus)) return undefined
   const progress = cycle(index * .43)
   return {
     top: `${10 + progress * 29}px`,
@@ -740,6 +751,10 @@ function statusLabel(status: AgentActivityStatus): string {
 .review-agent-team.is-parallel { border-color: rgba(83,220,255,.42); box-shadow: 0 15px 32px rgba(0,0,0,.34),0 0 22px rgba(42,199,238,.1); }
 .review-agent-team.is-arbitrating { border-color: rgba(187,151,255,.42); }
 .review-agent-team.is-arbitrating > header small { color: #c1a5ff; }
+.review-agent-team.is-debating { border-color: rgba(255,181,91,.48); box-shadow: 0 15px 32px rgba(0,0,0,.34),0 0 24px rgba(255,167,65,.11); }
+.review-agent-team.is-debating > header small { color: #ffbd70; }
+.review-agent-team.is-regenerating { border-color: rgba(255,111,111,.42); }
+.review-agent-team.is-regenerating > header small { color: #ff8989; }
 .review-agent-team.is-complete { opacity: .86; transform: scale(.94); }
 .review-team-enter-active,.review-team-leave-active { transition: opacity .28s ease,transform .36s cubic-bezier(.2,.8,.2,1); }
 .review-team-enter-from,.review-team-leave-to { opacity: 0; transform: translateY(-9px) scale(.88); }

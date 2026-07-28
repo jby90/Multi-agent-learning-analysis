@@ -397,6 +397,26 @@ def test_advance_routes_review_reject_through_shared_debate(
     roles = [message["role"] for message in lecture["messages"]]
     assert "rebuttal" in roles
     assert "re_verdict" in roles
+    agent_events = manager.get_agent_events(session_id)
+    targeted_events = [
+        event
+        for event in agent_events
+        if event["activity"] == "targeted_dispute_review"
+    ]
+    assert [(event["agent"], event["status"]) for event in targeted_events] == [
+        ("evidence_review", "debating"),
+        ("evidence_review", "done"),
+    ]
+    debate_event = next(
+        event
+        for event in agent_events
+        if event["agent"] == "review"
+        and event["activity"] == "bounded_debate"
+        and event["status"] == "debating"
+    )
+    assert debate_event["details"]["dispute_route"] == "targeted_debate"
+    assert debate_event["details"]["rule_ids"] == ["R-02"]
+    assert debate_event["details"]["specialist_agents"] == ["evidence_review"]
     learner_copy = json.dumps(
         {
             "lecture": lecture["artifact"]["payload"]["content"].get("lecture_md"),

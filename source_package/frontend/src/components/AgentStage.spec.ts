@@ -145,6 +145,72 @@ describe('AgentStage', () => {
     expect(wrapper.text()).toContain('lc-1234567…ghijkl')
   })
 
+  it('shows only the routed specialist during targeted dispute review', () => {
+    const completed = {
+      ...event(10, 'review', 'reviewing', '双路审核已汇聚，正在执行确定性裁决', ['task'], {
+        fan_out: 2,
+        aggregation: 'deterministic',
+        branches: [
+          { branch_id: 'evidence_review', status: 'succeeded', required: true },
+          { branch_id: 'pedagogy_review', status: 'succeeded', required: true },
+        ],
+      }),
+      activity: 'parallel_quality_review',
+    }
+    const reviewDebate = {
+      ...event(11, 'review', 'debating', '正在围绕证据进行有界复核', ['task'], {
+        dispute_route: 'targeted_debate',
+        rule_ids: ['R-02'],
+        specialist_agents: ['evidence_review'],
+      }),
+      activity: 'bounded_debate',
+    }
+    const evidenceDebate = {
+      ...event(12, 'evidence_review', 'debating', '正在针对 R-02 证据边界进行定向复核', ['task', 'review']),
+      activity: 'targeted_dispute_review',
+    }
+    const taskDebate = {
+      ...event(13, 'task', 'debating', '正在围绕证据进行有界复核', ['review']),
+      activity: 'bounded_debate',
+    }
+    const wrapper = mount(AgentStage, {
+      props: {
+        view: { ...view, currentState: 'S6_DEBATE' },
+        events: [completed, reviewDebate, evidenceDebate, taskDebate],
+      },
+    })
+
+    expect(wrapper.get('.review-agent-team').classes()).toContain('is-debating')
+    expect(wrapper.get('[data-agent="evidence_review"]').classes()).toContain('is-debating')
+    expect(wrapper.get('[data-agent="pedagogy_review"]').classes()).toContain('is-done')
+    expect(wrapper.text()).toContain('争议点定向复核中')
+    expect(wrapper.text()).toContain('3 活跃')
+  })
+
+  it('shows hard-rule rejects as direct regeneration instead of debate', () => {
+    const completed = {
+      ...event(20, 'review', 'reviewing', '双路审核已汇聚', ['knowledge'], {
+        aggregation: 'deterministic',
+        branches: [
+          { branch_id: 'evidence_review', status: 'succeeded', required: true },
+          { branch_id: 'pedagogy_review', status: 'succeeded', required: true },
+        ],
+      }),
+      activity: 'parallel_quality_review',
+    }
+    const routed = {
+      ...event(21, 'review', 'blocked', '硬规则命中，已跳过模型辩论', ['knowledge'], {
+        dispute_route: 'local_regeneration',
+        hard_veto_rules: ['R-04'],
+      }),
+      activity: 'deterministic_rejection_route',
+    }
+    const wrapper = mount(AgentStage, { props: { view, events: [completed, routed] } })
+
+    expect(wrapper.get('.review-agent-team').classes()).toContain('is-regenerating')
+    expect(wrapper.text()).toContain('硬规则命中 · 跳过辩论')
+  })
+
   it('lets the presenter pause and resume all stage motion', async () => {
     const wrapper = mount(AgentStage, { props: { view } })
     const toggle = wrapper.get('.motion-toggle')

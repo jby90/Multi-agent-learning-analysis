@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from coordination.contracts import QualityPolicy
+from coordination.disputes import plan_review_dispute
+
 
 class ReviewFlowError(RuntimeError):
     """Raised when review cannot reach approval or a canonical fallback."""
@@ -98,6 +101,7 @@ def audit_and_review(
     max_cycles: int = 4,
     terminal_action: str = "refuse",
     on_event: ReviewEventCallback | None = None,
+    quality_policy: QualityPolicy | None = None,
 ) -> dict[str, Any]:
     """Review an in-state product without inventing state-machine transitions.
 
@@ -121,16 +125,32 @@ def audit_and_review(
             original = audit(review(product))
             last_message = original
             decision = _review_decision(original, product)
+            dispute_plan = plan_review_dispute(original, policy=quality_policy)
             _notify(
                 on_event,
                 "review_completed",
                 cycle=cycle,
                 decision=decision,
+                **dispute_plan.as_event_details(),
             )
             if decision in {"approve", "approve_with_fix"}:
                 return product
 
-            _notify(on_event, "debate_started", cycle=cycle)
+            if dispute_plan.route == "local_regeneration":
+                _notify(
+                    on_event,
+                    "regeneration_started",
+                    cycle=cycle,
+                    **dispute_plan.as_event_details(),
+                )
+                continue
+
+            _notify(
+                on_event,
+                "debate_started",
+                cycle=cycle,
+                **dispute_plan.as_event_details(),
+            )
             rebuttal = audit(generate_rebuttal(product, original))
             last_message = rebuttal
             reconsidered = audit(re_review(product, original, rebuttal))
@@ -141,6 +161,7 @@ def audit_and_review(
                 "debate_completed",
                 cycle=cycle,
                 decision=re_decision,
+                **dispute_plan.as_event_details(),
             )
             if re_decision in {"approve", "approve_with_fix"}:
                 return product
@@ -170,6 +191,7 @@ def produce_and_review(
     on_approved: ApprovedCallback | None = None,
     max_cycles: int = 4,
     on_event: ReviewEventCallback | None = None,
+    quality_policy: QualityPolicy | None = None,
 ) -> dict[str, Any]:
     """Produce until Review approves, the rebuttal wins, or the engine falls back."""
 
@@ -185,11 +207,13 @@ def produce_and_review(
             )
         _notify(on_event, "review_started", cycle=cycle)
         original, transition_id = send_transition(review(product))
+        dispute_plan = plan_review_dispute(original, policy=quality_policy)
         _notify(
             on_event,
             "review_completed",
             cycle=cycle,
             transition=transition_id,
+            **dispute_plan.as_event_details(),
         )
         if transition_id == approved_transition:
             if on_approved is not None:
@@ -204,7 +228,49 @@ def produce_and_review(
             raise ReviewFlowError(
                 f"review reject expected T05, got {transition_id}"
             )
-        _notify(on_event, "debate_started", cycle=cycle)
+
+        if dispute_plan.route == "local_regeneration":
+            _notify(
+                on_event,
+                "regeneration_started",
+                cycle=cycle,
+                **dispute_plan.as_event_details(),
+            )
+            last_message = original
+            try:
+                concession = audit(generate_rebuttal(product, original))
+                last_message = concession
+                re_message, re_transition = send_transition(
+                    re_review(product, original, concession)
+                )
+                _notify(
+                    on_event,
+                    "regeneration_completed",
+                    cycle=cycle,
+                    transition=re_transition,
+                    **dispute_plan.as_event_details(),
+                )
+            except ReviewFlowTerminal:
+                raise
+            except Exception as exc:
+                raise ReviewFlowInterrupted(last_message) from exc
+            if re_transition == "T08":
+                fallback = resolve_fallback(product, re_message)
+                if fallback is None:
+                    raise ReviewFlowError("T08 did not yield a canonical fallback")
+                return fallback
+            if re_transition != "T07":
+                raise ReviewFlowError(
+                    f"hard rejection regeneration expected T07, got {re_transition}"
+                )
+            continue
+
+        _notify(
+            on_event,
+            "debate_started",
+            cycle=cycle,
+            **dispute_plan.as_event_details(),
+        )
         last_message = original
         try:
             rebuttal = audit(generate_rebuttal(product, original))
@@ -217,6 +283,7 @@ def produce_and_review(
                 "debate_completed",
                 cycle=cycle,
                 transition=re_transition,
+                **dispute_plan.as_event_details(),
             )
         except ReviewFlowTerminal:
             raise

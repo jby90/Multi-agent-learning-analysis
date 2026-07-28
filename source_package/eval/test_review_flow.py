@@ -30,6 +30,7 @@ def _verdict(
     *,
     reviewed_msg_id: str | None = None,
     role: str = "verdict",
+    rule_id: str = "R-04",
 ) -> dict[str, Any]:
     return {
         "agent": "review",
@@ -52,7 +53,7 @@ def _verdict(
                 if decision != "reject"
                 else [
                     {
-                        "rule_id": "R-04",
+                        "rule_id": rule_id,
                         "reason": "问题需要重新生成",
                         "evidence_ref": str(product["msg_id"]),
                     }
@@ -119,7 +120,7 @@ def test_audit_and_review_routes_reject_through_rebuttal_and_re_review() -> None
     approved = audit_and_review(
         lambda: _product("需要辩护的问题"),
         audit=audit,
-        review=lambda product: _verdict(product, "reject"),
+        review=lambda product: _verdict(product, "reject", rule_id="R-02"),
         generate_rebuttal=rebuttal,
         re_review=lambda product, *_: _verdict(
             product,
@@ -174,6 +175,59 @@ def test_audit_and_review_regenerates_without_returning_rejected_text() -> None:
     ] == ["不得展示的首版问题", "审核通过的替代问题"]
 
 
+def test_audit_and_review_routes_hard_reject_directly_to_regeneration() -> None:
+    audit = AuditLog()
+    labels = iter(("硬规则错误", "替代产物"))
+    events: list[tuple[str, Mapping[str, Any]]] = []
+
+    approved = audit_and_review(
+        lambda: _product(next(labels)),
+        audit=audit,
+        review=lambda product: _verdict(
+            product,
+            "reject" if product["payload"]["content"]["question"] == "硬规则错误" else "approve",
+        ),
+        generate_rebuttal=lambda *_: pytest.fail("hard reject must skip rebuttal"),
+        re_review=lambda *_: pytest.fail("hard reject must skip re-review"),
+        on_event=lambda event, details: events.append((event, details)),
+    )
+
+    assert approved["payload"]["content"]["question"] == "替代产物"
+    assert "debate_started" not in [event for event, _ in events]
+    regeneration = next(details for event, details in events if event == "regeneration_started")
+    assert regeneration["dispute_route"] == "local_regeneration"
+    assert regeneration["hard_veto_rules"] == ["R-04"]
+
+
+def test_audit_and_review_emits_targeted_debate_participants() -> None:
+    audit = AuditLog()
+    events: list[tuple[str, Mapping[str, Any]]] = []
+
+    audit_and_review(
+        lambda: _product("证据争议"),
+        audit=audit,
+        review=lambda product: _verdict(product, "reject", rule_id="R-02"),
+        generate_rebuttal=lambda product, verdict: {
+            "agent": "task",
+            "role": "rebuttal",
+            "payload": {
+                "type": "rebuttal_case",
+                "content": {
+                    "product_msg_id": product["msg_id"],
+                    "verdict_msg_id": verdict["msg_id"],
+                },
+            },
+            "evidence": [],
+        },
+        re_review=lambda product, *_: _verdict(product, "approve", role="re_verdict"),
+        on_event=lambda event, details: events.append((event, details)),
+    )
+
+    debate = next(details for event, details in events if event == "debate_started")
+    assert debate["rule_ids"] == ["R-02"]
+    assert debate["specialist_agents"] == ["evidence_review"]
+
+
 def test_audit_and_review_rejects_a_verdict_for_another_message() -> None:
     audit = AuditLog()
 
@@ -199,19 +253,10 @@ def test_audit_and_review_exhaustion_fails_closed() -> None:
             lambda: _product("始终未通过的问题"),
             audit=audit,
             review=lambda product: _verdict(product, "reject"),
-            generate_rebuttal=lambda *_: {
-                "agent": "task",
-                "role": "rebuttal",
-                "payload": {"type": "rebuttal_case", "content": {}},
-                "evidence": [],
-            },
-            re_review=lambda product, *_: _verdict(
-                product,
-                "reject",
-                role="re_verdict",
-            ),
+            generate_rebuttal=lambda *_: pytest.fail("hard reject must skip rebuttal"),
+            re_review=lambda *_: pytest.fail("hard reject must skip re-review"),
             max_cycles=2,
         )
 
     assert raised.value.action == "refuse"
-    assert raised.value.control_message["role"] == "re_verdict"
+    assert raised.value.control_message["role"] == "verdict"

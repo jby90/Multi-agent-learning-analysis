@@ -309,6 +309,12 @@ class InteractiveSessionManager:
                 producer_agent=producer_agent,
             ):
                 return
+            self._publish_targeted_dispute_specialists(
+                session,
+                event,
+                event_details,
+                producer_agent=producer_agent,
+            )
             if event == "producer_started":
                 self._publish_activity(
                     session,
@@ -360,13 +366,49 @@ class InteractiveSessionManager:
                 )
             elif event == "review_completed":
                 accepted = details.get("transition") == approved_transition
+                direct_regeneration = details.get("dispute_route") == "local_regeneration"
                 self._publish_activity(
                     session,
                     "review",
                     "approved" if accepted else "waiting",
                     "quality_gate",
-                    "质量门已通过" if accepted else "发现争议，准备复核",
+                    (
+                        "质量门已通过"
+                        if accepted
+                        else "命中硬规则，准备局部重生成"
+                        if direct_regeneration
+                        else "发现可辩争议，准备定向复核"
+                    ),
                     peers=() if accepted else (producer_agent,),
+                    details=event_details,
+                )
+            elif event == "regeneration_started":
+                self._publish_activity(
+                    session,
+                    "review",
+                    "blocked",
+                    "deterministic_rejection_route",
+                    "硬规则命中，已跳过模型辩论",
+                    peers=(producer_agent,),
+                    details=event_details,
+                )
+                self._publish_activity(
+                    session,
+                    producer_agent,
+                    "queued",
+                    "local_regeneration",
+                    "仅退回当前产物进行局部重生成",
+                    peers=("review",),
+                    details=event_details,
+                )
+            elif event == "regeneration_completed":
+                self._publish_activity(
+                    session,
+                    producer_agent,
+                    "queued",
+                    "local_regeneration",
+                    "重生成路由已确认，等待新候选产物",
+                    peers=("review",),
                     details=event_details,
                 )
             elif event == "debate_started":
@@ -1006,6 +1048,12 @@ class InteractiveSessionManager:
                 producer_agent="task",
             ):
                 return
+            self._publish_targeted_dispute_specialists(
+                session,
+                event,
+                details,
+                producer_agent="task",
+            )
             if event == "producer_started":
                 self._publish_activity(
                     session,
@@ -1057,13 +1105,39 @@ class InteractiveSessionManager:
                 )
             elif event == "review_completed":
                 accepted = details.get("decision") in {"approve", "approve_with_fix"}
+                direct_regeneration = details.get("dispute_route") == "local_regeneration"
                 self._publish_activity(
                     session,
                     "review",
                     "approved" if accepted else "waiting",
                     "follow_up_quality_gate",
-                    "追问已通过质量门" if accepted else "追问需要证据复核",
+                    (
+                        "追问已通过质量门"
+                        if accepted
+                        else "追问命中硬规则，准备局部重生成"
+                        if direct_regeneration
+                        else "追问存在可辩争议，准备定向复核"
+                    ),
                     peers=() if accepted else ("task",),
+                    details=details,
+                )
+            elif event == "regeneration_started":
+                self._publish_activity(
+                    session,
+                    "review",
+                    "blocked",
+                    "deterministic_rejection_route",
+                    "硬规则命中，追问跳过模型辩论",
+                    peers=("task",),
+                    details=details,
+                )
+                self._publish_activity(
+                    session,
+                    "task",
+                    "queued",
+                    "local_regeneration",
+                    "仅重新生成当前追问",
+                    peers=("review",),
                     details=details,
                 )
             elif event == "debate_started":
@@ -1106,6 +1180,11 @@ class InteractiveSessionManager:
             ),
             terminal_action="refuse",
             on_event=observe,
+            quality_policy=(
+                session.learning_contract.quality_policy
+                if session.learning_contract is not None
+                else None
+            ),
         )
         self._publish_activity(
             session,
@@ -1743,6 +1822,42 @@ class InteractiveSessionManager:
             details=details,
         )
         return True
+
+    @staticmethod
+    def _publish_targeted_dispute_specialists(
+        session: _InteractiveSession,
+        event: str,
+        details: Mapping[str, Any],
+        *,
+        producer_agent: str,
+    ) -> None:
+        if event not in {"debate_started", "debate_completed"}:
+            return
+        raw_agents = details.get("specialist_agents")
+        if not isinstance(raw_agents, list):
+            return
+        agents = tuple(
+            agent
+            for agent in raw_agents
+            if agent in {"evidence_review", "pedagogy_review"}
+        )
+        for agent in agents:
+            label = (
+                "正在针对 R-02 证据边界进行定向复核"
+                if agent == "evidence_review"
+                else "正在针对 R-03 教学适配进行定向复核"
+            )
+            if event == "debate_completed":
+                label = "定向复核已完成并交回专业审核仲裁"
+            InteractiveSessionManager._publish_activity(
+                session,
+                agent,
+                "debating" if event == "debate_started" else "done",
+                "targeted_dispute_review",
+                label,
+                peers=(producer_agent, "review"),
+                details=details,
+            )
 
     @staticmethod
     def _start_follow_up(

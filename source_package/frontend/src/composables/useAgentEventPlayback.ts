@@ -7,6 +7,7 @@ const REVIEW_GATE_HOLD_MS = 650
 const PARALLEL_RUNNING_HOLD_MS = 1800
 const PARALLEL_JOIN_HOLD_MS = 1100
 const DEBATE_HOLD_MS = 900
+const REGENERATION_ROUTE_HOLD_MS = 1200
 
 function detailString(event: AgentActivityEvent, key: string): string | undefined {
   const value = event.details?.[key]
@@ -24,6 +25,9 @@ export function agentEventHoldMs(event: AgentActivityEvent): number {
     && event.activity === 'quality_gate'
     && event.status === 'reviewing'
   ) return REVIEW_GATE_HOLD_MS
+  if (event.activity === 'deterministic_rejection_route') {
+    return REGENERATION_ROUTE_HOLD_MS
+  }
   if (event.status === 'debating') return DEBATE_HOLD_MS
   return 0
 }

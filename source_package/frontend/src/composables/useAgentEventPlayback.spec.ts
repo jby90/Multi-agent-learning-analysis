@@ -71,4 +71,11 @@ describe('useAgentEventPlayback', () => {
     expect(playback.events.value).toEqual([])
     scope.stop()
   })
+
+  it('holds the deterministic hard-rule route long enough to explain skipped debate', () => {
+    const routed = event(9, 'blocked', 'deterministic_rejection_route')
+    const debate = event(10, 'debating', 'bounded_debate')
+
+    expect(agentEventHoldMs(routed)).toBeGreaterThan(agentEventHoldMs(debate))
+  })
 })

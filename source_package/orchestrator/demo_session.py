@@ -471,6 +471,11 @@ def _produce_reviewed_product(
                 if learning_contract is not None
                 else 4
             ),
+            quality_policy=(
+                learning_contract.quality_policy
+                if learning_contract is not None
+                else None
+            ),
         )
     except (ReviewFlowInterrupted, ReviewFlowTerminal):
         raise
