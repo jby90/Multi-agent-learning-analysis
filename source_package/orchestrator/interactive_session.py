@@ -126,6 +126,7 @@ class _InteractiveSession:
     follow_up_target: str | None = None
     follow_up_had_support: bool = False
     generic_fallback_used: bool = False
+    recorded_turn_ids: set[str] = field(default_factory=set)
     processed_turn_ids: set[str] = field(default_factory=set)
     advance_lock: Any = field(default_factory=RLock, repr=False)
     follow_up_lock: Any = field(default_factory=RLock, repr=False)
@@ -901,14 +902,16 @@ class InteractiveSessionManager:
             f"正在评估第 {submitted_round} 轮学员判断",
         )
 
-        runtime.audit(
-            self._follow_up_submission_draft(
-                session,
-                answer_text,
-                client_turn_id,
-                submitted_round,
+        if client_turn_id not in session.recorded_turn_ids:
+            runtime.audit(
+                self._follow_up_submission_draft(
+                    session,
+                    answer_text,
+                    client_turn_id,
+                    submitted_round,
+                )
             )
-        )
+            session.recorded_turn_ids.add(client_turn_id)
         terminal_round = submitted_round >= MAX_FOLLOW_UP_ROUNDS
         generation_round = min(
             submitted_round + 1,

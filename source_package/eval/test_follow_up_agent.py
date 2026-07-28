@@ -257,6 +257,31 @@ def test_mastered_turn_after_the_minimum_does_not_generate_an_unused_question() 
     assert turn.product is None
 
 
+def test_mastered_turn_discards_an_unneeded_model_question() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "mastered",
+            "target_misconception": "M-03",
+            "question": "是否还要继续追问？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer="五月是显著的单期偏低信号，但不能当作随机噪声忽略。",
+        current_task=_current_task(task_agent, "T-05-A"),
+        task_agent=task_agent,
+        round_index=3,
+        max_rounds=4,
+        completion_allowed=True,
+    )
+
+    assert turn.assessment == "mastered"
+    assert turn.target_misconception == "M-03"
+    assert turn.product is None
+
+
 def test_terminal_round_never_generates_a_fifth_question() -> None:
     llm = FollowUpLLM(
         {

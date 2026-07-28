@@ -360,10 +360,6 @@ class FollowUpAgent:
 
         raw_question = result.data["question"]
         if terminal_round or (completion_allowed and assessment == "mastered"):
-            if not isinstance(raw_question, str) or raw_question.strip():
-                raise FollowUpGenerationError(
-                    "completed follow-up must not generate another question"
-                )
             return FollowUpTurn(
                 assessment=assessment,
                 target_misconception=target,
