@@ -79,12 +79,13 @@ describe('interactiveApi', () => {
     )
   })
 
-  it('maps advance and raw SQL to separate learner actions', async () => {
+  it('maps advance, curriculum continuation, and raw SQL to separate learner actions', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(state), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const api = createInteractiveApi('http://127.0.0.1:8765')
 
     await api.advance('session-1')
+    await api.continueLearning('session-1')
     await api.submitSql('session-1', 'SELECT plan_qty FROM fact_production_progress')
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -94,6 +95,11 @@ describe('interactiveApi', () => {
     )
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      'http://127.0.0.1:8765/api/sessions/session-1/continue',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({}) }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       'http://127.0.0.1:8765/api/sessions/session-1/sql',
       expect.objectContaining({
         body: JSON.stringify({ sql: 'SELECT plan_qty FROM fact_production_progress' }),

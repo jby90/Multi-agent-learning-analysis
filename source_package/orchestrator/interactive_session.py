@@ -213,6 +213,91 @@ class InteractiveSessionManager:
             self._sessions[session_id] = session
         return self.get_state(session_id)
 
+    def continue_learning(self, session_id: str) -> dict[str, Any]:
+        """Start the next diagnosed knowledge unit without repeating pretest."""
+        previous = self._get_session(session_id)
+        if (
+            previous.runtime.engine.state is not State.S10_DONE
+            or previous.awaiting != "done"
+            or previous.outcome != "completed"
+        ):
+            raise InteractiveSessionError("当前学习单元尚未完成，不能进入下一知识点。")
+        if previous.diagnosis is None:
+            raise InteractiveSessionError("缺少可继承的岗前测评结果，请重新开始。")
+        remaining = self._remaining_blind_spots(previous)
+        if not remaining:
+            raise InteractiveSessionError("当前培养路径已全部完成。")
+
+        created = self.create_session(previous.runtime.options.profile_id)
+        next_session = self._get_session(str(created["session_id"]))
+        previous_content = _payload_content(previous.diagnosis)
+        current_difficulty = _payload_content(
+            previous.learning_task or previous.lecture or {}
+        ).get("difficulty")
+        diagnosis_content = dict(previous_content)
+        diagnosis_content.update(
+            {
+                "event": "diagnosis_ready",
+                "blind_spots": remaining,
+                "diagnosis_narrative": "",
+                "suggestions": [],
+                "narrative_fallback": True,
+                "narrative_fallback_reason": "continued_learning",
+                "llm_latency_ms": 0,
+            }
+        )
+        if current_difficulty in {"basic", "applied", "advanced"}:
+            diagnosis_content["difficulty"] = current_difficulty
+        diagnosis = next_session.runtime.transition(
+            {
+                "trace_id": next_session.runtime.options.trace_id,
+                "agent": "diagnosis",
+                "role": "produce",
+                "payload": {
+                    "type": "profile_assessment",
+                    "content": diagnosis_content,
+                },
+                "evidence": [],
+                "claims": [],
+                "student_profile_ref": next_session.runtime.options.profile_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            "T02",
+        )
+        learning_contract = LearningContract.from_diagnosis(
+            profile=next_session.runtime.profile,
+            diagnosis=diagnosis,
+            domain_id=next_session.runtime.task.domain_id,
+            domain_package_sha256=next_session.runtime.task.domain_package_sha256,
+        )
+        next_session.runtime.audit(
+            learning_contract.control_draft(next_session.runtime.options.trace_id)
+        )
+        self._publish_activity(
+            next_session,
+            "diagnosis",
+            "done",
+            "continued_assessment",
+            "已沿用本轮画像与测评结果",
+        )
+        self._publish_activity(
+            next_session,
+            "knowledge",
+            "queued",
+            "evidence_retrieval",
+            f"下一知识点“{remaining[0]}”已进入生成队列",
+        )
+        next_session.diagnosis = diagnosis
+        next_session.learning_contract = learning_contract
+        next_session.artifact = diagnosis
+        next_session.interaction = {
+            "kind": "learning_notice",
+            "message": f"已沿用本轮画像与测评结果，下一知识点：{remaining[0]}。",
+        }
+        next_session.awaiting = "advance"
+        next_session.outcome = None
+        return self.get_state(next_session.session_id)
+
     def get_pretest(self, session_id: str) -> list[dict[str, Any]]:
         session = self._get_session(session_id)
         if session.awaiting != "pretest":
@@ -589,6 +674,7 @@ class InteractiveSessionManager:
                 return self.get_state(session_id)
             session.lecture = lecture
             session.artifact = lecture
+            session.interaction = None
             self._publish_activity(
                 session,
                 "task",
@@ -788,6 +874,7 @@ class InteractiveSessionManager:
             "step_up" if session.task_phase == "progression" else "keep"
         )
         runtime = session.runtime
+        remaining_blind_spots = self._remaining_blind_spots(session)
         path = runtime.transition(
             _path_update_draft(
                 runtime.options.trace_id,
@@ -803,16 +890,49 @@ class InteractiveSessionManager:
                         session.diagnosis,
                         evidence_result,
                     ),
+                    "curriculum_has_next": bool(remaining_blind_spots),
+                    "next_knowledge_point": (
+                        remaining_blind_spots[0]
+                        if remaining_blind_spots
+                        else None
+                    ),
                 },
             ),
             "T20",
         )
         session.artifact = path
-        session.interaction = None
+        session.interaction = (
+            {
+                "kind": "next_learning_step",
+                "message": f"下一知识点：{remaining_blind_spots[0]}",
+                "knowledge_point": remaining_blind_spots[0],
+            }
+            if remaining_blind_spots
+            else None
+        )
         session.pending_learning_action = None
         session.awaiting = "done"
         session.outcome = "completed"
         return self.get_state(session.session_id)
+
+    @staticmethod
+    def _remaining_blind_spots(session: _InteractiveSession) -> list[str]:
+        if session.diagnosis is None:
+            return []
+        blind_spots = [
+            item.strip()
+            for item in _payload_content(session.diagnosis).get("blind_spots", [])
+            if isinstance(item, str) and item.strip()
+        ]
+        if not blind_spots:
+            return []
+        current = _payload_content(
+            session.learning_task or session.lecture or {}
+        ).get("knowledge_point")
+        remaining = [item for item in blind_spots if item != current]
+        if len(remaining) == len(blind_spots):
+            return blind_spots[1:]
+        return remaining
 
     @staticmethod
     def _completed_nodes(session: _InteractiveSession) -> list[str]:
@@ -2040,6 +2160,12 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
                 session_id, action = parts[2], parts[3]
                 if action == "advance":
                     self._send_json(200, self.manager.advance(session_id))
+                    return
+                if action == "continue":
+                    self._send_json(
+                        201,
+                        self.manager.continue_learning(session_id),
+                    )
                     return
                 if action == "follow-up":
                     text = body.get("text")

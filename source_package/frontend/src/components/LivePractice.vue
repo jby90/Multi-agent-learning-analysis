@@ -79,6 +79,17 @@ const completionMessage = computed(() => {
   return '训练完成'
 })
 
+const nextKnowledgePoint = computed(() => {
+  const interaction = session.value?.interaction
+  if (
+    session.value?.awaiting !== 'done'
+    || session.value.outcome !== 'completed'
+    || interaction?.kind !== 'next_learning_step'
+  ) return undefined
+  return interaction.knowledge_point
+    || interaction.message.replace(/^下一知识点[：:]\s*/u, '').trim()
+})
+
 type SqlFeedback = Omit<VerificationFailureCopy, 'event'> & {
   event?: VerificationFailureEvent
 }
@@ -204,6 +215,23 @@ function newClientTurnId(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.()
   if (randomUuid) return randomUuid
   return `learner-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+async function continueLearning(): Promise<void> {
+  const value = session.value
+  if (busy.value || !value || !nextKnowledgePoint.value) return
+  busy.value = true
+  errorMessage.value = ''
+  try {
+    const continued = await api.continueLearning(value.session_id)
+    sessionStorage.setItem('ref-interactive-session', continued.session_id)
+    connectAgentEvents(continued.session_id)
+    applyState(continued)
+  } catch (error) {
+    errorMessage.value = publicRequestError(error, '下一知识点暂时无法开始。')
+  } finally {
+    busy.value = false
+  }
 }
 
 function updateFollowUpDraft(): void {
@@ -358,6 +386,11 @@ onBeforeUnmount(() => {
     </form>
 
     <div v-else-if="advanceAction" class="live-action-block">
+      <p
+        v-if="session.interaction?.kind === 'learning_notice'"
+        class="learning-notice"
+        data-testid="learning-notice"
+      >{{ learnerText(session.interaction.message) }}</p>
       <button
         type="button"
         class="primary-action"
@@ -483,6 +516,16 @@ onBeforeUnmount(() => {
 
     <div v-else-if="session.awaiting === 'done'" class="live-complete">
       <strong>{{ completionMessage }}</strong>
+      <template v-if="nextKnowledgePoint">
+        <p>本知识点已经达标，下一知识点：{{ learnerText(nextKnowledgePoint) }}</p>
+        <button
+          type="button"
+          class="primary-action live-next-action"
+          aria-label="开始下一知识点"
+          :disabled="busy"
+          @click="continueLearning"
+        >{{ busy ? '正在衔接…' : '开始下一知识点' }}</button>
+      </template>
     </div>
 
     <p v-if="errorMessage" class="live-error" role="alert">{{ errorMessage }}</p>

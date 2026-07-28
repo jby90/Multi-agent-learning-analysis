@@ -1101,6 +1101,27 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     assert completed["awaiting"] == "done"
     assert completed["outcome"] == "completed"
     assert completed["artifact"]["payload"]["content"]["difficulty_action"] == "step_up"
+    assert completed["interaction"] == {
+        "kind": "next_learning_step",
+        "message": "下一知识点：完成率计算",
+        "knowledge_point": "完成率计算",
+    }
+
+    continued = manager.continue_learning(session_id)
+    assert continued["session_id"] != session_id
+    assert continued["state"] == "S2_KNOWLEDGE"
+    assert continued["awaiting"] == "advance"
+    assert continued["profile"]["profile_id"] == "line_leader"
+    assert continued["learning_contract"]["target_knowledge_points"][0] == "完成率计算"
+    assert continued["learning_contract"]["difficulty"] == "applied"
+    assert continued["interaction"] == {
+        "kind": "learning_notice",
+        "message": "已沿用本轮画像与测评结果，下一知识点：完成率计算。",
+    }
+
+    next_lecture = manager.advance(continued["session_id"])
+    assert next_lecture["state"] == "S3_TASK"
+    assert next_lecture["artifact"]["payload"]["content"]["knowledge_point"] == "完成率计算"
 
 
 def test_conclusion_task_uses_the_same_deterministic_learning_strategy(
@@ -1217,7 +1238,7 @@ def test_top_tier_answer_completes_without_claiming_a_fake_increase(
     completed = manager.advance(session_id)
 
     assert completed["state"] == "S10_DONE"
-    assert completed["interaction"] is None
+    assert completed["interaction"]["kind"] == "next_learning_step"
     content = completed["artifact"]["payload"]["content"]
     assert content["difficulty_action"] == "keep"
     assert "提高一档难度" not in json.dumps(completed, ensure_ascii=False)

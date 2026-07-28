@@ -62,6 +62,7 @@ export type InteractiveInteraction =
   | {
       kind: 'next_learning_step'
       message: string
+      knowledge_point?: string
     }
   | {
       kind: 'learning_notice'
@@ -130,6 +131,7 @@ export interface InteractiveApi {
     answers: Record<string, string>,
   ): Promise<InteractiveState>
   advance(sessionId: string): Promise<InteractiveState>
+  continueLearning(sessionId: string): Promise<InteractiveState>
   submitSql(sessionId: string, sql: string): Promise<InteractiveState>
   submitFollowUp(
     sessionId: string,
@@ -228,6 +230,11 @@ export function createInteractiveApi(
     ),
     advance: (sessionId) => request(
       `/api/sessions/${encodeURIComponent(sessionId)}/advance`,
+      'POST',
+      {},
+    ),
+    continueLearning: (sessionId) => request(
+      `/api/sessions/${encodeURIComponent(sessionId)}/continue`,
       'POST',
       {},
     ),

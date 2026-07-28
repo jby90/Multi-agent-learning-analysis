@@ -47,6 +47,15 @@ function fakeApi(): InteractiveApi {
       awaiting: 'advance',
     })),
     advance: vi.fn(async () => sessionState()),
+    continueLearning: vi.fn(async () => sessionState({
+      session_id: 'session-next',
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+      interaction: {
+        kind: 'learning_notice',
+        message: '已沿用本轮画像与测评结果，下一知识点：完成率计算。',
+      },
+    })),
     submitSql: vi.fn(async () => sessionState()),
     submitFollowUp: vi.fn(async () => sessionState()),
   }
@@ -379,6 +388,35 @@ describe('LivePractice', () => {
     expect(wrapper.get('button[aria-label="查看下一步训练"]').text())
       .toBe('查看下一步训练')
     expect(isLearnerSafeText(wrapper.text())).toBe(true)
+  })
+
+  it('continues a completed curriculum at the next knowledge point', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S10_DONE',
+      awaiting: 'done',
+      outcome: 'completed',
+      interaction: {
+        kind: 'next_learning_step',
+        message: '下一知识点：完成率计算',
+        knowledge_point: '完成率计算',
+      },
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('下一知识点：完成率计算')
+    await wrapper.get('button[aria-label="开始下一知识点"]').trigger('click')
+    await flushPromises()
+
+    expect(api.continueLearning).toHaveBeenCalledWith('session-live')
+    expect(sessionStorage.getItem('ref-interactive-session')).toBe('session-next')
+    expect(wrapper.get('[data-testid="learning-notice"]').text())
+      .toContain('下一知识点：完成率计算')
+    expect(wrapper.find('button[aria-label="打开岗位微课"]').exists()).toBe(true)
   })
 
   it('resumes a stored session and polls server-owned state', async () => {

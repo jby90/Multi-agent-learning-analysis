@@ -3226,6 +3226,10 @@ p {
   color: #45684d;
 }
 
+.live-next-action {
+  width: min(360px, 100%);
+}
+
 .collision-backdrop {
   position: fixed;
   z-index: 1000;
