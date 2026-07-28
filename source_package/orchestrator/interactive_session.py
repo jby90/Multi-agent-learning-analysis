@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -39,6 +38,7 @@ from agents.verification_agent import (
     _result_is_empty,
 )
 from coordination.contracts import LearningContract
+from coordination.parallel import BranchSpec, ParallelStage, ParallelStageExecutor
 from orchestrator.demo_session import (
     DemoOptions,
     _DemoRuntime,
@@ -156,6 +156,7 @@ class InteractiveSessionManager:
         self._follow_up_llm_call = follow_up_llm_call
         self._executor_factory = executor_factory
         self._mode = mode or os.environ.get("REF_DEMO_MODE", "live")
+        self._resource_stage_executor = ParallelStageExecutor(max_concurrency=2)
         self._sessions: dict[str, _InteractiveSession] = {}
         self._lock = RLock()
 
@@ -613,34 +614,13 @@ class InteractiveSessionManager:
             if not isinstance(blind_spots, list) or not blind_spots:
                 raise InteractiveSessionError("岗前测评没有产生知识盲区。")
             def prefetch_task() -> dict[str, Any]:
-                self._publish_activity(
-                    session,
-                    "task",
-                    "working",
-                    "parallel_task_prefetch",
-                    "正在与微课并行准备实操任务草稿",
-                    peers=("knowledge",),
-                )
-                draft = runtime.task.generate_for_diagnosis(
+                return runtime.task.generate_for_diagnosis(
                     str(blind_spots[0]),
                     str(diagnosis_content.get("difficulty")),
                 )
-                self._publish_activity(
-                    session,
-                    "task",
-                    "waiting",
-                    "parallel_task_prefetch",
-                    "任务草稿已就绪，等待主链路质量门",
-                    peers=("knowledge",),
-                )
-                return draft
 
-            with ThreadPoolExecutor(
-                max_workers=1,
-                thread_name_prefix="task-prefetch",
-            ) as pool:
-                task_future = pool.submit(prefetch_task)
-                lecture = self._produce_reviewed_product(
+            def produce_lecture() -> dict[str, Any] | None:
+                return self._produce_reviewed_product(
                     session,
                     lambda: _generate_reviewable_lecture(
                         runtime,
@@ -655,21 +635,44 @@ class InteractiveSessionManager:
                     activity="personalized_lecture",
                     working_label="正在检索证据并生成个性化微课",
                 )
-                try:
-                    session.prefetched_task = task_future.result()
-                    session.prefetched_task_generator = type(
-                        runtime.task
-                    ).generate_for_diagnosis
-                except Exception:
-                    session.prefetched_task = None
-                    session.prefetched_task_generator = None
-                    self._publish_activity(
-                        session,
-                        "task",
-                        "queued",
-                        "task_design",
-                        "并行草稿未完成，将在主链路重试",
-                    )
+
+            resource_result = self._resource_stage_executor.execute(
+                ParallelStage(
+                    stage_id="resource-generation",
+                    branches=(
+                        BranchSpec("knowledge", produce_lecture),
+                        BranchSpec("task", prefetch_task, required=False),
+                    ),
+                ),
+                correlation_id=f"{runtime.options.trace_id}-resources",
+                observer=lambda event, details: self._observe_resource_stage(
+                    session,
+                    event,
+                    details,
+                ),
+            )
+            lecture_branch = resource_result.branch("knowledge")
+            if lecture_branch.status != "succeeded":
+                raise InteractiveSessionError(
+                    "个性化微课暂时无法生成，请稍后重试。"
+                )
+            lecture = lecture_branch.value
+            task_branch = resource_result.branch("task")
+            if task_branch.status == "succeeded":
+                session.prefetched_task = task_branch.value
+                session.prefetched_task_generator = type(
+                    runtime.task
+                ).generate_for_diagnosis
+            else:
+                session.prefetched_task = None
+                session.prefetched_task_generator = None
+                self._publish_activity(
+                    session,
+                    "task",
+                    "queued",
+                    "task_design",
+                    "并行草稿未完成，将在主链路重试",
+                )
             if lecture is None:
                 return self.get_state(session_id)
             session.lecture = lecture
@@ -1892,6 +1895,107 @@ class InteractiveSessionManager:
             max(after_sequence, 0),
             timeout=timeout,
         )
+
+    def _observe_resource_stage(
+        self,
+        session: _InteractiveSession,
+        event: str,
+        details: Mapping[str, Any],
+    ) -> None:
+        """Translate the shared fork/join protocol into Agent lifecycle events."""
+        normalized = dict(details)
+        branch_ids = normalized.get("branch_ids")
+        branches = normalized.get("branches")
+        fan_out = (
+            len(branch_ids)
+            if isinstance(branch_ids, list)
+            else len(branches)
+            if isinstance(branches, list)
+            else 2
+        )
+        normalized["fan_out"] = fan_out
+        if event == "stage_started":
+            normalized["aggregation"] = "pending"
+            for agent, peer in (("knowledge", "task"), ("task", "knowledge")):
+                self._publish_activity(
+                    session,
+                    agent,
+                    "collaborating",
+                    "parallel_resource_generation",
+                    "个性化微课与实操草稿已双路并行派发",
+                    peers=(peer,),
+                    details=normalized,
+                )
+            return
+        branch_id = normalized.get("branch_id")
+        if branch_id not in {"knowledge", "task"}:
+            if event != "stage_completed":
+                return
+        peer = "task" if branch_id == "knowledge" else "knowledge"
+        if event == "branch_started":
+            label = (
+                "正在检索证据并生成个性化微课"
+                if branch_id == "knowledge"
+                else "正在并行准备实操任务草稿"
+            )
+            self._publish_activity(
+                session,
+                str(branch_id),
+                "working",
+                "parallel_resource_generation",
+                label,
+                peers=(peer,),
+                details={**normalized, "aggregation": "pending"},
+            )
+            return
+        if event == "branch_completed":
+            label = (
+                "微课分支已完成，等待资源汇聚"
+                if branch_id == "knowledge"
+                else "实操草稿已就绪，等待资源汇聚"
+            )
+            self._publish_activity(
+                session,
+                str(branch_id),
+                "waiting",
+                "parallel_resource_generation",
+                label,
+                peers=(peer,),
+                details={**normalized, "aggregation": "pending"},
+            )
+            return
+        if event == "branch_failed":
+            self._publish_activity(
+                session,
+                str(branch_id),
+                "blocked",
+                "parallel_resource_generation",
+                "当前资源分支未完成",
+                peers=(peer,),
+                details={**normalized, "aggregation": "pending"},
+            )
+            return
+        if event == "stage_completed":
+            normalized.update(
+                {
+                    "aggregation": "deterministic",
+                    "parallel_elapsed_ms": normalized.get("elapsed_ms"),
+                }
+            )
+            safely_stopped = session.awaiting == "done" and session.outcome != "completed"
+            self._publish_activity(
+                session,
+                "knowledge",
+                "blocked" if safely_stopped else "done",
+                "parallel_resource_generation",
+                (
+                    "资源并行阶段已安全停止"
+                    if safely_stopped
+                    else "微课与实操草稿已汇聚，进入主链路质量门"
+                ),
+                peers=("task",),
+                details=normalized,
+            )
 
     @staticmethod
     def _publish_activity(

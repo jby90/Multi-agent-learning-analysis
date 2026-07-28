@@ -103,14 +103,18 @@ const primaryActiveCount = computed(() => agents.value.filter(
 const approvedCount = computed(() => agents.value.filter(
   (agent) => ['approved', 'done'].includes(agent.status),
 ).length)
-const reviewFanOut = computed(() => {
-  const event = [...props.events].reverse().find(
-    (item) => item.activity === 'parallel_quality_review'
-      && typeof item.details?.fan_out === 'number',
-  )
-  return typeof event?.details?.fan_out === 'number'
-    ? event.details.fan_out
-    : undefined
+const parallelStageMetric = computed(() => {
+  const event = [...props.events].reverse().find((item) => (
+    ['parallel_quality_review', 'parallel_resource_generation'].includes(item.activity)
+    && typeof item.details?.fan_out === 'number'
+  ))
+  if (!event || typeof event.details?.fan_out !== 'number') return undefined
+  return {
+    fanOut: event.details.fan_out,
+    label: event.activity === 'parallel_resource_generation'
+      ? '路资源并发'
+      : '路并发审核',
+  }
 })
 
 type ReviewBranchProof = {
@@ -441,7 +445,9 @@ function statusLabel(status: AgentActivityStatus): string {
           <small v-if="reducedMotion">RM兼容</small>
         </button>
         <div class="stage-metrics" aria-label="协同状态摘要">
-          <span v-if="reviewFanOut"><b>{{ reviewFanOut }}</b> 路并发审核</span>
+          <span v-if="parallelStageMetric">
+            <b>{{ parallelStageMetric.fanOut }}</b> {{ parallelStageMetric.label }}
+          </span>
           <span><b>{{ activeCount }}</b> 活跃</span>
           <span><b>{{ approvedCount }}</b> 已接力</span>
         </div>

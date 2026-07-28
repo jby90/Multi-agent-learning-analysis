@@ -8,6 +8,8 @@ const PARALLEL_RUNNING_HOLD_MS = 1800
 const PARALLEL_JOIN_HOLD_MS = 1100
 const DEBATE_HOLD_MS = 900
 const REGENERATION_ROUTE_HOLD_MS = 1200
+const RESOURCE_BRANCH_HOLD_MS = 700
+const RESOURCE_JOIN_HOLD_MS = 850
 
 function detailString(event: AgentActivityEvent, key: string): string | undefined {
   const value = event.details?.[key]
@@ -15,6 +17,15 @@ function detailString(event: AgentActivityEvent, key: string): string | undefine
 }
 
 export function agentEventHoldMs(event: AgentActivityEvent): number {
+  if (event.activity === 'parallel_resource_generation') {
+    if (detailString(event, 'aggregation') === 'deterministic') {
+      return RESOURCE_JOIN_HOLD_MS
+    }
+    if (event.status === 'working' || event.status === 'collaborating') {
+      return RESOURCE_BRANCH_HOLD_MS
+    }
+    return 0
+  }
   if (event.activity === 'parallel_quality_review') {
     return detailString(event, 'aggregation') === 'pending'
       ? PARALLEL_RUNNING_HOLD_MS

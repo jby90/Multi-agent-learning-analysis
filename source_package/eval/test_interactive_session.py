@@ -298,12 +298,17 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
     )
 
     lecture = manager.advance(session_id)
-    task_events = [
+    resource_events = [
         event
         for event in manager.get_agent_events(session_id)
-        if event["agent"] == "task"
-        and event["activity"] == "parallel_task_prefetch"
+        if event["activity"] == "parallel_resource_generation"
     ]
+    task_events = [event for event in resource_events if event["agent"] == "task"]
+    joined = next(
+        event
+        for event in resource_events
+        if event["details"].get("aggregation") == "deterministic"
+    )
     parallel_review_events = [
         event
         for event in manager.get_agent_events(session_id)
@@ -317,7 +322,21 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         and event["activity"] == "specialist_quality_review"
     ]
 
-    assert [event["status"] for event in task_events] == ["working", "waiting"]
+    assert [event["status"] for event in task_events] == [
+        "collaborating",
+        "working",
+        "waiting",
+    ]
+    assert joined["details"]["stage_id"] == "resource-generation"
+    assert joined["details"]["fan_out"] == 2
+    assert joined["details"]["parallel_elapsed_ms"] >= 0
+    assert [
+        branch["branch_id"] for branch in joined["details"]["branches"]
+    ] == ["knowledge", "task"]
+    assert all(
+        branch["status"] == "succeeded"
+        for branch in joined["details"]["branches"]
+    )
     assert [event["status"] for event in parallel_review_events] == [
         "collaborating",
         "reviewing",
@@ -348,6 +367,65 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         message["payload"]["type"] not in {"quiz_set", "practice_guide"}
         for message in lecture["messages"]
     )
+
+
+def test_optional_resource_branch_failure_retries_on_the_main_chain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = TaskAgent.generate_for_diagnosis
+    calls = 0
+
+    def fail_prefetch_once(
+        self: TaskAgent,
+        knowledge_point: str,
+        diagnostic_difficulty: str,
+    ) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("prefetch provider detail")
+        return original(self, knowledge_point, diagnostic_difficulty)
+
+    monkeypatch.setattr(TaskAgent, "generate_for_diagnosis", fail_prefetch_once)
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=RecordingExecutor,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+
+    lecture = manager.advance(session_id)
+    task = manager.advance(session_id)
+
+    assert lecture["state"] == "S3_TASK"
+    assert task["state"] == "S7_STUDENT"
+    assert calls == 2
+    resource_events = [
+        event
+        for event in manager.get_agent_events(session_id)
+        if event["activity"] == "parallel_resource_generation"
+    ]
+    failed = next(event for event in resource_events if event["status"] == "blocked")
+    joined = next(
+        event
+        for event in resource_events
+        if event["details"].get("aggregation") == "deterministic"
+    )
+    task_branch = next(
+        branch
+        for branch in joined["details"]["branches"]
+        if branch["branch_id"] == "task"
+    )
+    assert failed["agent"] == "task"
+    assert task_branch["required"] is False
+    assert task_branch["status"] == "failed"
+    assert "provider detail" not in json.dumps(resource_events, ensure_ascii=False)
 
 
 def test_advance_routes_review_reject_through_shared_debate(

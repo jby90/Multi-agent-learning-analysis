@@ -98,6 +98,38 @@ describe('AgentStage', () => {
     expect(wrapper.text()).toContain('双路并行执行中')
   })
 
+  it('shows the shared resource fork/join stage without adding another proof panel', () => {
+    const dispatched = {
+      ...event(
+        3,
+        'knowledge',
+        'collaborating',
+        '个性化微课与实操草稿已双路并行派发',
+        ['task'],
+        { fan_out: 2, aggregation: 'pending', stage_id: 'resource-generation' },
+      ),
+      activity: 'parallel_resource_generation',
+    }
+    const taskWorking = {
+      ...event(
+        4,
+        'task',
+        'working',
+        '正在并行准备实操任务草稿',
+        ['knowledge'],
+        { fan_out: 2, aggregation: 'pending', branch_id: 'task' },
+      ),
+      activity: 'parallel_resource_generation',
+    }
+    const wrapper = mount(AgentStage, { props: { view, events: [dispatched, taskWorking] } })
+
+    expect(wrapper.text()).toContain('2 路资源并发')
+    expect(wrapper.get('[data-agent="knowledge"]').classes()).toContain('is-collaborating')
+    expect(wrapper.get('[data-agent="task"]').classes()).toContain('is-working')
+    expect(wrapper.text()).toContain('正在并行准备实操任务草稿')
+    expect(wrapper.findAll('.parallel-proof')).toHaveLength(0)
+  })
+
   it('keeps deterministic join evidence visible after review completes', () => {
     const completed = {
       ...event(

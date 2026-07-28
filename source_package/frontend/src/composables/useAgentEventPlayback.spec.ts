@@ -78,4 +78,12 @@ describe('useAgentEventPlayback', () => {
 
     expect(agentEventHoldMs(routed)).toBeGreaterThan(agentEventHoldMs(debate))
   })
+
+  it('keeps resource fan-out and join events perceptible', () => {
+    const working = event(11, 'working', 'parallel_resource_generation', 'pending')
+    const joined = event(12, 'done', 'parallel_resource_generation', 'deterministic')
+
+    expect(agentEventHoldMs(working)).toBeGreaterThan(0)
+    expect(agentEventHoldMs(joined)).toBeGreaterThan(agentEventHoldMs(working))
+  })
 })
