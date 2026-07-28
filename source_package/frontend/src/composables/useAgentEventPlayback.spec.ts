@@ -1,0 +1,74 @@
+import { effectScope } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { AgentActivityEvent } from '../lib/interactiveApi'
+import { agentEventHoldMs, useAgentEventPlayback } from './useAgentEventPlayback'
+
+
+function event(
+  sequence: number,
+  status: AgentActivityEvent['status'],
+  activity: string,
+  aggregation?: string,
+): AgentActivityEvent {
+  return {
+    sequence,
+    trace_id: 'trace-playback',
+    agent: 'review',
+    status,
+    activity,
+    label: `event-${sequence}`,
+    stage: 'S5_REVIEW',
+    peers: ['knowledge'],
+    timestamp: '2026-07-28T02:00:00Z',
+    details: aggregation ? { aggregation } : undefined,
+  }
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('useAgentEventPlayback', () => {
+  it('makes review, parallel execution, and join states perceptible in order', () => {
+    vi.useFakeTimers()
+    const scope = effectScope()
+    const playback = scope.run(() => useAgentEventPlayback())!
+    const review = event(1, 'reviewing', 'quality_gate')
+    const running = event(2, 'collaborating', 'parallel_quality_review', 'pending')
+    const joined = event(3, 'reviewing', 'parallel_quality_review', 'deterministic')
+    const approved = event(4, 'approved', 'quality_gate')
+
+    playback.receive(review)
+    playback.receive(running)
+    playback.receive(joined)
+    playback.receive(approved)
+    expect(playback.events.value.map((item) => item.sequence)).toEqual([1])
+
+    vi.advanceTimersByTime(agentEventHoldMs(review))
+    expect(playback.events.value.map((item) => item.sequence)).toEqual([1, 2])
+
+    vi.advanceTimersByTime(agentEventHoldMs(running))
+    expect(playback.events.value.map((item) => item.sequence)).toEqual([1, 2, 3])
+
+    vi.advanceTimersByTime(agentEventHoldMs(joined))
+    expect(playback.events.value.map((item) => item.sequence)).toEqual([1, 2, 3, 4])
+    scope.stop()
+  })
+
+  it('deduplicates events and clears queued states on reset', () => {
+    vi.useFakeTimers()
+    const scope = effectScope()
+    const playback = scope.run(() => useAgentEventPlayback())!
+    const review = event(1, 'reviewing', 'quality_gate')
+
+    playback.receive(review)
+    playback.receive(review)
+    playback.receive(event(2, 'collaborating', 'parallel_quality_review', 'pending'))
+    playback.reset()
+    vi.runAllTimers()
+
+    expect(playback.events.value).toEqual([])
+    scope.stop()
+  })
+})

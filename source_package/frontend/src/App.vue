@@ -13,11 +13,12 @@ import ProfilePanel from './components/ProfilePanel.vue'
 import ReplayToolbar from './components/ReplayToolbar.vue'
 import ResourcePanel from './components/ResourcePanel.vue'
 import TracePanel from './components/TracePanel.vue'
+import { useAgentEventPlayback } from './composables/useAgentEventPlayback'
 import { useReplay, type ReplaySpeed } from './composables/useReplay'
 import { buildTraceView, listKeyframes } from './lib/traceModel'
 import { parseTraceJsonl } from './lib/traceParser'
 import { parseImportedTrace, serializeTraceJsonl } from './lib/traceTransfer'
-import type { AgentActivityEvent, InteractiveState } from './lib/interactiveApi'
+import type { InteractiveState } from './lib/interactiveApi'
 import type { DataCollision, TraceDocument, TraceManifestEntry } from './types/trace'
 
 
@@ -30,7 +31,11 @@ const entryMode = ref<'replay' | 'live'>(
 const viewMode = ref<'student' | 'collaboration'>('student')
 const liveDocument = ref<TraceDocument>()
 const liveState = ref<InteractiveState>()
-const liveAgentEvents = ref<AgentActivityEvent[]>([])
+const {
+  events: liveAgentEvents,
+  receive: receiveAgentEvent,
+  reset: resetAgentEventPlayback,
+} = useAgentEventPlayback()
 const replayCollision = ref<DataCollision>()
 const replayCollisionKey = ref('')
 const dismissedReplayCollision = ref('')
@@ -136,15 +141,10 @@ function updateLiveState(state: InteractiveState): void {
   }
 }
 
-function receiveAgentEvent(event: AgentActivityEvent): void {
-  if (liveAgentEvents.value.some((item) => item.sequence === event.sequence)) return
-  liveAgentEvents.value = [...liveAgentEvents.value, event].slice(-160)
-}
-
 function resetLiveState(): void {
   liveState.value = undefined
   liveDocument.value = undefined
-  liveAgentEvents.value = []
+  resetAgentEventPlayback()
 }
 
 async function importTrace(file: File): Promise<void> {

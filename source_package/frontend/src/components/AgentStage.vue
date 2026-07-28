@@ -122,7 +122,7 @@ type ParallelReviewProof = {
   artifactId?: string
   contractId?: string
   correlationId?: string
-  elapsedMs: number
+  elapsedMs?: number
   isComplete: boolean
   branches: ReviewBranchProof[]
   savedMs?: number
@@ -172,18 +172,13 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
       })
     }
   }
-  // motionProgress is the component's animation clock, so the running wall time
-  // updates without a second timer or fabricated backend progress percentage.
-  void motionProgress.value
   const started = [...events].reverse().find((item) => (
     detailString(item.details, 'aggregation') === 'pending'
     && detailString(item.details, 'artifact_id') === detailString(details, 'artifact_id')
   ))
-  const startedAt = started ? Date.parse(started.timestamp) : Number.NaN
-  const liveElapsed = Number.isFinite(startedAt) ? Date.now() - startedAt : 0
   const elapsedMs = isComplete
-    ? (detailNumber(details, 'parallel_elapsed_ms') ?? 0)
-    : Math.max(0, liveElapsed)
+    ? detailNumber(details, 'parallel_elapsed_ms')
+    : undefined
   const branches = (['R-02', 'R-03'] as const).map((branchId): ReviewBranchProof => {
     const completed = completedBranches.get(branchId)
     return {
@@ -203,7 +198,9 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
     elapsedMs,
     isComplete,
     branches,
-    savedMs: isComplete && branchTotal > elapsedMs ? branchTotal - elapsedMs : undefined,
+    savedMs: isComplete && elapsedMs !== undefined && branchTotal > elapsedMs
+      ? branchTotal - elapsedMs
+      : undefined,
   }
 })
 
