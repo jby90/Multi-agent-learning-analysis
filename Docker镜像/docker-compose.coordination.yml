@@ -1,0 +1,58 @@
+name: multiagent-decision-coordination
+
+services:
+  backend:
+    image: multiagent-decision-backend:coordination-32d3e49
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: database
+      MYSQL_PORT: "3306"
+      REF_READER_PASSWORD: ${REF_READER_PASSWORD:?REF_READER_PASSWORD is required}
+      REF_DOMAIN_CONFIG: production_progress
+      REF_DEMO_MODE: live
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}
+    ports:
+      - "127.0.0.1:${COORDINATION_BACKEND_HOST_PORT:-18766}:8765"
+    volumes:
+      - backend_runtime:/app/runtime
+    networks:
+      - coordination_internal
+      - legacy_database
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.create_connection(('127.0.0.1',8765),2); s.close()",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  frontend:
+    image: multiagent-decision-frontend:coordination-32d3e49
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${COORDINATION_FRONTEND_HOST_PORT:-18081}:80"
+    networks:
+      - coordination_internal
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  backend_runtime:
+
+networks:
+  coordination_internal:
+  legacy_database:
+    external: true
+    name: multiagent-decision-1-1-0_default

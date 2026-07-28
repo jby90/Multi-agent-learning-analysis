@@ -1,6 +1,6 @@
-# 已有数据库版本升级说明
+# 保留旧版并并行运行新版
 
-本目录提供当前协同重构版的后端、前端增量镜像。它适用于已经部署过旧版、已经拥有 `multiagent-decision-1-1-0_database_data` 数据卷的学生。
+本目录提供当前协同重构版的后端、前端增量镜像。它适用于已经部署过旧版、已经拥有 `multiagent-decision-1-1-0_database_data` 数据卷的学生。推荐保留旧版并在另一组端口同时运行新版。
 
 本次没有修改数据库结构和比赛数据，因此不需要重新加载数据库镜像，也不需要重新导入 CSV。
 
@@ -21,7 +21,7 @@ docker volume ls | Select-String 'multiagent-decision-1-1-0_database_data'
 
 能看到该数据卷后再继续。升级过程中不要执行 `docker compose down -v`，也不要运行 `./stop.ps1 -RemoveData`。
 
-## 二、为旧版前后端镜像保留回滚标签
+## 二、永久保留旧版镜像标签
 
 ```powershell
 docker tag multiagent-decision-backend:1.1.0 multiagent-decision-backend:backup-before-coordination
@@ -41,30 +41,42 @@ Get-FileHash -Algorithm SHA256 .\multiagent-decision-frontend_1.1.0-coordination
 
 计算结果应与校验文件一致。
 
-## 四、加载新版前后端镜像
+## 四、加载新版并建立独立标签
 
 ```powershell
 docker image load --input .\multiagent-decision-backend_1.1.0-coordination-32d3e49.tar.gz
 docker image load --input .\multiagent-decision-frontend_1.1.0-coordination-32d3e49.tar.gz
+
+docker tag multiagent-decision-backend:1.1.0 multiagent-decision-backend:coordination-32d3e49
+docker tag multiagent-decision-frontend:1.1.0 multiagent-decision-frontend:coordination-32d3e49
+
+docker tag multiagent-decision-backend:backup-before-coordination multiagent-decision-backend:1.1.0
+docker tag multiagent-decision-frontend:backup-before-coordination multiagent-decision-frontend:1.1.0
 ```
 
-两个压缩包内部仍使用 `multiagent-decision-backend:1.1.0` 和 `multiagent-decision-frontend:1.1.0` 标签，因此不需要修改原有 Compose 服务名。
+加载时压缩包会临时占用 `1.1.0` 标签。后四条命令先把新版保存为 `coordination-32d3e49`，再把 `1.1.0` 恢复指向旧版。这样旧版 Compose 以后重新启动时仍会使用旧镜像。
 
-## 五、只重建前端和后端
+## 五、保持旧版运行并启动新版
 
 ```powershell
-docker compose --env-file .env --file docker-compose.yml up --detach --no-deps --force-recreate backend frontend
+docker compose --env-file .env --file docker-compose.coordination.yml up --detach --wait --wait-timeout 120
 ```
 
-此命令不会重建数据库服务，也不会删除数据库卷。等待十几秒后检查：
+新版 Compose 不包含数据库服务。新版后端会通过原有 Docker 网络连接旧版数据库，并且仍然只使用 `ref_reader` 只读账号。等待启动完成后检查：
 
 ```powershell
 docker compose --env-file .env --file docker-compose.yml ps
+docker compose --env-file .env --file docker-compose.coordination.yml ps
 ```
 
-`database`、`backend`、`frontend` 应均为 `healthy`。然后打开 `http://127.0.0.1:18080/`，并使用 `Ctrl+F5` 强制刷新浏览器缓存。
+两组服务应均为 `healthy`：
 
-如果 `.env` 中修改过 `FRONTEND_HOST_PORT`，请使用对应端口。
+- 旧版：`http://127.0.0.1:18080/`
+- 协同重构版：`http://127.0.0.1:18081/`
+
+两版前后端容器、镜像标签和运行记录相互独立，只有比赛数据库是共享的。数据库账号为只读，因此两套系统不会互相修改业务数据。
+
+如果 18081 或 18766 已被占用，可在 `.env` 中增加 `COORDINATION_FRONTEND_HOST_PORT` 或 `COORDINATION_BACKEND_HOST_PORT` 自定义新版端口。
 
 ## 六、验证新功能
 
@@ -73,23 +85,17 @@ docker compose --env-file .env --file docker-compose.yml ps
 3. 切换到“协同视图”。
 4. 确认能看到新版卡通 Agent、专业审核专项组和“协同效能证据”面板。
 
-也可以执行：
+原有 `smoke-test.ps1` 默认检查旧版 18080。新版可直接打开 18081，完成一次会话创建和岗前测评进行验证。
+
+## 单独停止新版
+
+停止协同重构版但保留旧版：
 
 ```powershell
-.\smoke-test.ps1
+docker compose --env-file .env --file docker-compose.coordination.yml down
 ```
 
-## 回滚
-
-如果需要退回升级前版本：
-
-```powershell
-docker tag multiagent-decision-backend:backup-before-coordination multiagent-decision-backend:1.1.0
-docker tag multiagent-decision-frontend:backup-before-coordination multiagent-decision-frontend:1.1.0
-docker compose --env-file .env --file docker-compose.yml up --detach --no-deps --force-recreate backend frontend
-```
-
-回滚同样不会修改数据库数据卷。
+不要附加 `-v`。上述命令不会停止旧版，也不会删除旧版数据库卷。
 
 ## 新安装说明
 
