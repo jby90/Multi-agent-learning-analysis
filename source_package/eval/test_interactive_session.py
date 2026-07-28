@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -708,6 +708,63 @@ def test_diagnosis_result_routes_the_first_interactive_task(
         if message["payload"]["content"].get("transition_id")
     ]
     assert transitions == ["T01", "T02", "T03", "T04", "T09", "T10"]
+
+
+def test_overlapping_advance_requests_share_the_completed_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=RecordingExecutor,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+    original = manager._produce_reviewed_product
+    entered = Event()
+    release = Event()
+
+    def delayed_review(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
+        entered.set()
+        assert release.wait(timeout=3)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(manager, "_produce_reviewed_product", delayed_review)
+    results: list[dict[str, Any]] = []
+    errors: list[Exception] = []
+
+    def run_advance() -> None:
+        try:
+            results.append(manager.advance(session_id))
+        except Exception as exc:  # pragma: no cover - asserted below
+            errors.append(exc)
+
+    first = Thread(target=run_advance)
+    second = Thread(target=run_advance)
+    first.start()
+    assert entered.wait(timeout=3)
+    second.start()
+    release.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert errors == []
+    assert len(results) == 2
+    assert {result["state"] for result in results} == {"S3_TASK"}
+    transition_sequences = {
+        tuple(
+            message["payload"]["content"]["transition_id"]
+            for message in result["messages"]
+            if message["payload"]["content"].get("transition_id")
+        )
+        for result in results
+    }
+    assert transition_sequences == {("T01", "T02", "T03", "T04")}
 
 
 def test_non_q2_diagnosis_route_preserves_the_sandbox_retry_transition(

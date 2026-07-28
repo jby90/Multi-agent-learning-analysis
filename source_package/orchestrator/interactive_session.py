@@ -127,6 +127,7 @@ class _InteractiveSession:
     follow_up_had_support: bool = False
     generic_fallback_used: bool = False
     processed_turn_ids: set[str] = field(default_factory=set)
+    advance_lock: Any = field(default_factory=RLock, repr=False)
     follow_up_lock: Any = field(default_factory=RLock, repr=False)
     query_count: int = 0
     outcome: str | None = None
@@ -505,6 +506,16 @@ class InteractiveSessionManager:
 
     def advance(self, session_id: str) -> dict[str, Any]:
         session = self._get_session(session_id)
+        if not session.advance_lock.acquire(blocking=False):
+            with session.advance_lock:
+                return self.get_state(session_id)
+        try:
+            return self._advance_locked(session)
+        finally:
+            session.advance_lock.release()
+
+    def _advance_locked(self, session: _InteractiveSession) -> dict[str, Any]:
+        session_id = session.session_id
         if session.awaiting != "advance":
             raise InteractiveSessionError("当前步骤需要先完成学员操作。")
         runtime = session.runtime

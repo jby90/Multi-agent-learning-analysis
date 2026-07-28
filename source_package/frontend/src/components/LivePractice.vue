@@ -143,6 +143,7 @@ function connectAgentEvents(sessionId: string): void {
 }
 
 async function selectProfile(profileId: string): Promise<void> {
+  if (busy.value) return
   busy.value = true
   errorMessage.value = ''
   try {
@@ -159,7 +160,7 @@ async function selectProfile(profileId: string): Promise<void> {
 }
 
 async function submitPretest(): Promise<void> {
-  if (!session.value || !pretestComplete.value) return
+  if (busy.value || !session.value || !pretestComplete.value) return
   busy.value = true
   errorMessage.value = ''
   try {
@@ -172,7 +173,7 @@ async function submitPretest(): Promise<void> {
 }
 
 async function advance(): Promise<void> {
-  if (!session.value) return
+  if (busy.value || !session.value) return
   busy.value = true
   errorMessage.value = ''
   try {
@@ -185,7 +186,7 @@ async function advance(): Promise<void> {
 }
 
 async function submitSql(): Promise<void> {
-  if (!session.value || !sqlText.value.trim()) return
+  if (busy.value || !session.value || !sqlText.value.trim()) return
   busy.value = true
   errorMessage.value = ''
   try {
@@ -215,7 +216,7 @@ async function submitFollowUp(): Promise<void> {
   const value = session.value
   const interaction = value?.interaction
   if (
-    !value
+    busy.value || !value
     || value.awaiting !== 'follow_up'
     || interaction?.kind !== 'free_text_follow_up'
     || !canSubmitFollowUp.value

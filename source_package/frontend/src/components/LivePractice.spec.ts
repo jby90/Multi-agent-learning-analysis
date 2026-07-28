@@ -132,6 +132,31 @@ describe('LivePractice', () => {
       .toBe('完成数据当月每日完成率的平均值')
   })
 
+  it('ignores a repeated advance click while the first request is running', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+    }))
+    let finishAdvance!: (value: InteractiveState) => void
+    vi.mocked(api.advance).mockReturnValue(new Promise((resolve) => {
+      finishAdvance = resolve
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    const button = wrapper.get('button[aria-label="打开岗位微课"]')
+    await button.trigger('click')
+    await button.trigger('click')
+
+    expect(api.advance).toHaveBeenCalledTimes(1)
+    finishAdvance(sessionState({ state: 'S3_TASK', awaiting: 'advance' }))
+    await flushPromises()
+  })
+
   it('walks the learner through SQL and a reviewed free-text correction', async () => {
     const api = fakeApi()
     vi.mocked(api.submitPretest).mockResolvedValue(sessionState({
