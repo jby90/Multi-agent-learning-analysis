@@ -21,6 +21,9 @@
 
 # Large offline deployment images stay on disk and are reproducible from checksums
 Docker镜像/*.tar
+Docker镜像/*.tar.gz
+!Docker镜像/multiagent-decision-backend_1.1.0-coordination-32d3e49.tar.gz
+!Docker镜像/multiagent-decision-frontend_1.1.0-coordination-32d3e49.tar.gz
 
 # Temporary inspection/rendering artifacts
 /tmp/

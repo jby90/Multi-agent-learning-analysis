@@ -1,0 +1,2 @@
+ff0fcf78aaae5ea60bf32504be9d23b662a5c7fd4651e9b69ed4ff8e81f398a6  multiagent-decision-backend_1.1.0-coordination-32d3e49.tar.gz
+61bcdf273c3a98535aa2cef0d8d0dd44417db6fb2a1cc1da1a459f022665ce8d  multiagent-decision-frontend_1.1.0-coordination-32d3e49.tar.gz

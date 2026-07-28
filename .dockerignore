@@ -1,0 +1,16 @@
+.git
+.github
+.idea
+.vscode
+**/.env
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/node_modules
+**/dist
+**/.vite
+**/eval/results
+**/eval/output
+**/runtime
+Docker镜像/*.tar
+Docker镜像/*.tar.gz
