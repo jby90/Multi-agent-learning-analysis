@@ -36,6 +36,46 @@ export interface InteractiveResourceBundle extends Record<string, unknown> {
   branches: InteractiveResourceBranch[]
 }
 
+export interface CoordinationStageEvidence extends Record<string, unknown> {
+  stage_id: string
+  label: string
+  correlation_id: string
+  fan_out: number
+  parallel_elapsed_ms: number
+  paired_serial_estimate_ms: number
+  saved_ms: number
+  speedup: number
+  succeeded: boolean
+}
+
+export interface InteractiveCoordinationEvidence extends Record<string, unknown> {
+  schema_version: number
+  measurement_basis: 'same_run_branch_wall_time_sum'
+  baseline_label: string
+  stages: CoordinationStageEvidence[]
+  summary: {
+    completed_parallel_stages: number
+    max_fan_out: number
+    parallel_elapsed_ms: number
+    paired_serial_estimate_ms: number
+    saved_ms: number
+    speedup: number
+    branch_success_rate: number
+  }
+  quality_flow: {
+    review_decisions: number
+    first_pass_approvals: number
+    first_pass_rate: number
+    debate_triggers: number
+    local_regenerations: number
+  }
+  token_usage: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+}
+
 export interface InteractivePretestQuestion {
   question_id: string
   knowledge_point: string
@@ -108,6 +148,7 @@ export interface InteractiveState {
   learning_contract?: InteractiveLearningContract | null
   evidence_bundle?: InteractiveEvidenceBundle | null
   resource_bundle?: InteractiveResourceBundle | null
+  coordination_evidence?: InteractiveCoordinationEvidence | null
   messages: Record<string, unknown>[]
   artifact: Record<string, unknown> | null
   interaction: InteractiveInteraction | null

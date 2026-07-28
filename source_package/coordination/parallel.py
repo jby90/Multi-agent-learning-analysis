@@ -93,10 +93,21 @@ class ParallelStageResult(Generic[T]):
         return self
 
     def summary(self) -> dict[str, Any]:
+        serial_estimate_ms = sum(branch.elapsed_ms for branch in self.branches)
+        saved_ms = max(serial_estimate_ms - self.elapsed_ms, 0)
+        speedup = (
+            round(serial_estimate_ms / self.elapsed_ms, 3)
+            if self.elapsed_ms > 0
+            else 1.0
+        )
         return {
             "stage_id": self.stage_id,
             "correlation_id": self.correlation_id,
             "elapsed_ms": self.elapsed_ms,
+            "parallel_elapsed_ms": self.elapsed_ms,
+            "serial_estimate_ms": serial_estimate_ms,
+            "saved_ms": saved_ms,
+            "speedup": speedup,
             "max_concurrency": self.max_concurrency,
             "branches": [
                 {

@@ -42,6 +42,16 @@ def test_parallel_stage_really_overlaps_branches_and_keeps_declared_order() -> N
     assert [item.branch_id for item in result.branches] == ["slow", "fast"]
     assert result.require("slow") == "slow"
     assert result.succeeded is True
+    summary = result.summary()
+    assert summary["parallel_elapsed_ms"] == summary["elapsed_ms"]
+    assert summary["serial_estimate_ms"] == sum(
+        branch["elapsed_ms"] for branch in summary["branches"]
+    )
+    assert summary["saved_ms"] == max(
+        summary["serial_estimate_ms"] - summary["parallel_elapsed_ms"],
+        0,
+    )
+    assert summary["speedup"] >= 0
 
 
 def test_parallel_stage_fails_closed_without_leaking_exception_text() -> None:

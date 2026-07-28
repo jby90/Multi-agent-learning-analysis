@@ -144,6 +144,26 @@ function applyState(value: InteractiveState): void {
   emit('state', value)
 }
 
+function progressFingerprint(value: InteractiveState): string {
+  return [
+    value.state,
+    value.awaiting,
+    value.messages.length,
+    value.artifact ? JSON.stringify(value.artifact) : '',
+  ].join('|')
+}
+
+async function reconcileLateAdvance(previous: InteractiveState): Promise<boolean> {
+  try {
+    const current = await api.getState(previous.session_id)
+    if (progressFingerprint(current) === progressFingerprint(previous)) return false
+    applyState(current)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function connectAgentEvents(sessionId: string): void {
   if (!api.subscribeAgentEvents || eventSessionId === sessionId) return
   closeEventStream?.()
@@ -185,12 +205,15 @@ async function submitPretest(): Promise<void> {
 
 async function advance(): Promise<void> {
   if (busy.value || !session.value) return
+  const previous = session.value
   busy.value = true
   errorMessage.value = ''
   try {
-    applyState(await api.advance(session.value.session_id))
+    applyState(await api.advance(previous.session_id))
   } catch (error) {
-    errorMessage.value = publicRequestError(error, '当前步骤暂时无法继续。')
+    if (!(await reconcileLateAdvance(previous))) {
+      errorMessage.value = publicRequestError(error, '当前步骤暂时无法继续。')
+    }
   } finally {
     busy.value = false
   }

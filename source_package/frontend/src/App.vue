@@ -6,6 +6,7 @@ import knowledgeCatalog from 'virtual:knowledge-catalog'
 import AgentStage from './components/AgentStage.vue'
 import LearningPath from './components/LearningPath.vue'
 import DataCollisionMoment from './components/DataCollisionMoment.vue'
+import EvaluationEvidencePanel from './components/EvaluationEvidencePanel.vue'
 import LivePractice from './components/LivePractice.vue'
 import LiveStepGuide from './components/LiveStepGuide.vue'
 import ProfileComparison from './components/ProfileComparison.vue'
@@ -363,6 +364,7 @@ onMounted(loadTraces)
         v-if="viewMode === 'collaboration' && liveView"
         class="collaboration-observatory"
       >
+        <EvaluationEvidencePanel :evidence="liveState?.coordination_evidence" />
         <AgentStage
           :view="liveView"
           :events="liveAgentEvents"

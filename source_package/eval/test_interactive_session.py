@@ -422,6 +422,16 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         branch["status"] == "ready"
         for branch in resource_bundle["branches"]
     )
+    coordination = lecture["coordination_evidence"]
+    assert coordination["measurement_basis"] == "same_run_branch_wall_time_sum"
+    assert coordination["summary"]["completed_parallel_stages"] == 3
+    assert coordination["summary"]["max_fan_out"] == 4
+    assert coordination["summary"]["branch_success_rate"] == 1.0
+    assert {stage["stage_id"] for stage in coordination["stages"]} == {
+        "evidence-bundle",
+        "resource-generation",
+        "quality-review-axes",
+    }
     evidence_control = next(
         message
         for message in lecture["messages"]

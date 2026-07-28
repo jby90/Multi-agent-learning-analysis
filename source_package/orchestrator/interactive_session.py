@@ -40,6 +40,7 @@ from agents.verification_agent import (
 )
 from coordination.contracts import LearningContract
 from coordination.evidence_bundle import EvidenceBundle
+from coordination.evaluation import build_coordination_evidence
 from coordination.parallel import BranchSpec, ParallelStage, ParallelStageExecutor
 from coordination.resource_bundle import ResourceBundle
 from orchestrator.demo_session import (
@@ -2067,6 +2068,8 @@ class InteractiveSessionManager:
         trace_path = session.runtime.bus.trace_path(
             session.runtime.options.trace_id
         )
+        messages = _trace_messages(trace_path)
+        events = session.events.after(0) if session.events is not None else []
         return {
             "session_id": session.session_id,
             "trace_id": session.runtime.options.trace_id,
@@ -2091,7 +2094,8 @@ class InteractiveSessionManager:
                 if session.resource_bundle is not None
                 else None
             ),
-            "messages": _trace_messages(trace_path),
+            "coordination_evidence": build_coordination_evidence(events, messages),
+            "messages": messages,
             "artifact": session.artifact,
             "interaction": session.interaction,
         }

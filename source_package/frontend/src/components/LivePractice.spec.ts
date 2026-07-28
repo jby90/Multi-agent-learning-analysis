@@ -166,6 +166,36 @@ describe('LivePractice', () => {
     await flushPromises()
   })
 
+  it('reconciles a late successful state after the advance response fails', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const before = sessionState({ state: 'S2_KNOWLEDGE', awaiting: 'advance' })
+    const recovered = sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      messages: [{ msg_id: 'lecture-ready' }],
+      artifact: { artifact_id: 'lecture-ready' },
+    })
+    vi.mocked(api.getState)
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(recovered)
+    vi.mocked(api.advance).mockRejectedValue(new InteractiveApiError(
+      '当前步骤暂时无法继续，请稍后再试。',
+      'system_error',
+    ))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="打开岗位微课"]').trigger('click')
+    await flushPromises()
+
+    expect(api.getState).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('领取实操任务')
+  })
+
   it('walks the learner through SQL and a reviewed free-text correction', async () => {
     const api = fakeApi()
     vi.mocked(api.submitPretest).mockResolvedValue(sessionState({
