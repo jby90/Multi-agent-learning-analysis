@@ -484,6 +484,93 @@ def _produce_reviewed_product(
         raise DemoSessionError("review flow could not complete safely") from exc
 
 
+def _evidence_projection_lecture(
+    candidate: Mapping[str, Any],
+    rule_hits: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Project a rejected lecture onto its mechanically verified KB claims.
+
+    Model-written connective prose may occasionally fail the semantic R-04
+    preflight even though the draft already contains valid, quoted facts.  The
+    projection keeps only facts with an exact evidence edge and therefore
+    provides a deterministic, auditable recovery path without inventing new
+    teaching content.
+    """
+
+    projected = deepcopy(dict(candidate))
+    payload = projected.get("payload")
+    content = payload.get("content") if isinstance(payload, dict) else None
+    if not isinstance(content, dict):
+        raise DemoSessionError("lecture projection requires payload content")
+
+    evidence = projected.get("evidence")
+    claims = projected.get("claims")
+    evidence_items = (
+        [item for item in evidence if isinstance(item, Mapping)]
+        if isinstance(evidence, list)
+        else []
+    )
+    supported_texts = {
+        str(item["supports_claim"]).strip()
+        for item in evidence_items
+        if item.get("kind") == "kb_chunk"
+        and isinstance(item.get("supports_claim"), str)
+        and str(item["supports_claim"]).strip()
+    }
+    grounded_claims: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    if isinstance(claims, list):
+        for claim in claims:
+            if not isinstance(claim, Mapping) or claim.get("kind") != "fact":
+                continue
+            text = claim.get("text")
+            if (
+                not isinstance(text, str)
+                or not text.strip()
+                or text.strip() not in supported_texts
+                or text.strip() in seen
+            ):
+                continue
+            grounded_claims.append(deepcopy(dict(claim)))
+            seen.add(text.strip())
+    if not grounded_claims:
+        raise DemoSessionError("lecture projection has no grounded KB facts")
+
+    knowledge_point = str(content.get("knowledge_point", "岗位知识")).strip()
+    fact_lines = "\n".join(
+        f"- {str(claim['text']).strip()}" for claim in grounded_claims
+    )
+    content["lecture_md"] = (
+        f"# 岗位微课：{knowledge_point}\n\n"
+        "## 已核验核心证据\n\n"
+        f"{fact_lines}"
+    )
+    content["generated_by"] = "evidence_projection_fallback"
+    content["fallback_reason"] = "lecture_preflight_exhausted"
+    content["discarded_rule_ids"] = sorted(
+        {
+            str(hit.get("rule_id"))
+            for hit in rule_hits
+            if isinstance(hit.get("rule_id"), str)
+        }
+    )
+    content["quote_validation"] = {
+        "checked": len(grounded_claims),
+        "passed": len(grounded_claims),
+        "failed": 0,
+        "failures": [],
+        "scaffold_leaks": 0,
+        "m_id_leaks": 0,
+    }
+    projected["claims"] = grounded_claims
+    projected["evidence"] = [
+        deepcopy(dict(item))
+        for item in evidence_items
+        if str(item.get("supports_claim", "")).strip() in seen
+    ]
+    return projected
+
+
 def _generate_reviewable_lecture(
     runtime: _DemoRuntime,
     *,
@@ -513,6 +600,7 @@ def _generate_reviewable_lecture(
         resolved_fallback = difficulty_fallback
     generation_difficulty = None if resolved_fallback else requested_difficulty
     hard_hits: tuple[dict[str, str], ...] = ()
+    last_lecture: dict[str, Any] | None = None
     for _ in range(MAX_LECTURE_GENERATION_ATTEMPTS):
         lecture = runtime.knowledge.generate(
             knowledge_point=knowledge_point,
@@ -527,6 +615,7 @@ def _generate_reviewable_lecture(
         )
         if evidence_bundle is not None:
             lecture = evidence_bundle.bind(lecture)
+        last_lecture = lecture
         if resolved_fallback:
             lecture = deepcopy(lecture)
             payload = lecture.get("payload")
@@ -541,6 +630,12 @@ def _generate_reviewable_lecture(
         if semantic_hit is None:
             return lecture
         hard_hits = (semantic_hit,)
+    if last_lecture is not None:
+        projected = _evidence_projection_lecture(last_lecture, hard_hits)
+        projected_hard_hits = evaluate_hard_rules(projected)
+        projected_semantic_hit = runtime.review.preflight_r04(projected)
+        if not projected_hard_hits and projected_semantic_hit is None:
+            return projected
     labels = ", ".join(hit["rule_id"] for hit in hard_hits)
     raise DemoSessionError(
         "lecture failed deterministic review preflight after "

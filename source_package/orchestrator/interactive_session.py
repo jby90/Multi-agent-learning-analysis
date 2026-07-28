@@ -2531,6 +2531,8 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             self._send_json(404, {"error": "未找到请求的交互接口。"})
+        except (BrokenPipeError, ConnectionResetError):
+            return
         except InteractiveSessionError as exc:
             self._send_json(404, {"error": str(exc)})
         except Exception:
@@ -2642,6 +2644,8 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
                     )
                     return
             self._send_json(404, {"error": "未找到请求的交互接口。"})
+        except (BrokenPipeError, ConnectionResetError):
+            return
         except (ValueError, json.JSONDecodeError) as exc:
             self._send_json(400, {"error": str(exc)})
         except InteractiveSessionError as exc:
@@ -2669,12 +2673,18 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
 
     def _send_json(self, status: int, value: dict[str, Any]) -> None:
         payload = json.dumps(value, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self._cors_headers()
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.send_response(status)
+            self._cors_headers()
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except (BrokenPipeError, ConnectionResetError):
+            # The state transition may have completed after a reverse-proxy or
+            # browser timeout.  Treat the vanished client as transport noise;
+            # the next idempotent state read will recover the canonical result.
+            self.close_connection = True
 
     def _cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")

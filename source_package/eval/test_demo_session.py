@@ -322,6 +322,54 @@ class FirstLectureSemanticR04RejectLLM(ScriptedLLM):
         return super().__call__(**request)
 
 
+class ExhaustedLecturePreflightLLM(ScriptedLLM):
+    """Reject all three model rewrites before accepting the evidence projection."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lecture_calls = 0
+        self.semantic_rejections = 0
+
+    def __call__(self, **request: Any) -> LLMResult:
+        schema = request["json_schema"]
+        if "oneOf" in schema:
+            self.lecture_calls += 1
+            self.calls.append(request)
+            user = json.loads(request["user"])
+            chunk = user["chunks"][0]
+            claim = str(chunk["body"].splitlines()[0]).removeprefix("[S1] ")
+            return llm_result(
+                {
+                    "lecture_md": (
+                        "# 岗位微课\n\n"
+                        "完成率是衡量生产任务完成情况的重要指标。"
+                    ),
+                    "claims": [
+                        {
+                            "text": claim,
+                            "kind": "fact",
+                            "chunk_id": chunk["chunk_id"],
+                            "sentence_ref": [1],
+                        }
+                    ],
+                    "coverage": [user["knowledge_point"]],
+                },
+                str(request["model"]),
+            )
+        required = set(schema.get("required", []))
+        if (
+            required == {"supported", "reason"}
+            and self.semantic_rejections < MAX_LECTURE_GENERATION_ATTEMPTS
+        ):
+            self.semantic_rejections += 1
+            self.calls.append(request)
+            return llm_result(
+                {"supported": False, "reason": "该改写未被声明事实直接覆盖。"},
+                str(request["model"]),
+            )
+        return super().__call__(**request)
+
+
 class RecordingExecutor:
     def __init__(self) -> None:
         self.sql: list[str] = []
@@ -531,6 +579,37 @@ def test_session_regenerates_after_r04_semantic_review_rejects_a_rewrite(
     assert result.state_sequence == EXPECTED_NORMAL_STATES
     assert llm.lecture_calls == 2
     assert llm.semantic_rejections == 1
+
+
+def test_session_projects_grounded_facts_after_lecture_preflight_is_exhausted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REF_DEMO_MODE", "live")
+    llm = ExhaustedLecturePreflightLLM()
+
+    result = run_demo_session(
+        DemoOptions(
+            profile_id="craft_engineer",
+            trace_id="demo-lecture-evidence-projection-test",
+            trace_dir=tmp_path / "traces",
+            cache_dir=tmp_path / "cache",
+        ),
+        llm_call=llm,
+        executor_factory=RecordingExecutor,
+    )
+
+    messages = read_trace(result.trace_path)
+    lecture = next(
+        message for message in messages if message["payload"]["type"] == "lecture_note"
+    )
+    content = message_content(lecture)
+    assert result.state_sequence == EXPECTED_NORMAL_STATES
+    assert llm.lecture_calls == MAX_LECTURE_GENERATION_ATTEMPTS
+    assert llm.semantic_rejections == MAX_LECTURE_GENERATION_ATTEMPTS
+    assert content["generated_by"] == "evidence_projection_fallback"
+    assert content["fallback_reason"] == "lecture_preflight_exhausted"
+    assert content["quote_validation"]["failed"] == 0
+    assert "完成率是衡量生产任务完成情况的重要指标" not in content["lecture_md"]
 
 
 def test_session_uses_exact_completion_rate_chunk_for_profile_difficulty(
