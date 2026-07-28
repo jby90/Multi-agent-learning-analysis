@@ -114,6 +114,22 @@ _MONTH_RE = re.compile(
     r"(?:20\d{2}[-年/]\d{1,2}|\d{1,2}月|[一二三四五六七八九十]{1,3}月)"
 )
 _NUMBER_RE = r"[-+]?\d+(?:\.\d+)?"
+_REVERSED_COMPLETE_RATE_RE = re.compile(
+    r"(?:计划量|计划数|plan_qty|plan)\s*(?:汇总)?\s*"
+    r"(?:除以|除|÷|/)\s*"
+    r"(?:实际量|实际数|实际完成量|actual_qty|actual)",
+    re.IGNORECASE,
+)
+_FORMULA_NEGATION_TERMS = (
+    "错误",
+    "不能",
+    "不可",
+    "禁止",
+    "不应",
+    "避免",
+    "而不是",
+    "≠",
+)
 _METRIC_VALUE_PATTERNS = {
     "plan_qty": re.compile(
         rf"(?:计划量|计划数|plan_qty|plan)\s*(?:为|是|等于|达到|共|合计|=|：|:)?\s*({_NUMBER_RE})(%)?",
@@ -738,6 +754,31 @@ def _sentences(body: str) -> tuple[str, ...]:
     )
 
 
+def _r02_formula_hit(product: Mapping[str, Any]) -> dict[str, str] | None:
+    """Reject a reversed completion-rate formula before probabilistic review."""
+    content = _content(product)
+    bodies = tuple(
+        value
+        for field in ("lecture_md", "practice_guide", "guide_md")
+        for value in (content.get(field),)
+        if isinstance(value, str)
+    )
+    for body in bodies:
+        for sentence in _sentences(body):
+            normalized = unicodedata.normalize("NFKC", sentence)
+            if not _contains_any(normalized, COMPLETE_RATE_TERMS):
+                continue
+            if _contains_any(normalized, _FORMULA_NEGATION_TERMS):
+                continue
+            if _REVERSED_COMPLETE_RATE_RE.search(normalized) is not None:
+                return _rule_hit(
+                    "R-02",
+                    "完成率公式方向错误：必须使用实际量÷计划量，不能反向计算。",
+                    _evidence_ref(product),
+                )
+    return None
+
+
 def _task_r04_bodies(content: Mapping[str, Any]) -> tuple[str, ...]:
     bodies = [
         value
@@ -1042,6 +1083,10 @@ def _r02_reviews(
     hits: list[dict[str, str]] = []
     results: list[LLMResult] = []
     checks = 0
+    formula_hit = _r02_formula_hit(product)
+    if formula_hit is not None:
+        hits.append(formula_hit)
+        checks += 1
     evidence = _items(product, "evidence")
     chunks_by_id = _catalog_by_id(
         tuple(knowledge_chunks)

@@ -1379,6 +1379,35 @@ def test_r02_invalid_kb_provenance_is_a_deterministic_hit() -> None:
     assert llm.calls == []
 
 
+def test_r02_rejects_reversed_completion_rate_formula_deterministically() -> None:
+    product = _document_product(
+        "# 计算方法\n\n通过计划量除以实际完成量计算完成率。"
+    )
+    llm = SequentialLLM([])
+
+    hits, results, checks = _review_module()._r02_reviews(product, llm)
+
+    assert checks == 1
+    assert results == ()
+    assert [hit["rule_id"] for hit in hits] == ["R-02"]
+    assert "实际量÷计划量" in hits[0]["reason"]
+    assert llm.calls == []
+
+
+def test_r02_does_not_reject_a_warning_against_the_reversed_formula() -> None:
+    product = _document_product(
+        "# 计算方法\n\n不能用计划量除以实际完成量计算完成率。"
+    )
+    llm = SequentialLLM([])
+
+    hits, results, checks = _review_module()._r02_reviews(product, llm)
+
+    assert hits == ()
+    assert results == ()
+    assert checks == 0
+    assert llm.calls == []
+
+
 def test_follow_up_question_requires_semantic_support_from_bound_evidence() -> None:
     product = {
         "msg_id": "trace-soft-follow-up-001",

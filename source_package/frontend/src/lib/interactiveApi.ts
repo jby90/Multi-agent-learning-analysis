@@ -12,6 +12,14 @@ export interface InteractiveLearningContract extends Record<string, unknown> {
   misconceptions: string[]
 }
 
+export interface InteractiveEvidenceBundle extends Record<string, unknown> {
+  bundle_id: string
+  contract_id: string
+  knowledge_point: string
+  difficulty: string
+  sources: Record<'knowledge' | 'business_data' | 'pedagogy', Record<string, unknown>>
+}
+
 export interface InteractivePretestQuestion {
   question_id: string
   knowledge_point: string
@@ -82,6 +90,7 @@ export interface InteractiveState {
   mode: string
   profile: InteractiveProfile
   learning_contract?: InteractiveLearningContract | null
+  evidence_bundle?: InteractiveEvidenceBundle | null
   messages: Record<string, unknown>[]
   artifact: Record<string, unknown> | null
   interaction: InteractiveInteraction | null

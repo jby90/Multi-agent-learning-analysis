@@ -362,6 +362,7 @@ onMounted(loadTraces)
           :view="liveView"
           :events="liveAgentEvents"
           :contract="liveState?.learning_contract ?? undefined"
+          :evidence-bundle="liveState?.evidence_bundle ?? undefined"
         />
         <TracePanel :view="liveView" />
       </div>

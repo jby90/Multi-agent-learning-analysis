@@ -519,6 +519,18 @@ class TaskAgent:
         knowledge_point: str,
         diagnostic_difficulty: str,
     ) -> dict[str, Any]:
+        anchor = self.diagnosis_evidence(
+            knowledge_point,
+            diagnostic_difficulty,
+        )
+        return self.generate(str(anchor["template_id"]))
+
+    def diagnosis_evidence(
+        self,
+        knowledge_point: str,
+        diagnostic_difficulty: str,
+    ) -> dict[str, Any]:
+        """Resolve the deterministic business-data anchor before generation."""
         point = _string(knowledge_point, "diagnostic knowledge point")
         difficulty = _string(
             diagnostic_difficulty,
@@ -533,7 +545,17 @@ class TaskAgent:
             raise ValueError(
                 f"unsupported diagnostic difficulty: {difficulty}"
             ) from exc
-        return self.generate(template_id)
+        entry = self._catalog.templates[template_id]
+        expected_columns = tuple(entry.expected_rows[0]) if entry.expected_rows else ()
+        return {
+            "template_id": entry.template_id,
+            "knowledge_point": entry.knowledge_point,
+            "difficulty": entry.difficulty,
+            "family": entry.family,
+            "payload_type": entry.payload_type,
+            "expected_columns": list(expected_columns),
+            "expected_row_count": len(entry.expected_rows),
+        }
 
     def generate_for_learning_action(
         self,

@@ -86,4 +86,12 @@ describe('useAgentEventPlayback', () => {
     expect(agentEventHoldMs(working)).toBeGreaterThan(0)
     expect(agentEventHoldMs(joined)).toBeGreaterThan(agentEventHoldMs(working))
   })
+
+  it('keeps evidence fan-out and deterministic bundle join perceptible', () => {
+    const working = event(13, 'working', 'parallel_evidence_retrieval', 'pending')
+    const joined = event(14, 'done', 'parallel_evidence_retrieval', 'deterministic')
+
+    expect(agentEventHoldMs(working)).toBeGreaterThan(0)
+    expect(agentEventHoldMs(joined)).toBeGreaterThan(agentEventHoldMs(working))
+  })
 })

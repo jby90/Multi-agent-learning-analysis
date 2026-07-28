@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import type { AgentActivityEvent } from '../lib/interactiveApi'
+import type { AgentActivityEvent, InteractiveEvidenceBundle } from '../lib/interactiveApi'
 import type { TraceView } from '../types/trace'
 import AgentStage from './AgentStage.vue'
 
@@ -127,6 +127,67 @@ describe('AgentStage', () => {
     expect(wrapper.get('[data-agent="knowledge"]').classes()).toContain('is-collaborating')
     expect(wrapper.get('[data-agent="task"]').classes()).toContain('is-working')
     expect(wrapper.text()).toContain('正在并行准备实操任务草稿')
+    expect(wrapper.findAll('.parallel-proof')).toHaveLength(0)
+  })
+
+  it('shows the three-source evidence fork and the shared bundle binding', () => {
+    const evidenceBundle: InteractiveEvidenceBundle = {
+      bundle_id: 'eb-1234567890abcdefghijklmn',
+      contract_id: 'lc-1234567890abcdefghijklmn',
+      knowledge_point: 'completion-rate',
+      difficulty: 'basic',
+      sources: {
+        knowledge: { chunk_ids: ['KB-003'] },
+        business_data: { template_id: 'T-02' },
+        pedagogy: { profile_id: 'line_leader' },
+      },
+    }
+    const dispatched = {
+      ...event(
+        1,
+        'diagnosis',
+        'collaborating',
+        'three evidence branches dispatched',
+        ['knowledge', 'verification'],
+        { fan_out: 3, aggregation: 'pending', stage_id: 'evidence-bundle' },
+      ),
+      activity: 'parallel_evidence_retrieval',
+    }
+    const knowledgeWorking = {
+      ...event(
+        2,
+        'knowledge',
+        'working',
+        'retrieving domain evidence',
+        ['diagnosis', 'verification'],
+        { fan_out: 3, aggregation: 'pending', branch_id: 'knowledge' },
+      ),
+      activity: 'parallel_evidence_retrieval',
+    }
+    const verificationWorking = {
+      ...event(
+        3,
+        'verification',
+        'working',
+        'resolving business evidence',
+        ['diagnosis', 'knowledge'],
+        { fan_out: 3, aggregation: 'pending', branch_id: 'business_data' },
+      ),
+      activity: 'parallel_evidence_retrieval',
+    }
+    const wrapper = mount(AgentStage, {
+      props: {
+        view,
+        evidenceBundle,
+        events: [dispatched, knowledgeWorking, verificationWorking],
+      },
+    })
+
+    expect(wrapper.text()).toContain('EB')
+    expect(wrapper.text()).toContain('3')
+    expect(wrapper.get('[data-agent="diagnosis"]').classes()).toContain('is-collaborating')
+    expect(wrapper.get('[data-agent="knowledge"]').classes()).toContain('is-working')
+    expect(wrapper.get('[data-agent="verification"]').classes()).toContain('is-working')
     expect(wrapper.findAll('.parallel-proof')).toHaveLength(0)
   })
 

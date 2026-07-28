@@ -6,6 +6,7 @@ import type {
   AgentActivityEvent,
   AgentActivityId,
   AgentActivityStatus,
+  InteractiveEvidenceBundle,
   InteractiveLearningContract,
 } from '../lib/interactiveApi'
 import { agentLabel, agentPurpose } from '../lib/tracePresentation'
@@ -15,10 +16,12 @@ import AgentTeacherAvatar from './AgentTeacherAvatar.vue'
 
 const props = withDefaults(defineProps<{
   contract?: InteractiveLearningContract
+  evidenceBundle?: InteractiveEvidenceBundle
   events?: AgentActivityEvent[]
   view: TraceView
 }>(), {
   contract: undefined,
+  evidenceBundle: undefined,
   events: () => [],
 })
 
@@ -105,7 +108,11 @@ const approvedCount = computed(() => agents.value.filter(
 ).length)
 const parallelStageMetric = computed(() => {
   const event = [...props.events].reverse().find((item) => (
-    ['parallel_quality_review', 'parallel_resource_generation'].includes(item.activity)
+    [
+      'parallel_quality_review',
+      'parallel_resource_generation',
+      'parallel_evidence_retrieval',
+    ].includes(item.activity)
     && typeof item.details?.fan_out === 'number'
   ))
   if (!event || typeof event.details?.fan_out !== 'number') return undefined
@@ -113,7 +120,9 @@ const parallelStageMetric = computed(() => {
     fanOut: event.details.fan_out,
     label: event.activity === 'parallel_resource_generation'
       ? '路资源并发'
-      : '路并发审核',
+      : event.activity === 'parallel_evidence_retrieval'
+        ? '路证据并发'
+        : '路并发审核',
   }
 })
 
@@ -447,6 +456,9 @@ function statusLabel(status: AgentActivityStatus): string {
         <div class="stage-metrics" aria-label="协同状态摘要">
           <span v-if="parallelStageMetric">
             <b>{{ parallelStageMetric.fanOut }}</b> {{ parallelStageMetric.label }}
+          </span>
+          <span v-if="evidenceBundle" class="evidence-bundle-metric">
+            <b>EB</b> 3 源已绑定
           </span>
           <span><b>{{ activeCount }}</b> 活跃</span>
           <span><b>{{ approvedCount }}</b> 已接力</span>

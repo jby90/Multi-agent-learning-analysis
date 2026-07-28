@@ -17,7 +17,10 @@ function detailString(event: AgentActivityEvent, key: string): string | undefine
 }
 
 export function agentEventHoldMs(event: AgentActivityEvent): number {
-  if (event.activity === 'parallel_resource_generation') {
+  if (
+    event.activity === 'parallel_resource_generation'
+    || event.activity === 'parallel_evidence_retrieval'
+  ) {
     if (detailString(event, 'aggregation') === 'deterministic') {
       return RESOURCE_JOIN_HOLD_MS
     }

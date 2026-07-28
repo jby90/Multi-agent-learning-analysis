@@ -274,6 +274,21 @@ def test_advance_returns_reviewed_lecture_then_reviewed_sql_task(
     assert task["artifact"]["payload"]["content"]["family"] == "Q2"
     assert task["state"] == "S7_STUDENT"
     assert task["awaiting"] == "sql"
+    evidence_bundle = lecture["evidence_bundle"]
+    assert evidence_bundle["bundle_id"].startswith("eb-")
+    assert set(evidence_bundle["sources"]) == {
+        "knowledge",
+        "business_data",
+        "pedagogy",
+    }
+    assert (
+        lecture["artifact"]["payload"]["content"]["evidence_bundle_ref"]
+        == evidence_bundle["bundle_id"]
+    )
+    assert (
+        task["artifact"]["payload"]["content"]["evidence_bundle_ref"]
+        == evidence_bundle["bundle_id"]
+    )
     transitions = [
         message["payload"]["content"].get("transition_id")
         for message in task["messages"]
@@ -298,6 +313,16 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
     )
 
     lecture = manager.advance(session_id)
+    evidence_events = [
+        event
+        for event in manager.get_agent_events(session_id)
+        if event["activity"] == "parallel_evidence_retrieval"
+    ]
+    evidence_joined = next(
+        event
+        for event in evidence_events
+        if event["details"].get("aggregation") == "deterministic"
+    )
     resource_events = [
         event
         for event in manager.get_agent_events(session_id)
@@ -322,6 +347,20 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         and event["activity"] == "specialist_quality_review"
     ]
 
+    assert evidence_joined["details"]["stage_id"] == "evidence-bundle"
+    assert evidence_joined["details"]["fan_out"] == 3
+    assert [
+        branch["branch_id"] for branch in evidence_joined["details"]["branches"]
+    ] == ["knowledge", "business_data", "pedagogy"]
+    assert all(
+        branch["status"] == "succeeded"
+        for branch in evidence_joined["details"]["branches"]
+    )
+    assert {
+        event["agent"]
+        for event in evidence_events
+        if event["status"] == "working"
+    } == {"knowledge", "verification", "diagnosis"}
     assert [event["status"] for event in task_events] == [
         "collaborating",
         "working",
@@ -352,6 +391,14 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
     }
     assert lecture["state"] == "S3_TASK"
     assert lecture["artifact"]["payload"]["type"] == "lecture_note"
+    bundle_id = lecture["evidence_bundle"]["bundle_id"]
+    assert lecture["artifact"]["payload"]["content"]["evidence_bundle_ref"] == bundle_id
+    evidence_control = next(
+        message
+        for message in lecture["messages"]
+        if message["payload"]["content"].get("event") == "evidence_bundle_ready"
+    )
+    assert evidence_control["payload"]["content"]["evidence_bundle"]["bundle_id"] == bundle_id
     audited_specialist_verdict = next(
         message
         for message in lecture["messages"]
@@ -369,25 +416,77 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
     )
 
 
+def test_required_evidence_branch_failure_blocks_resource_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_business_evidence(*_: Any, **__: Any) -> dict[str, Any]:
+        raise RuntimeError("private provider detail")
+
+    monkeypatch.setattr(TaskAgent, "diagnosis_evidence", fail_business_evidence)
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=RecordingExecutor,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+
+    with pytest.raises(InteractiveSessionError) as raised:
+        manager.advance(session_id)
+
+    assert "provider detail" not in str(raised.value)
+    state = manager.get_state(session_id)
+    assert state["state"] == "S2_KNOWLEDGE"
+    assert state["evidence_bundle"] is None
+    evidence_events = [
+        event
+        for event in manager.get_agent_events(session_id)
+        if event["activity"] == "parallel_evidence_retrieval"
+    ]
+    joined = next(
+        event
+        for event in evidence_events
+        if event["details"].get("aggregation") == "deterministic"
+    )
+    failed_branch = next(
+        branch
+        for branch in joined["details"]["branches"]
+        if branch["branch_id"] == "business_data"
+    )
+    assert joined["details"]["succeeded"] is False
+    assert failed_branch["required"] is True
+    assert failed_branch["status"] == "failed"
+    assert not any(
+        event["activity"] == "parallel_resource_generation"
+        for event in manager.get_agent_events(session_id)
+    )
+    assert "provider detail" not in json.dumps(evidence_events, ensure_ascii=False)
+
+
 def test_optional_resource_branch_failure_retries_on_the_main_chain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = TaskAgent.generate_for_diagnosis
+    original = TaskAgent.generate
     calls = 0
 
     def fail_prefetch_once(
         self: TaskAgent,
-        knowledge_point: str,
-        diagnostic_difficulty: str,
+        template_id: str,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         nonlocal calls
         calls += 1
         if calls == 1:
             raise RuntimeError("prefetch provider detail")
-        return original(self, knowledge_point, diagnostic_difficulty)
+        return original(self, template_id, **kwargs)
 
-    monkeypatch.setattr(TaskAgent, "generate_for_diagnosis", fail_prefetch_once)
+    monkeypatch.setattr(TaskAgent, "generate", fail_prefetch_once)
     manager = InteractiveSessionManager(
         trace_dir=tmp_path / "traces",
         cache_dir=tmp_path / "cache",
@@ -900,7 +999,7 @@ def test_diagnosis_routing_failure_uses_learning_language(
         raise ValueError("unsupported diagnostic difficulty: expert")
 
     monkeypatch.setattr(
-        "agents.task_agent.TaskAgent.generate_for_diagnosis",
+        "agents.task_agent.TaskAgent.generate",
         reject_route,
     )
     before = manager.get_state(session_id)

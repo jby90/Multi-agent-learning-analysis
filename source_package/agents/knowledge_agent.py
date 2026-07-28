@@ -110,6 +110,7 @@ class KnowledgeAgent:
         learning_report_summary: str,
         keywords: Sequence[str] = (),
         difficulty: str | None = None,
+        retrieved_chunks: Sequence[KnowledgeChunk] | None = None,
     ) -> dict[str, Any]:
         self._validate_inputs(
             knowledge_point,
@@ -119,7 +120,12 @@ class KnowledgeAgent:
             difficulty,
         )
         started = perf_counter()
-        chunks = self._retriever.retrieve(knowledge_point, difficulty, keywords)
+        if retrieved_chunks is None:
+            chunks = self._retriever.retrieve(knowledge_point, difficulty, keywords)
+        else:
+            chunks = tuple(retrieved_chunks)
+            if any(not isinstance(chunk, KnowledgeChunk) for chunk in chunks):
+                raise ValueError("retrieved_chunks must contain KnowledgeChunk values")
         resolved_difficulty = self._resolved_difficulty(difficulty, chunks)
         knowledge_point_match, knowledge_point_match_basis = self._match_audit(
             knowledge_point, chunks

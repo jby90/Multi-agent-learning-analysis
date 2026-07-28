@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from agents.diagnosis_agent import DiagnosisAgent, load_profiles
-from agents.kb_loader import require_valid_chunks
+from agents.kb_loader import KnowledgeChunk, require_valid_chunks
 from agents.knowledge_agent import KnowledgeAgent
 from agents.rebuttal_generator import RebuttalGenerator
 from agents.retriever import BM25Retriever
@@ -22,6 +22,7 @@ from agents.sandbox import DatabaseSettings, ReadOnlyExecutor
 from agents.task_agent import TaskAgent
 from agents.verification_agent import VerificationAgent
 from coordination.contracts import LearningContract
+from coordination.evidence_bundle import EvidenceBundle
 from coordination.parallel import bounded_llm_executor
 from orchestrator.bus import MessageBus
 from orchestrator.demo_answers import (
@@ -489,15 +490,28 @@ def _generate_reviewable_lecture(
     knowledge_point: str,
     diagnosis_content: Mapping[str, Any],
     blind_spots: Sequence[Any],
+    retrieved_chunks: Sequence[KnowledgeChunk] | None = None,
+    difficulty_fallback: bool | None = None,
+    evidence_bundle: EvidenceBundle | None = None,
 ) -> dict[str, Any]:
     requested_difficulty = str(diagnosis_content.get("difficulty"))
     keywords = tuple(str(item) for item in blind_spots[:3])
-    difficulty_fallback = not runtime.retriever.retrieve(
-        knowledge_point,
-        requested_difficulty,
-        keywords,
-    )
-    generation_difficulty = None if difficulty_fallback else requested_difficulty
+    chunks = tuple(retrieved_chunks) if retrieved_chunks is not None else None
+    if difficulty_fallback is None:
+        requested_chunks = runtime.retriever.retrieve(
+            knowledge_point,
+            requested_difficulty,
+            keywords,
+        )
+        resolved_fallback = not requested_chunks
+        chunks = requested_chunks if requested_chunks else runtime.retriever.retrieve(
+            knowledge_point,
+            None,
+            keywords,
+        )
+    else:
+        resolved_fallback = difficulty_fallback
+    generation_difficulty = None if resolved_fallback else requested_difficulty
     hard_hits: tuple[dict[str, str], ...] = ()
     for _ in range(MAX_LECTURE_GENERATION_ATTEMPTS):
         lecture = runtime.knowledge.generate(
@@ -509,8 +523,11 @@ def _generate_reviewable_lecture(
             ),
             keywords=keywords,
             difficulty=generation_difficulty,
+            retrieved_chunks=chunks,
         )
-        if difficulty_fallback:
+        if evidence_bundle is not None:
+            lecture = evidence_bundle.bind(lecture)
+        if resolved_fallback:
             lecture = deepcopy(lecture)
             payload = lecture.get("payload")
             content = payload.get("content") if isinstance(payload, dict) else None

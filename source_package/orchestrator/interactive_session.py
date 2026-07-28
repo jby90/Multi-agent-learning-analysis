@@ -15,6 +15,7 @@ from uuid import uuid4
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from agents.diagnosis_agent import load_pretest
+from agents.kb_loader import KnowledgeChunk
 from agents.follow_up_agent import (
     MAX_FOLLOW_UP_ROUNDS,
     FollowUpAgent,
@@ -38,6 +39,7 @@ from agents.verification_agent import (
     _result_is_empty,
 )
 from coordination.contracts import LearningContract
+from coordination.evidence_bundle import EvidenceBundle
 from coordination.parallel import BranchSpec, ParallelStage, ParallelStageExecutor
 from orchestrator.demo_session import (
     DemoOptions,
@@ -112,6 +114,8 @@ class _InteractiveSession:
     artifact: dict[str, Any] | None = None
     diagnosis: dict[str, Any] | None = None
     learning_contract: LearningContract | None = None
+    evidence_bundle: EvidenceBundle | None = None
+    evidence_chunks: tuple[KnowledgeChunk, ...] = ()
     lecture: dict[str, Any] | None = None
     active_task: dict[str, Any] | None = None
     learning_task: dict[str, Any] | None = None
@@ -156,6 +160,7 @@ class InteractiveSessionManager:
         self._follow_up_llm_call = follow_up_llm_call
         self._executor_factory = executor_factory
         self._mode = mode or os.environ.get("REF_DEMO_MODE", "live")
+        self._evidence_stage_executor = ParallelStageExecutor(max_concurrency=3)
         self._resource_stage_executor = ParallelStageExecutor(max_concurrency=2)
         self._sessions: dict[str, _InteractiveSession] = {}
         self._lock = RLock()
@@ -601,6 +606,93 @@ class InteractiveSessionManager:
         finally:
             session.advance_lock.release()
 
+    def _prepare_evidence_bundle(
+        self,
+        session: _InteractiveSession,
+        diagnosis_content: Mapping[str, Any],
+        blind_spots: list[Any],
+    ) -> tuple[EvidenceBundle, tuple[KnowledgeChunk, ...]]:
+        if session.evidence_bundle is not None:
+            return session.evidence_bundle, session.evidence_chunks
+        if session.learning_contract is None:
+            raise InteractiveSessionError("学习契约缺失，无法准备统一证据包。")
+        runtime = session.runtime
+        knowledge_point = str(blind_spots[0])
+        difficulty = str(diagnosis_content.get("difficulty"))
+        keywords = tuple(str(item) for item in blind_spots[:3])
+
+        def retrieve_knowledge() -> dict[str, Any]:
+            chunks = runtime.retriever.retrieve(
+                knowledge_point,
+                difficulty,
+                keywords,
+            )
+            difficulty_fallback = not chunks
+            if difficulty_fallback:
+                chunks = runtime.retriever.retrieve(
+                    knowledge_point,
+                    None,
+                    keywords,
+                )
+            return {
+                "chunks": chunks,
+                "summary": {
+                    "chunk_ids": [chunk.chunk_id for chunk in chunks],
+                    "chunk_count": len(chunks),
+                    "difficulty_fallback": difficulty_fallback,
+                },
+            }
+
+        def retrieve_business_data() -> dict[str, Any]:
+            return runtime.task.diagnosis_evidence(
+                knowledge_point,
+                difficulty,
+            )
+
+        def retrieve_pedagogy() -> dict[str, Any]:
+            return {
+                "profile_id": str(runtime.profile["profile_id"]),
+                "profile_title": str(runtime.profile["title"]),
+                "lecture_style": str(runtime.profile["lecture_style"]),
+                "difficulty": difficulty,
+                "misconceptions": list(session.learning_contract.misconceptions),
+            }
+
+        evidence_result = self._evidence_stage_executor.execute(
+            ParallelStage(
+                stage_id="evidence-bundle",
+                branches=(
+                    BranchSpec("knowledge", retrieve_knowledge),
+                    BranchSpec("business_data", retrieve_business_data),
+                    BranchSpec("pedagogy", retrieve_pedagogy),
+                ),
+            ),
+            correlation_id=f"{runtime.options.trace_id}-evidence",
+            observer=lambda event, details: self._observe_evidence_stage(
+                session,
+                event,
+                details,
+            ),
+        )
+        if not evidence_result.succeeded:
+            raise InteractiveSessionError("统一证据包暂时无法完成，请稍后重试。")
+        knowledge_result = evidence_result.require("knowledge")
+        chunks = tuple(knowledge_result["chunks"])
+        bundle = EvidenceBundle(
+            contract_id=session.learning_contract.contract_id,
+            knowledge_point=knowledge_point,
+            difficulty=difficulty,
+            sources={
+                "knowledge": knowledge_result["summary"],
+                "business_data": evidence_result.require("business_data"),
+                "pedagogy": evidence_result.require("pedagogy"),
+            },
+        )
+        runtime.audit(bundle.control_draft(runtime.options.trace_id))
+        session.evidence_bundle = bundle
+        session.evidence_chunks = chunks
+        return bundle, chunks
+
     def _advance_locked(self, session: _InteractiveSession) -> dict[str, Any]:
         session_id = session.session_id
         if session.awaiting != "advance":
@@ -613,10 +705,15 @@ class InteractiveSessionManager:
             blind_spots = diagnosis_content.get("blind_spots")
             if not isinstance(blind_spots, list) or not blind_spots:
                 raise InteractiveSessionError("岗前测评没有产生知识盲区。")
+            evidence_bundle, evidence_chunks = self._prepare_evidence_bundle(
+                session,
+                diagnosis_content,
+                blind_spots,
+            )
+            business_evidence = evidence_bundle.source("business_data")
             def prefetch_task() -> dict[str, Any]:
-                return runtime.task.generate_for_diagnosis(
-                    str(blind_spots[0]),
-                    str(diagnosis_content.get("difficulty")),
+                return evidence_bundle.bind(
+                    runtime.task.generate(str(business_evidence["template_id"]))
                 )
 
             def produce_lecture() -> dict[str, Any] | None:
@@ -627,6 +724,11 @@ class InteractiveSessionManager:
                         knowledge_point=str(blind_spots[0]),
                         diagnosis_content=diagnosis_content,
                         blind_spots=blind_spots,
+                        retrieved_chunks=evidence_chunks,
+                        difficulty_fallback=bool(
+                            evidence_bundle.source("knowledge")["difficulty_fallback"]
+                        ),
+                        evidence_bundle=evidence_bundle,
                     ),
                     session.diagnosis,
                     "T03",
@@ -644,7 +746,7 @@ class InteractiveSessionManager:
                         BranchSpec("task", prefetch_task, required=False),
                     ),
                 ),
-                correlation_id=f"{runtime.options.trace_id}-resources",
+                correlation_id=evidence_bundle.bundle_id,
                 observer=lambda event, details: self._observe_resource_stage(
                     session,
                     event,
@@ -662,7 +764,7 @@ class InteractiveSessionManager:
                 session.prefetched_task = task_branch.value
                 session.prefetched_task_generator = type(
                     runtime.task
-                ).generate_for_diagnosis
+                ).generate
             else:
                 session.prefetched_task = None
                 session.prefetched_task_generator = None
@@ -699,9 +801,15 @@ class InteractiveSessionManager:
                 raise InteractiveSessionError("岗前测评没有产生知识盲区。")
             def produce_task() -> dict[str, Any]:
                 try:
+                    if session.evidence_bundle is not None:
+                        template_id = session.evidence_bundle.source(
+                            "business_data"
+                        )["template_id"]
+                        return session.evidence_bundle.bind(
+                            runtime.task.generate(str(template_id))
+                        )
                     return runtime.task.generate_for_diagnosis(
-                        blind_spots[0],
-                        diagnosis_content.get("difficulty"),
+                        blind_spots[0], diagnosis_content.get("difficulty")
                     )
                 except ValueError as exc:
                     raise InteractiveSessionError(
@@ -711,7 +819,7 @@ class InteractiveSessionManager:
             prefetched = session.prefetched_task
             generator_unchanged = (
                 session.prefetched_task_generator
-                is type(runtime.task).generate_for_diagnosis
+                is type(runtime.task).generate
             )
             session.prefetched_task = None
             session.prefetched_task_generator = None
@@ -1866,6 +1974,11 @@ class InteractiveSessionManager:
                 if session.learning_contract is not None
                 else None
             ),
+            "evidence_bundle": (
+                session.evidence_bundle.as_dict()
+                if session.evidence_bundle is not None
+                else None
+            ),
             "messages": _trace_messages(trace_path),
             "artifact": session.artifact,
             "interaction": session.interaction,
@@ -1904,6 +2017,11 @@ class InteractiveSessionManager:
     ) -> None:
         """Translate the shared fork/join protocol into Agent lifecycle events."""
         normalized = dict(details)
+        if session.evidence_bundle is not None:
+            normalized["evidence_bundle_id"] = session.evidence_bundle.bundle_id
+            normalized["evidence_source_ids"] = list(
+                session.evidence_bundle.sources
+            )
         branch_ids = normalized.get("branch_ids")
         branches = normalized.get("branches")
         fan_out = (
@@ -1995,6 +2113,107 @@ class InteractiveSessionManager:
                 ),
                 peers=("task",),
                 details=normalized,
+            )
+
+    def _observe_evidence_stage(
+        self,
+        session: _InteractiveSession,
+        event: str,
+        details: Mapping[str, Any],
+    ) -> None:
+        """Expose three-source evidence fan-out without leaking source content."""
+        normalized = dict(details)
+        branch_ids = normalized.get("branch_ids")
+        branches = normalized.get("branches")
+        normalized["fan_out"] = (
+            len(branch_ids)
+            if isinstance(branch_ids, list)
+            else len(branches)
+            if isinstance(branches, list)
+            else 3
+        )
+        agents = {
+            "knowledge": "knowledge",
+            "business_data": "verification",
+            "pedagogy": "diagnosis",
+        }
+        labels = {
+            "knowledge": "正在检索领域知识证据",
+            "business_data": "正在解析业务数据口径与任务锚点",
+            "pedagogy": "正在提取岗位画像与教学策略",
+        }
+        if event == "stage_started":
+            normalized["aggregation"] = "pending"
+            for branch_id, agent in agents.items():
+                peers = tuple(
+                    peer_agent
+                    for peer_id, peer_agent in agents.items()
+                    if peer_id != branch_id
+                )
+                self._publish_activity(
+                    session,
+                    agent,
+                    "collaborating",
+                    "parallel_evidence_retrieval",
+                    "三路证据源已并行派发",
+                    peers=peers,
+                    details=normalized,
+                )
+            return
+        branch_id = normalized.get("branch_id")
+        if branch_id in agents:
+            agent = agents[str(branch_id)]
+            peers = tuple(value for key, value in agents.items() if key != branch_id)
+            if event == "branch_started":
+                self._publish_activity(
+                    session,
+                    agent,
+                    "working",
+                    "parallel_evidence_retrieval",
+                    labels[str(branch_id)],
+                    peers=peers,
+                    details={**normalized, "aggregation": "pending"},
+                )
+                return
+            if event == "branch_completed":
+                self._publish_activity(
+                    session,
+                    agent,
+                    "waiting",
+                    "parallel_evidence_retrieval",
+                    "本路证据已就绪，等待统一证据包汇聚",
+                    peers=peers,
+                    details={**normalized, "aggregation": "pending"},
+                )
+                return
+            if event == "branch_failed":
+                self._publish_activity(
+                    session,
+                    agent,
+                    "blocked",
+                    "parallel_evidence_retrieval",
+                    "本路证据未完成，统一证据包已阻断",
+                    peers=peers,
+                    details={**normalized, "aggregation": "pending"},
+                )
+                return
+        if event == "stage_completed":
+            self._publish_activity(
+                session,
+                "knowledge",
+                "done" if normalized.get("succeeded") else "blocked",
+                "parallel_evidence_retrieval",
+                (
+                    "三路证据已汇聚为统一 Evidence Bundle"
+                    if normalized.get("succeeded")
+                    else "统一证据包未能完成"
+                ),
+                peers=("verification", "diagnosis"),
+                details={
+                    **normalized,
+                    "aggregation": "deterministic",
+                    "parallel_elapsed_ms": normalized.get("elapsed_ms"),
+                },
             )
 
     @staticmethod
