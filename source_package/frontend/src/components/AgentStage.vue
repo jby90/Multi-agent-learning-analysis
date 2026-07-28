@@ -8,6 +8,7 @@ import type {
   AgentActivityStatus,
   InteractiveEvidenceBundle,
   InteractiveLearningContract,
+  InteractiveResourceBundle,
 } from '../lib/interactiveApi'
 import { agentLabel, agentPurpose } from '../lib/tracePresentation'
 import type { StateId, TraceView } from '../types/trace'
@@ -17,11 +18,13 @@ import AgentTeacherAvatar from './AgentTeacherAvatar.vue'
 const props = withDefaults(defineProps<{
   contract?: InteractiveLearningContract
   evidenceBundle?: InteractiveEvidenceBundle
+  resourceBundle?: InteractiveResourceBundle
   events?: AgentActivityEvent[]
   view: TraceView
 }>(), {
   contract: undefined,
   evidenceBundle: undefined,
+  resourceBundle: undefined,
   events: () => [],
 })
 
@@ -201,8 +204,24 @@ function eventAgentLabel(agent: AgentActivityId): string {
   if (agent === 'pedagogy_review') return specialistDefinitions.pedagogy_review.label
   if (agent === 'data_safety_review') return specialistDefinitions.data_safety_review.label
   if (agent === 'readability_review') return specialistDefinitions.readability_review.label
+  if (agent === 'assessment') return '分阶测验 Agent'
   return agentLabel(agent)
 }
+
+const assessmentWorker = computed(() => {
+  const event = latestEvents.value.get('assessment')
+  const branch = props.resourceBundle?.branches.find((item) => item.branch_id === 'assessment')
+  if (!event && !branch) return undefined
+  const status: AgentActivityStatus = event?.status ?? (
+    branch?.status === 'ready' ? 'done' : 'queued'
+  )
+  return {
+    status,
+    label: event?.label ?? (
+      branch?.status === 'ready' ? '分阶测验草稿已就绪' : '等待单分支重试'
+    ),
+  }
+})
 
 function detailString(details: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = details?.[key]
@@ -336,9 +355,14 @@ const reviewTeamMembers = computed<ReviewTeamMember[]>(() => {
   })
 })
 
-const activeCount = computed(() => primaryActiveCount.value + reviewTeamMembers.value.filter(
-  (member) => ['working', 'debating'].includes(member.agentStatus),
-).length)
+const activeCount = computed(() => (
+  primaryActiveCount.value
+  + reviewTeamMembers.value.filter(
+    (member) => ['working', 'debating'].includes(member.agentStatus),
+  ).length
+  + (assessmentWorker.value
+    && ['working', 'collaborating'].includes(assessmentWorker.value.status) ? 1 : 0)
+))
 
 function elapsedLabel(value: number | undefined): string {
   if (value === undefined) return '执行中'
@@ -517,6 +541,9 @@ function statusLabel(status: AgentActivityStatus): string {
           <span v-if="evidenceBundle" class="evidence-bundle-metric">
             <b>EB</b> 3 源已绑定
           </span>
+          <span v-if="resourceBundle" class="resource-bundle-metric">
+            <b>RB</b> 3 资源已汇聚
+          </span>
           <span><b>{{ activeCount }}</b> 活跃</span>
           <span><b>{{ approvedCount }}</b> 已接力</span>
         </div>
@@ -618,6 +645,27 @@ function statusLabel(status: AgentActivityStatus): string {
             <Check v-else-if="agent.status === 'approved' || agent.status === 'done'" :size="12" aria-hidden="true" />
             {{ statusLabel(agent.status) }}
           </span>
+
+          <Transition name="review-team">
+            <aside
+              v-if="agent.id === 'task' && assessmentWorker"
+              class="assessment-satellite"
+              :class="`is-${assessmentWorker.status}`"
+              data-agent="assessment"
+              :aria-label="`分阶测验 Agent，${assessmentWorker.label}，${statusLabel(assessmentWorker.status)}`"
+            >
+              <AgentTeacherAvatar
+                agent="assessment"
+                :status="assessmentWorker.status"
+                :size="32"
+              />
+              <span>
+                <b>分阶测验</b>
+                <small>{{ assessmentWorker.label }}</small>
+              </span>
+              <i v-if="assessmentWorker.status === 'working'" aria-hidden="true"></i>
+            </aside>
+          </Transition>
 
           <Transition name="review-team">
             <aside
@@ -784,6 +832,7 @@ function statusLabel(status: AgentActivityStatus): string {
 .agent-slot-3 { top: 24%; left: 83%; --dx: -44px; --dy: 27px; }
 .agent-slot-4 { top: 78%; left: 75%; --dx: -42px; --dy: -34px; }
 .agent-slot-5 { top: 78%; left: 25%; --dx: 42px; --dy: -34px; }
+.agent-slot-5:has(.assessment-satellite) { z-index: 5; }
 .agent-stage-roster li.is-approaching { transform: translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))); }
 .agent-avatar { position: relative; display: grid; place-items: center; width: 60px; height: 60px; overflow: hidden; color: currentColor; background: radial-gradient(circle at 50% 62%,rgba(82,219,255,.1),transparent 66%); border-radius: 13px; }
 .agent-avatar::after { position: absolute; right: 4px; left: 4px; top: -8px; height: 2px; content: ''; opacity: 0; background: linear-gradient(90deg, transparent, currentColor, transparent); box-shadow: 0 0 8px currentColor; }
@@ -809,6 +858,15 @@ function statusLabel(status: AgentActivityStatus): string {
 .is-approved,.is-done { color: #62d8a2 !important; }
 .is-approved .agent-signal,.is-done .agent-signal { background: #48ce91; box-shadow: 0 0 9px rgba(72,206,145,.65); }
 .is-blocked { color: #ff7e7e !important; border-color: rgba(255,126,126,.48) !important; }
+.assessment-satellite { position: absolute; right: -90px; bottom: 7px; display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 4px; align-items: center; width: 84px; min-height: 44px; padding: 4px; color: #76dffc; background: rgba(7,31,47,.96); border: 1px solid rgba(82,214,248,.27); border-radius: 9px; box-shadow: 0 10px 22px rgba(0,0,0,.28); }
+.assessment-satellite::before { position: absolute; top: 50%; left: -8px; width: 8px; height: 1px; content: ''; background: currentColor; opacity: .45; }
+.assessment-satellite > .agent-teacher-avatar { width: 32px; height: 32px; }
+.assessment-satellite span { display: grid; gap: 2px; min-width: 0; }
+.assessment-satellite b { color: #e8f9ff; font-size: 8px; white-space: nowrap; }
+.assessment-satellite small { display: -webkit-box; overflow: hidden; color: #729bae; font-size: 7px; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.assessment-satellite > i { position: absolute; right: 4px; bottom: 3px; width: 4px; height: 4px; background: #5be5ff; border-radius: 50%; box-shadow: 0 0 7px #5be5ff; animation: signal .7s ease-in-out infinite alternate; }
+.assessment-satellite.is-done { color: #58dda0; border-color: rgba(83,224,158,.26) !important; }
+.assessment-satellite.is-queued { opacity: .7; }
 .agent-slot-3.has-review-team { z-index: 6; }
 .agent-slot-3.has-review-team.is-approaching { transform: translate(calc(-50% - 12px),-50%); }
 .review-agent-team { position: absolute; top: calc(100% + 6px); right: -5px; display: grid; gap: 4px; width: 208px; padding: 6px; color: #91b5c7; background: linear-gradient(155deg,rgba(7,28,43,.98),rgba(10,34,49,.97)); border: 1px solid rgba(88,213,250,.24); border-radius: 11px; box-shadow: 0 15px 30px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.025); transform-origin: top right; }

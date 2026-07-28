@@ -329,6 +329,9 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         if event["activity"] == "parallel_resource_generation"
     ]
     task_events = [event for event in resource_events if event["agent"] == "task"]
+    assessment_events = [
+        event for event in resource_events if event["agent"] == "assessment"
+    ]
     joined = next(
         event
         for event in resource_events
@@ -371,12 +374,17 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         "working",
         "waiting",
     ]
+    assert [event["status"] for event in assessment_events] == [
+        "collaborating",
+        "working",
+        "waiting",
+    ]
     assert joined["details"]["stage_id"] == "resource-generation"
-    assert joined["details"]["fan_out"] == 2
+    assert joined["details"]["fan_out"] == 3
     assert joined["details"]["parallel_elapsed_ms"] >= 0
     assert [
         branch["branch_id"] for branch in joined["details"]["branches"]
-    ] == ["knowledge", "task"]
+    ] == ["knowledge", "practice", "assessment"]
     assert all(
         branch["status"] == "succeeded"
         for branch in joined["details"]["branches"]
@@ -402,6 +410,18 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
     assert lecture["artifact"]["payload"]["type"] == "lecture_note"
     bundle_id = lecture["evidence_bundle"]["bundle_id"]
     assert lecture["artifact"]["payload"]["content"]["evidence_bundle_ref"] == bundle_id
+    resource_bundle = lecture["resource_bundle"]
+    assert resource_bundle["bundle_id"].startswith("rb-")
+    assert resource_bundle["evidence_bundle_id"] == bundle_id
+    assert [branch["branch_id"] for branch in resource_bundle["branches"]] == [
+        "knowledge",
+        "practice",
+        "assessment",
+    ]
+    assert all(
+        branch["status"] == "ready"
+        for branch in resource_bundle["branches"]
+    )
     evidence_control = next(
         message
         for message in lecture["messages"]
@@ -533,7 +553,7 @@ def test_optional_resource_branch_failure_retries_on_the_main_chain(
     task_branch = next(
         branch
         for branch in joined["details"]["branches"]
-        if branch["branch_id"] == "task"
+        if branch["branch_id"] == "practice"
     )
     assert failed["agent"] == "task"
     assert task_branch["required"] is False
@@ -1315,7 +1335,7 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     assert next_lecture["artifact"]["payload"]["content"]["knowledge_point"] == "完成率计算"
 
 
-def test_conclusion_task_uses_the_same_deterministic_learning_strategy(
+def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1365,7 +1385,14 @@ def test_conclusion_task_uses_the_same_deterministic_learning_strategy(
     assert conclusion["state"] == "S7_STUDENT"
     assert conclusion["awaiting"] == "follow_up"
     assert conclusion["interaction"]["kind"] == "free_text_follow_up"
-    assert strategy_calls == [("T-03", "keep")]
+    assert strategy_calls == []
+    assessment_branch = next(
+        branch
+        for branch in conclusion["resource_bundle"]["branches"]
+        if branch["branch_id"] == "assessment"
+    )
+    assert assessment_branch["status"] == "ready"
+    assert assessment_branch["payload_type"] == "quiz_set"
     conclusion_msg_id = conclusion["artifact"]["msg_id"]
     conclusion_verdicts = [
         message

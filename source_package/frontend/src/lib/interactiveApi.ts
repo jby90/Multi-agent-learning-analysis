@@ -20,6 +20,22 @@ export interface InteractiveEvidenceBundle extends Record<string, unknown> {
   sources: Record<'knowledge' | 'business_data' | 'pedagogy', Record<string, unknown>>
 }
 
+export interface InteractiveResourceBranch extends Record<string, unknown> {
+  branch_id: 'knowledge' | 'practice' | 'assessment'
+  status: 'ready' | 'unavailable'
+  required: boolean
+  draft_id?: string
+  payload_type?: string
+  difficulty?: string
+}
+
+export interface InteractiveResourceBundle extends Record<string, unknown> {
+  bundle_id: string
+  contract_id: string
+  evidence_bundle_id: string
+  branches: InteractiveResourceBranch[]
+}
+
 export interface InteractivePretestQuestion {
   question_id: string
   knowledge_point: string
@@ -91,6 +107,7 @@ export interface InteractiveState {
   profile: InteractiveProfile
   learning_contract?: InteractiveLearningContract | null
   evidence_bundle?: InteractiveEvidenceBundle | null
+  resource_bundle?: InteractiveResourceBundle | null
   messages: Record<string, unknown>[]
   artifact: Record<string, unknown> | null
   interaction: InteractiveInteraction | null
@@ -106,6 +123,7 @@ export type AgentActivityId =
   | 'pedagogy_review'
   | 'data_safety_review'
   | 'readability_review'
+  | 'assessment'
   | 'review'
 
 export type AgentActivityStatus =

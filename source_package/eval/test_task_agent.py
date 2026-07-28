@@ -104,6 +104,26 @@ def _task_module() -> Any:
         pytest.fail("agents.task_agent is not implemented")
 
 
+def test_assessment_branch_normalizes_practice_anchor_to_quiz_contract() -> None:
+    message = _task_module().TaskAgent("trace-assessment-branch").generate_assessment(
+        "T-03"
+    )
+    content = message["payload"]["content"]
+
+    assert message["payload"]["type"] == "quiz_set"
+    assert content["event"] == "assessment_ready"
+    assert content["resource_kind"] == "graded_assessment"
+    assert content["questions"] == [
+        {
+            "id": "T-03",
+            "prompt": content["question"],
+            "difficulty": "basic",
+        }
+    ]
+    assert "guide_md" not in content
+    assert message["evidence"][0]["kind"] == "quiz_answer_key"
+
+
 def _planner_profile() -> dict[str, Any]:
     return {
         "profile_id": "planner_new",

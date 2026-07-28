@@ -12,6 +12,7 @@ import ProfileComparison from './components/ProfileComparison.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
 import ReplayToolbar from './components/ReplayToolbar.vue'
 import ResourcePanel from './components/ResourcePanel.vue'
+import ResourceBundleStrip from './components/ResourceBundleStrip.vue'
 import TracePanel from './components/TracePanel.vue'
 import { useAgentEventPlayback } from './composables/useAgentEventPlayback'
 import { useReplay, type ReplaySpeed } from './composables/useReplay'
@@ -344,6 +345,10 @@ onMounted(loadTraces)
           v-if="liveView && !liveHasResource"
           :state="liveState"
         />
+        <ResourceBundleStrip
+          v-if="liveState?.resource_bundle"
+          :bundle="liveState.resource_bundle"
+        />
         <ResourcePanel
           v-if="liveView && liveHasResource"
           :view="liveView"
@@ -363,6 +368,7 @@ onMounted(loadTraces)
           :events="liveAgentEvents"
           :contract="liveState?.learning_contract ?? undefined"
           :evidence-bundle="liveState?.evidence_bundle ?? undefined"
+          :resource-bundle="liveState?.resource_bundle ?? undefined"
         />
         <TracePanel :view="liveView" />
       </div>

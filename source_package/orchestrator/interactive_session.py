@@ -41,6 +41,7 @@ from agents.verification_agent import (
 from coordination.contracts import LearningContract
 from coordination.evidence_bundle import EvidenceBundle
 from coordination.parallel import BranchSpec, ParallelStage, ParallelStageExecutor
+from coordination.resource_bundle import ResourceBundle
 from orchestrator.demo_session import (
     DemoOptions,
     _DemoRuntime,
@@ -139,6 +140,9 @@ class _InteractiveSession:
     events: AgentEventStream | None = None
     prefetched_task: dict[str, Any] | None = None
     prefetched_task_generator: Any = None
+    prefetched_assessment: dict[str, Any] | None = None
+    prefetched_assessment_generator: Any = None
+    resource_bundle: ResourceBundle | None = None
 
 
 class InteractiveSessionManager:
@@ -161,7 +165,7 @@ class InteractiveSessionManager:
         self._executor_factory = executor_factory
         self._mode = mode or os.environ.get("REF_DEMO_MODE", "live")
         self._evidence_stage_executor = ParallelStageExecutor(max_concurrency=3)
-        self._resource_stage_executor = ParallelStageExecutor(max_concurrency=2)
+        self._resource_stage_executor = ParallelStageExecutor(max_concurrency=3)
         self._sessions: dict[str, _InteractiveSession] = {}
         self._lock = RLock()
 
@@ -716,6 +720,13 @@ class InteractiveSessionManager:
                     runtime.task.generate(str(business_evidence["template_id"]))
                 )
 
+            def prefetch_assessment() -> dict[str, Any]:
+                return evidence_bundle.bind(
+                    runtime.task.generate_assessment(
+                        str(business_evidence["template_id"])
+                    )
+                )
+
             def produce_lecture() -> dict[str, Any] | None:
                 return self._produce_reviewed_product(
                     session,
@@ -743,7 +754,12 @@ class InteractiveSessionManager:
                     stage_id="resource-generation",
                     branches=(
                         BranchSpec("knowledge", produce_lecture),
-                        BranchSpec("task", prefetch_task, required=False),
+                        BranchSpec("practice", prefetch_task, required=False),
+                        BranchSpec(
+                            "assessment",
+                            prefetch_assessment,
+                            required=False,
+                        ),
                     ),
                 ),
                 correlation_id=evidence_bundle.bundle_id,
@@ -759,7 +775,7 @@ class InteractiveSessionManager:
                     "个性化微课暂时无法生成，请稍后重试。"
                 )
             lecture = lecture_branch.value
-            task_branch = resource_result.branch("task")
+            task_branch = resource_result.branch("practice")
             if task_branch.status == "succeeded":
                 session.prefetched_task = task_branch.value
                 session.prefetched_task_generator = type(
@@ -775,8 +791,41 @@ class InteractiveSessionManager:
                     "task_design",
                     "并行草稿未完成，将在主链路重试",
                 )
+            assessment_branch = resource_result.branch("assessment")
+            if assessment_branch.status == "succeeded":
+                session.prefetched_assessment = assessment_branch.value
+                session.prefetched_assessment_generator = type(
+                    runtime.task
+                ).generate_assessment
+            else:
+                session.prefetched_assessment = None
+                session.prefetched_assessment_generator = None
+                self._publish_activity(
+                    session,
+                    "assessment",
+                    "queued",
+                    "assessment_design",
+                    "分阶测验草稿未完成，将在需要时单分支重试",
+                )
             if lecture is None:
                 return self.get_state(session_id)
+            session.resource_bundle = ResourceBundle.build(
+                contract_id=evidence_bundle.contract_id,
+                evidence_bundle_id=evidence_bundle.bundle_id,
+                products={
+                    "knowledge": lecture,
+                    "practice": (
+                        task_branch.value
+                        if task_branch.status == "succeeded"
+                        else None
+                    ),
+                    "assessment": (
+                        assessment_branch.value
+                        if assessment_branch.status == "succeeded"
+                        else None
+                    ),
+                },
+            )
             session.lecture = lecture
             session.artifact = lecture
             session.interaction = None
@@ -789,6 +838,17 @@ class InteractiveSessionManager:
                     "并行草稿已就绪，等待进入质量门"
                     if session.prefetched_task is not None
                     else "等待生成匹配难度的实操任务"
+                ),
+            )
+            self._publish_activity(
+                session,
+                "assessment",
+                "waiting" if session.prefetched_assessment is not None else "queued",
+                "assessment_design",
+                (
+                    "分阶测验已就绪，等待进入理解核对质量门"
+                    if session.prefetched_assessment is not None
+                    else "等待单分支生成分阶测验"
                 ),
             )
             return self.get_state(session_id)
@@ -874,7 +934,18 @@ class InteractiveSessionManager:
     ) -> dict[str, Any]:
         if session.diagnosis is None:
             raise InteractiveSessionError("岗前测评结果缺失。")
-        task_draft = self._learning_task_draft(session, "keep")
+        prefetched = session.prefetched_assessment
+        generator_unchanged = (
+            session.prefetched_assessment_generator
+            is type(session.runtime.task).generate_assessment
+        )
+        session.prefetched_assessment = None
+        session.prefetched_assessment_generator = None
+        task_draft = (
+            prefetched
+            if prefetched is not None and generator_unchanged
+            else self._assessment_task_draft(session)
+        )
         if task_draft is None:
             raise InteractiveSessionError("暂时无法为你安排结论练习，请稍后重试。")
         runtime = session.runtime
@@ -891,11 +962,19 @@ class InteractiveSessionManager:
             ),
             "T19",
         )
+        self._publish_activity(
+            session,
+            "assessment",
+            "collaborating",
+            "assessment_design",
+            "预生成分阶测验已进入主链路质量门",
+            peers=("task", "review"),
+        )
         task = self._produce_reviewed_product(
             session,
             _retryable_task_producer(
                 task_draft,
-                lambda: self._learning_task_draft(session, "keep"),
+                lambda: self._assessment_task_draft(session),
                 "暂时无法为你安排结论练习，请稍后重试。",
             ),
             session.diagnosis,
@@ -907,6 +986,14 @@ class InteractiveSessionManager:
         )
         if task is None:
             return self.get_state(session.session_id)
+        self._publish_activity(
+            session,
+            "assessment",
+            "done",
+            "assessment_design",
+            "分阶测验已通过质量门并交付理解核对",
+            peers=("task", "review"),
+        )
         session.active_task = task
         session.learning_task = task
         session.task_phase = "conclusion"
@@ -1069,6 +1156,26 @@ class InteractiveSessionManager:
         except ValueError as exc:
             raise InteractiveSessionError(
                 "暂时无法为你匹配合适的下一步训练，请稍后重试。"
+            ) from exc
+
+    @staticmethod
+    def _assessment_task_draft(
+        session: _InteractiveSession,
+    ) -> dict[str, Any]:
+        content = _payload_content(session.learning_task or {})
+        template_id = content.get("template_id")
+        if not isinstance(template_id, str) or not template_id.strip():
+            raise InteractiveSessionError("当前训练内容不完整，请稍后重试。")
+        try:
+            draft = session.runtime.task.generate_assessment(template_id)
+            return (
+                session.evidence_bundle.bind(draft)
+                if session.evidence_bundle is not None
+                else draft
+            )
+        except ValueError as exc:
+            raise InteractiveSessionError(
+                "暂时无法为你生成分阶测验，请稍后重试。"
             ) from exc
 
     def submit_follow_up(
@@ -1979,6 +2086,11 @@ class InteractiveSessionManager:
                 if session.evidence_bundle is not None
                 else None
             ),
+            "resource_bundle": (
+                session.resource_bundle.as_dict()
+                if session.resource_bundle is not None
+                else None
+            ),
             "messages": _trace_messages(trace_path),
             "artifact": session.artifact,
             "interaction": session.interaction,
@@ -2029,67 +2141,78 @@ class InteractiveSessionManager:
             if isinstance(branch_ids, list)
             else len(branches)
             if isinstance(branches, list)
-            else 2
+            else 3
         )
         normalized["fan_out"] = fan_out
         if event == "stage_started":
             normalized["aggregation"] = "pending"
-            for agent, peer in (("knowledge", "task"), ("task", "knowledge")):
+            resource_agents = ("knowledge", "task", "assessment")
+            for agent in resource_agents:
                 self._publish_activity(
                     session,
                     agent,
                     "collaborating",
                     "parallel_resource_generation",
-                    "个性化微课与实操草稿已双路并行派发",
-                    peers=(peer,),
+                    "微课、实操与分阶测验已三路并行派发",
+                    peers=tuple(item for item in resource_agents if item != agent),
                     details=normalized,
                 )
             return
         branch_id = normalized.get("branch_id")
-        if branch_id not in {"knowledge", "task"}:
+        branch_agents = {
+            "knowledge": "knowledge",
+            "practice": "task",
+            "assessment": "assessment",
+        }
+        if branch_id not in branch_agents:
             if event != "stage_completed":
                 return
-        peer = "task" if branch_id == "knowledge" else "knowledge"
+        agent_id = branch_agents.get(str(branch_id), "knowledge")
+        peer_ids = tuple(
+            agent
+            for agent in ("knowledge", "task", "assessment")
+            if agent != agent_id
+        )
         if event == "branch_started":
-            label = (
-                "正在检索证据并生成个性化微课"
-                if branch_id == "knowledge"
-                else "正在并行准备实操任务草稿"
-            )
+            label = {
+                "knowledge": "正在检索证据并生成个性化微课",
+                "practice": "正在并行准备实操任务草稿",
+                "assessment": "正在并行生成匹配难度的分阶测验",
+            }[str(branch_id)]
             self._publish_activity(
                 session,
-                str(branch_id),
+                agent_id,
                 "working",
                 "parallel_resource_generation",
                 label,
-                peers=(peer,),
+                peers=peer_ids,
                 details={**normalized, "aggregation": "pending"},
             )
             return
         if event == "branch_completed":
-            label = (
-                "微课分支已完成，等待资源汇聚"
-                if branch_id == "knowledge"
-                else "实操草稿已就绪，等待资源汇聚"
-            )
+            label = {
+                "knowledge": "微课分支已完成，等待资源汇聚",
+                "practice": "实操草稿已就绪，等待资源汇聚",
+                "assessment": "分阶测验已就绪，等待资源汇聚",
+            }[str(branch_id)]
             self._publish_activity(
                 session,
-                str(branch_id),
+                agent_id,
                 "waiting",
                 "parallel_resource_generation",
                 label,
-                peers=(peer,),
+                peers=peer_ids,
                 details={**normalized, "aggregation": "pending"},
             )
             return
         if event == "branch_failed":
             self._publish_activity(
                 session,
-                str(branch_id),
+                agent_id,
                 "blocked",
                 "parallel_resource_generation",
                 "当前资源分支未完成",
-                peers=(peer,),
+                peers=peer_ids,
                 details={**normalized, "aggregation": "pending"},
             )
             return
@@ -2109,9 +2232,9 @@ class InteractiveSessionManager:
                 (
                     "资源并行阶段已安全停止"
                     if safely_stopped
-                    else "微课与实操草稿已汇聚，进入主链路质量门"
+                    else "三路教学资源已汇聚，进入主链路质量门"
                 ),
-                peers=("task",),
+                peers=("task", "assessment"),
                 details=normalized,
             )
 

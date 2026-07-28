@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -598,6 +599,21 @@ class TaskAgent:
         student_profile: Mapping[str, Any] | None = None,
         learning_report_summary: str | None = None,
     ) -> dict[str, Any]:
+        return self._generate(
+            template_id,
+            diagnostic_difficulty=diagnostic_difficulty,
+            student_profile=student_profile,
+            learning_report_summary=learning_report_summary,
+        )
+
+    def _generate(
+        self,
+        template_id: str,
+        *,
+        diagnostic_difficulty: str | None = None,
+        student_profile: Mapping[str, Any] | None = None,
+        learning_report_summary: str | None = None,
+    ) -> dict[str, Any]:
         entry = _select_template(
             self._catalog,
             template_id,
@@ -696,6 +712,57 @@ class TaskAgent:
             if isinstance(profile_id, str) and profile_id.strip():
                 draft["student_profile_ref"] = profile_id
         draft.update(metadata)
+        return draft
+
+    def generate_assessment(
+        self,
+        template_id: str,
+        *,
+        diagnostic_difficulty: str | None = None,
+        student_profile: Mapping[str, Any] | None = None,
+        learning_report_summary: str | None = None,
+    ) -> dict[str, Any]:
+        """Build an independent graded-check draft from the approved task anchor.
+
+        The catalog may route a knowledge point to a practice guide.  The assessment
+        branch deliberately reuses the same query authority and answer-key evidence,
+        while exposing only the single graded question contract expected downstream.
+        """
+
+        draft = deepcopy(
+            self._generate(
+                template_id,
+                diagnostic_difficulty=diagnostic_difficulty,
+                student_profile=student_profile,
+                learning_report_summary=learning_report_summary,
+            )
+        )
+        payload = draft["payload"]
+        content = payload["content"]
+        question = content.get("question") or content.get("contextualized_stem")
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("assessment question must be a non-empty string")
+        for field in (
+            "guide_intro",
+            "guide_steps",
+            "completion_criteria",
+            "guide_md",
+        ):
+            content.pop(field, None)
+        content.update(
+            {
+                "event": "assessment_ready",
+                "resource_kind": "graded_assessment",
+                "questions": [
+                    {
+                        "id": str(content["template_id"]),
+                        "prompt": question,
+                        "difficulty": str(content["difficulty"]),
+                    }
+                ],
+            }
+        )
+        payload["type"] = "quiz_set"
         return draft
 
     def counter_evidence(

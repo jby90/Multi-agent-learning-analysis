@@ -122,15 +122,15 @@ describe('AgentStage', () => {
     expect(wrapper.text()).toContain('四维并行执行中')
   })
 
-  it('shows the shared resource fork/join stage without adding another proof panel', () => {
+  it('shows the three-way resource fork/join stage and assessment worker', () => {
     const dispatched = {
       ...event(
         3,
         'knowledge',
         'collaborating',
-        '个性化微课与实操草稿已双路并行派发',
-        ['task'],
-        { fan_out: 2, aggregation: 'pending', stage_id: 'resource-generation' },
+        '微课、实操与分阶测验已三路并行派发',
+        ['task', 'assessment'],
+        { fan_out: 3, aggregation: 'pending', stage_id: 'resource-generation' },
       ),
       activity: 'parallel_resource_generation',
     }
@@ -141,16 +141,31 @@ describe('AgentStage', () => {
         'working',
         '正在并行准备实操任务草稿',
         ['knowledge'],
-        { fan_out: 2, aggregation: 'pending', branch_id: 'task' },
+        { fan_out: 3, aggregation: 'pending', branch_id: 'practice' },
       ),
       activity: 'parallel_resource_generation',
     }
-    const wrapper = mount(AgentStage, { props: { view, events: [dispatched, taskWorking] } })
+    const assessmentWorking = {
+      ...event(
+        5,
+        'assessment',
+        'working',
+        '正在并行生成匹配难度的分阶测验',
+        ['knowledge', 'task'],
+        { fan_out: 3, aggregation: 'pending', branch_id: 'assessment' },
+      ),
+      activity: 'parallel_resource_generation',
+    }
+    const wrapper = mount(AgentStage, {
+      props: { view, events: [dispatched, taskWorking, assessmentWorking] },
+    })
 
-    expect(wrapper.text()).toContain('2 路资源并发')
+    expect(wrapper.text()).toContain('3 路资源并发')
     expect(wrapper.get('[data-agent="knowledge"]').classes()).toContain('is-collaborating')
     expect(wrapper.get('[data-agent="task"]').classes()).toContain('is-working')
+    expect(wrapper.get('[data-agent="assessment"]').classes()).toContain('is-working')
     expect(wrapper.text()).toContain('正在并行准备实操任务草稿')
+    expect(wrapper.text()).toContain('正在并行生成匹配难度的分阶测验')
     expect(wrapper.findAll('.parallel-proof')).toHaveLength(0)
   })
 
