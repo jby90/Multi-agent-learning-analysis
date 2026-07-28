@@ -97,7 +97,7 @@ const headline = computed(() => latestEvent.value?.label ?? (
     ? `${agentLabel(fallbackActive.value)}正在执行当前阶段`
     : '等待工作流启动'
 ))
-const activeCount = computed(() => agents.value.filter(
+const primaryActiveCount = computed(() => agents.value.filter(
   (agent) => ['working', 'collaborating', 'reviewing', 'debating'].includes(agent.status),
 ).length)
 const approvedCount = computed(() => agents.value.filter(
@@ -130,6 +130,12 @@ type ParallelReviewProof = {
   isComplete: boolean
   branches: ReviewBranchProof[]
   savedMs?: number
+}
+
+type ReviewGroupPhase = 'idle' | 'dispatching' | 'parallel' | 'arbitrating' | 'complete'
+
+type ReviewTeamMember = ReviewBranchProof & {
+  agentStatus: AgentActivityStatus
 }
 
 const branchLabels: Record<ReviewBranchProof['ruleId'], string> = {
@@ -211,7 +217,7 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
     const specialistEvent = latestEvents.value.get(agentId)
     const liveStatus = specialistEvent?.status === 'blocked'
       ? 'failed'
-      : specialistEvent?.status === 'done' ? 'succeeded' : 'running'
+      : specialistEvent?.status === 'done' || isComplete ? 'succeeded' : 'running'
     const definition = specialistDefinitions[agentId]
     return {
       agentId,
@@ -237,6 +243,55 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
       : undefined,
   }
 })
+
+const reviewGroupPhase = computed<ReviewGroupPhase>(() => {
+  const reviewEvent = latestEvents.value.get('review')
+  if (!parallelReviewProof.value) {
+    return reviewEvent?.activity === 'quality_gate' && reviewEvent.status === 'reviewing'
+      ? 'dispatching'
+      : 'idle'
+  }
+  if (!parallelReviewProof.value.isComplete) return 'parallel'
+  return reviewEvent?.activity === 'parallel_quality_review'
+    ? 'arbitrating'
+    : 'complete'
+})
+
+const reviewPhaseLabel = computed(() => ({
+  idle: '待机',
+  dispatching: '正在调度专项审核',
+  parallel: '双 Agent 并行审核',
+  arbitrating: '结果已汇聚 · 正在仲裁',
+  complete: '专项审核已完成',
+})[reviewGroupPhase.value])
+
+const reviewTeamMembers = computed<ReviewTeamMember[]>(() => {
+  const branches = parallelReviewProof.value?.branches
+  if (branches) {
+    return branches.map((branch) => ({
+      ...branch,
+      agentStatus: branch.status === 'failed'
+        ? 'blocked'
+        : branch.status === 'succeeded' ? 'done' : 'working',
+    }))
+  }
+  if (reviewGroupPhase.value !== 'dispatching') return []
+  return (['evidence_review', 'pedagogy_review'] as const).map((agentId) => {
+    const definition = specialistDefinitions[agentId]
+    return {
+      agentId,
+      ruleId: definition.ruleId,
+      label: definition.label,
+      axisLabel: branchLabels[definition.ruleId],
+      status: 'running',
+      agentStatus: 'queued',
+    }
+  })
+})
+
+const activeCount = computed(() => primaryActiveCount.value + reviewTeamMembers.value.filter(
+  (member) => member.agentStatus === 'working',
+).length)
 
 function elapsedLabel(value: number | undefined): string {
   if (value === undefined) return '执行中'
@@ -293,6 +348,26 @@ function activeAvatarStyle(agent: AgentCard) {
   return {
     animation: 'none',
     transform: `translateY(${lift.toFixed(1)}px) scale(${(1.06 + Math.abs(lift) / 70).toFixed(3)})`,
+  }
+}
+
+function reviewSpecialistStyle(member: ReviewTeamMember, index: number) {
+  if (!motionEnabled.value || member.agentStatus === 'done' || member.agentStatus === 'blocked') return undefined
+  const angle = cycle(index * .19) * Math.PI * 2
+  const amplitude = reviewGroupPhase.value === 'parallel' ? 3.5 : 1.7
+  const lift = Math.sin(angle) * amplitude
+  const drift = Math.cos(angle) * amplitude * .55
+  return {
+    transform: `translate(${drift.toFixed(1)}px,${lift.toFixed(1)}px) scale(${(1 + Math.abs(lift) / 95).toFixed(3)})`,
+  }
+}
+
+function reviewScanStyle(member: ReviewTeamMember, index: number) {
+  if (member.agentStatus !== 'working') return undefined
+  const progress = cycle(index * .43)
+  return {
+    top: `${10 + progress * 29}px`,
+    opacity: movingOpacity(progress),
   }
 }
 
@@ -427,7 +502,11 @@ function statusLabel(status: AgentActivityStatus): string {
           :class="[
             `agent-slot-${index + 1}`,
             `is-${agent.status}`,
-            { 'is-approaching': isApproaching(agent) },
+            {
+              'is-approaching': isApproaching(agent),
+              'has-review-team': agent.id === 'review' && reviewTeamMembers.length > 0,
+              [`review-phase-${reviewGroupPhase}`]: agent.id === 'review',
+            },
           ]"
           :data-agent="agent.id"
           :aria-label="`${agentLabel(agent.id)}，${agentPurpose(agent.id)}，${statusLabel(agent.status)}`"
@@ -446,6 +525,48 @@ function statusLabel(status: AgentActivityStatus): string {
             <Check v-else-if="agent.status === 'approved' || agent.status === 'done'" :size="12" aria-hidden="true" />
             {{ statusLabel(agent.status) }}
           </span>
+
+          <Transition name="review-team">
+            <aside
+              v-if="agent.id === 'review' && reviewTeamMembers.length"
+              class="review-agent-team"
+              :class="`is-${reviewGroupPhase}`"
+              aria-label="专业审核 Agent 的专项审核组"
+            >
+              <span class="review-team-connector" aria-hidden="true">
+                <i :style="{ top: `${cycle(.14) * 100}%` }"></i>
+              </span>
+              <header>
+                <b>专项审核组</b>
+                <small>{{ reviewPhaseLabel }}</small>
+              </header>
+              <div class="review-team-members">
+                <article
+                  v-for="(member, memberIndex) in reviewTeamMembers"
+                  :key="member.agentId"
+                  :class="[`is-${member.agentStatus}`, `member-${memberIndex + 1}`]"
+                  :data-agent="member.agentId"
+                  :aria-label="`${member.label}，${member.axisLabel}，${statusLabel(member.agentStatus)}`"
+                  :style="reviewSpecialistStyle(member, memberIndex)"
+                >
+                  <span class="review-specialist-avatar">
+                    <AgentTeacherAvatar :agent="member.agentId" :status="member.agentStatus" :size="34" />
+                    <i
+                      class="review-specialist-scan"
+                      :style="reviewScanStyle(member, memberIndex)"
+                      aria-hidden="true"
+                    ></i>
+                  </span>
+                  <span class="review-specialist-copy">
+                    <b>{{ member.label }}</b>
+                    <small>{{ member.axisLabel }}</small>
+                  </span>
+                  <code>{{ member.ruleId }}</code>
+                  <span class="review-specialist-status">{{ statusLabel(member.agentStatus) }}</span>
+                </article>
+              </div>
+            </aside>
+          </Transition>
         </li>
       </ul>
     </div>
@@ -468,29 +589,18 @@ function statusLabel(status: AgentActivityStatus): string {
           </b>
         </header>
 
-        <div class="parallel-proof-flow">
-          <article
-            v-for="branch in parallelReviewProof.branches"
-            :key="branch.agentId"
-            class="proof-branch"
-            :class="`is-${branch.status}`"
-            :data-agent="branch.agentId"
-          >
-            <div class="proof-branch-title">
-              <code>{{ branch.ruleId }}</code>
-              <span>{{ branch.status === 'running' ? 'RUNNING' : branch.status.toUpperCase() }}</span>
-            </div>
-            <strong>{{ branch.label }}</strong>
-            <small class="proof-axis">{{ branch.axisLabel }}</small>
-            <div class="proof-progress" aria-hidden="true"><i></i></div>
+        <div class="parallel-proof-audit" aria-label="专项审核审计摘要">
+          <span v-for="branch in parallelReviewProof.branches" :key="branch.agentId">
+            <code>{{ branch.ruleId }}</code>
+            <b>{{ branch.status === 'running' ? '执行中' : branch.status === 'succeeded' ? '已完成' : '异常' }}</b>
             <time>{{ elapsedLabel(branch.elapsedMs) }}</time>
-          </article>
-
-          <div class="proof-merge" :class="{ 'is-complete': parallelReviewProof.isComplete }">
-            <span><Check v-if="parallelReviewProof.isComplete" :size="18" aria-hidden="true" /><i v-else></i></span>
-            <b>{{ parallelReviewProof.isComplete ? 'JOINED' : 'JOIN' }}</b>
-            <small>固定顺序汇聚</small>
-          </div>
+          </span>
+          <span class="proof-join-audit" :class="{ 'is-complete': parallelReviewProof.isComplete }">
+            <Check v-if="parallelReviewProof.isComplete" :size="13" aria-hidden="true" />
+            <i v-else aria-hidden="true"></i>
+            <b>{{ parallelReviewProof.isComplete ? 'JOINED' : '并行中' }}</b>
+            <small>确定性汇聚</small>
+          </span>
         </div>
 
         <footer class="parallel-proof-meta">
@@ -604,6 +714,35 @@ function statusLabel(status: AgentActivityStatus): string {
 .is-approved,.is-done { color: #62d8a2 !important; }
 .is-approved .agent-signal,.is-done .agent-signal { background: #48ce91; box-shadow: 0 0 9px rgba(72,206,145,.65); }
 .is-blocked { color: #ff7e7e !important; border-color: rgba(255,126,126,.48) !important; }
+.agent-slot-3.has-review-team { z-index: 6; }
+.agent-slot-3.has-review-team.is-approaching { transform: translate(calc(-50% - 12px),-50%); }
+.review-agent-team { position: absolute; top: calc(100% + 8px); right: 0; display: grid; gap: 4px; width: 132px; padding: 6px; color: #91b5c7; background: linear-gradient(155deg,rgba(7,28,43,.98),rgba(10,34,49,.97)); border: 1px solid rgba(88,213,250,.24); border-radius: 11px; box-shadow: 0 15px 30px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.025); transform-origin: top right; }
+.review-agent-team::before { position: absolute; top: -5px; right: 17px; width: 9px; height: 9px; content: ''; background: #092033; border-top: 1px solid rgba(88,213,250,.24); border-left: 1px solid rgba(88,213,250,.24); transform: rotate(45deg); }
+.review-agent-team > header { display: grid; gap: 1px; padding: 0 2px 3px; border-bottom: 1px solid rgba(108,188,219,.1); }
+.review-agent-team > header b { color: #dff6ff; font-size: 9px; }
+.review-agent-team > header small { overflow: hidden; color: #63cfea; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.review-team-connector { position: absolute; top: -12px; right: 20px; width: 2px; height: 10px; overflow: hidden; background: rgba(80,219,255,.18); }
+.review-team-connector i { position: absolute; left: -1px; width: 4px; height: 4px; background: #e5fbff; border-radius: 50%; box-shadow: 0 0 7px #4bdcff; transform: translateY(-50%); }
+.review-team-members { display: grid; gap: 4px; }
+.review-team-members article { position: relative; display: grid; grid-template-columns: 34px minmax(0,1fr); grid-template-rows: auto auto; gap: 1px 4px; align-items: center; min-height: 40px; padding: 2px 4px 2px 2px; color: #50daf7; background: rgba(12,44,59,.82); border: 1px solid rgba(75,211,245,.24); border-radius: 8px; box-shadow: none; transition: border-color .25s,box-shadow .25s,opacity .25s; }
+.review-team-members article[data-agent="pedagogy_review"] { color: #bda0ff; background: rgba(32,27,66,.78); border-color: rgba(178,145,255,.3); }
+.review-team-members article.is-working { box-shadow: 0 0 15px rgba(53,207,243,.13); }
+.review-team-members article[data-agent="pedagogy_review"].is-working { box-shadow: 0 0 15px rgba(166,128,255,.15); }
+.review-team-members article.is-done { color: #58dba0; opacity: .88; }
+.review-team-members article.is-blocked { color: #ff8181; }
+.review-specialist-avatar { position: relative; grid-row: 1/3; display: grid; place-items: center; width: 34px; height: 34px; overflow: hidden; border-radius: 8px; }
+.review-specialist-scan { position: absolute; right: 3px; left: 3px; height: 1px; background: currentColor; box-shadow: 0 0 6px currentColor; }
+.review-specialist-copy { display: grid; gap: 1px; min-width: 0; padding-right: 23px; }
+.review-specialist-copy b { overflow: hidden; color: #e7f7ff; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.review-specialist-copy small { overflow: hidden; color: #6e98aa; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.review-team-members code { position: absolute; top: 5px; right: 4px; color: currentColor; font: 800 7px/1 ui-monospace,monospace; }
+.review-specialist-status { color: #638596; font-size: 7px; }
+.review-agent-team.is-parallel { border-color: rgba(83,220,255,.42); box-shadow: 0 15px 32px rgba(0,0,0,.34),0 0 22px rgba(42,199,238,.1); }
+.review-agent-team.is-arbitrating { border-color: rgba(187,151,255,.42); }
+.review-agent-team.is-arbitrating > header small { color: #c1a5ff; }
+.review-agent-team.is-complete { opacity: .86; transform: scale(.94); }
+.review-team-enter-active,.review-team-leave-active { transition: opacity .28s ease,transform .36s cubic-bezier(.2,.8,.2,1); }
+.review-team-enter-from,.review-team-leave-to { opacity: 0; transform: translateY(-9px) scale(.88); }
 .parallel-proof { margin: 0 14px 14px; padding: 14px; background: linear-gradient(135deg,rgba(5,25,39,.96),rgba(8,31,47,.92)); border: 1px solid rgba(76,210,255,.22); border-radius: 13px; box-shadow: inset 0 1px rgba(255,255,255,.025),0 12px 30px rgba(0,0,0,.18); }
 .parallel-proof-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .parallel-proof-heading > div { display: grid; gap: 3px; }
@@ -613,36 +752,15 @@ function statusLabel(status: AgentActivityStatus): string {
 .proof-state i { width: 6px; height: 6px; background: currentColor; border-radius: 50%; box-shadow: 0 0 9px currentColor; }
 .parallel-proof.is-running .proof-state i { animation: proof-led .7s ease-in-out infinite alternate; }
 .parallel-proof.is-complete .proof-state { color: #5de0a3; background: rgba(62,213,147,.075); border-color: rgba(78,219,157,.22); }
-.parallel-proof-flow { position: relative; display: grid; grid-template-columns: minmax(0,1fr) 78px minmax(0,1fr); gap: 10px; align-items: center; }
-.parallel-proof-flow::before { position: absolute; z-index: 0; top: 50%; right: 22%; left: 22%; height: 1px; content: ''; background: repeating-linear-gradient(90deg,rgba(73,219,255,.7) 0 8px,transparent 8px 14px); opacity: .5; }
-.parallel-proof.is-running .parallel-proof-flow::after { position: absolute; z-index: 1; top: calc(50% - 2px); left: 22%; width: 34px; height: 4px; content: ''; background: linear-gradient(90deg,transparent,#dffbff,transparent); border-radius: 99px; filter: drop-shadow(0 0 6px #4fe0ff); animation: proof-packet 1.35s ease-in-out infinite; }
-.proof-branch { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; min-width: 0; padding: 10px 11px; background: rgba(8,39,56,.96); border: 1px solid rgba(77,211,247,.22); border-radius: 9px; }
-.proof-branch:nth-of-type(1) { grid-column: 1; }
-.proof-branch:nth-of-type(2) { grid-column: 3; }
-.proof-branch-title { grid-column: 1/-1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.proof-branch-title code { color: #60ddff; font: 800 9px/1 ui-monospace,monospace; }
-.proof-branch-title span { color: #638b9e; font: 700 7px/1 ui-monospace,monospace; letter-spacing: .09em; }
-.proof-branch > strong { overflow: hidden; color: #dff5ff; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.proof-axis { grid-column: 1/-1; color: #718fa1; font-size: 8px; line-height: 1.2; }
-.proof-branch time { color: #7da8ba; font: 700 8px/1 ui-monospace,monospace; }
-.proof-progress { grid-column: 1/-1; height: 3px; overflow: hidden; background: rgba(255,255,255,.055); border-radius: 99px; }
-.proof-progress i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg,#2acdf7,#7aeaff,#2acdf7); box-shadow: 0 0 8px rgba(61,218,255,.7); transform-origin: left; }
-.proof-branch.is-running .proof-progress i { animation: proof-progress 1.1s ease-in-out infinite; }
-.proof-branch.is-succeeded { border-color: rgba(75,218,154,.3); }
-.proof-branch.is-succeeded .proof-branch-title code,.proof-branch.is-succeeded .proof-branch-title span { color: #5bd99c; }
-.proof-branch.is-succeeded .proof-progress i { background: #54d89a; box-shadow: 0 0 8px rgba(84,216,154,.55); }
-.proof-branch.is-failed { border-color: rgba(255,112,112,.45); }
-.proof-branch.is-failed .proof-progress i { background: #ff7474; }
-.proof-branch[data-agent="pedagogy_review"] { background: rgba(27,25,61,.94); border-color: rgba(177,143,255,.3); }
-.proof-branch[data-agent="pedagogy_review"] .proof-branch-title code { color: #c0a0ff; }
-.proof-branch[data-agent="pedagogy_review"] .proof-progress i { background: linear-gradient(90deg,#8f70eb,#c4a9ff,#8f70eb); box-shadow: 0 0 8px rgba(174,139,255,.55); }
-.proof-merge { position: relative; z-index: 3; grid-column: 2; grid-row: 1; display: grid; place-items: center; gap: 3px; color: #5edfff; text-align: center; }
-.proof-merge > span { display: grid; place-items: center; width: 37px; height: 37px; background: #082a3d; border: 1px solid rgba(80,220,255,.52); border-radius: 50%; box-shadow: 0 0 0 5px rgba(56,205,244,.045),0 0 17px rgba(56,205,244,.18); }
-.proof-merge > span i { width: 9px; height: 9px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: proof-spin .8s linear infinite; }
-.proof-merge b { font: 800 8px/1 ui-monospace,monospace; letter-spacing: .08em; }
-.proof-merge small { color: #5e8294; font-size: 7px; white-space: nowrap; }
-.proof-merge.is-complete { color: #59dfa0; }
-.proof-merge.is-complete > span { background: #082f29; border-color: rgba(87,222,159,.55); box-shadow: 0 0 0 5px rgba(75,213,148,.045),0 0 17px rgba(75,213,148,.18); }
+.parallel-proof-audit { display: flex; flex-wrap: wrap; gap: 6px; }
+.parallel-proof-audit > span { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 5px 8px; color: #789cad; background: rgba(255,255,255,.025); border: 1px solid rgba(108,185,215,.1); border-radius: 7px; }
+.parallel-proof-audit code { color: #5edcff; font: 800 8px/1 ui-monospace,monospace; }
+.parallel-proof-audit b { color: #b7d2df; font-size: 8px; }
+.parallel-proof-audit time { color: #67899a; font: 700 8px/1 ui-monospace,monospace; }
+.parallel-proof-audit .proof-join-audit { margin-left: auto; color: #60dffc; }
+.proof-join-audit i { width: 8px; height: 8px; border: 1px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: proof-spin .8s linear infinite; }
+.proof-join-audit small { color: #67899a; font-size: 7px; }
+.parallel-proof-audit .proof-join-audit.is-complete { color: #58dca0; border-color: rgba(78,219,157,.18); }
 .parallel-proof-meta { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1.35fr) minmax(90px,.65fr) minmax(90px,.65fr); gap: 7px; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(112,193,224,.1); }
 .parallel-proof-meta > span { display: grid; gap: 3px; min-width: 0; }
 .parallel-proof-meta small { color: #557687; font: 700 7px/1 ui-monospace,monospace; letter-spacing: .08em; }
@@ -675,8 +793,6 @@ function statusLabel(status: AgentActivityStatus): string {
 @keyframes review-tilt { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
 @keyframes debate-shake { to { transform: translateX(3px) rotate(2deg); } }
 @keyframes proof-led { to { opacity: .28; transform: scale(.7); } }
-@keyframes proof-packet { 0% { left: 22%; opacity: 0; } 18%,82% { opacity: 1; } 100% { left: calc(78% - 34px); opacity: 0; } }
-@keyframes proof-progress { 0% { transform: translateX(-82%) scaleX(.22); } 55% { transform: translateX(18%) scaleX(.45); } 100% { transform: translateX(100%) scaleX(.18); } }
 @keyframes proof-spin { to { transform: rotate(360deg); } }
 .agent-stage.is-motion-paused *,.agent-stage.is-motion-paused *::before,.agent-stage.is-motion-paused *::after { animation-play-state: paused !important; }
 @media (max-width: 900px) { .agent-stage-heading { align-items: flex-start; } .stage-controls { max-width: 58%; } .agent-stage-roster li { width: 146px; } .agent-copy small { display: none; } .parallel-proof-meta { grid-template-columns: 1fr 1fr; } }

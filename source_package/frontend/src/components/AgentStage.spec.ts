@@ -89,8 +89,12 @@ describe('AgentStage', () => {
     expect(wrapper.text()).toContain('R-03')
     expect(wrapper.text()).toContain('证据审核 Agent')
     expect(wrapper.text()).toContain('教学适配 Agent')
-    expect(wrapper.find('[data-agent="evidence_review"]').exists()).toBe(true)
-    expect(wrapper.find('[data-agent="pedagogy_review"]').exists()).toBe(true)
+    const reviewGroup = wrapper.get('[data-agent="review"]')
+    expect(reviewGroup.find('.review-agent-team').exists()).toBe(true)
+    expect(reviewGroup.find('[data-agent="evidence_review"]').exists()).toBe(true)
+    expect(reviewGroup.find('[data-agent="pedagogy_review"]').exists()).toBe(true)
+    expect(reviewGroup.find('.review-agent-team').classes()).toContain('is-parallel')
+    expect(wrapper.find('.proof-branch').exists()).toBe(false)
     expect(wrapper.text()).toContain('双路并行执行中')
   })
 
@@ -118,10 +122,21 @@ describe('AgentStage', () => {
       ),
       activity: 'parallel_quality_review',
     }
-    const later = event(7, 'task', 'working', '正在准备下一阶段任务')
-    const wrapper = mount(AgentStage, { props: { view, events: [completed, later] } })
+    const arbitratingWrapper = mount(AgentStage, { props: { view, events: [completed] } })
+    expect(arbitratingWrapper.get('.review-agent-team').classes()).toContain('is-arbitrating')
+    expect(arbitratingWrapper.text()).toContain('结果已汇聚 · 正在仲裁')
+
+    const finalReview = {
+      ...event(7, 'review', 'approved', '质量门已通过'),
+      activity: 'quality_gate',
+    }
+    const later = event(8, 'task', 'working', '正在准备下一阶段任务')
+    const wrapper = mount(AgentStage, { props: { view, events: [completed, finalReview, later] } })
 
     expect(wrapper.get('.parallel-proof').classes()).toContain('is-complete')
+    expect(wrapper.get('[data-agent="review"] .review-agent-team').classes()).toContain('is-complete')
+    expect(wrapper.get('[data-agent="evidence_review"]').classes()).toContain('is-done')
+    expect(wrapper.get('[data-agent="pedagogy_review"]').classes()).toContain('is-done')
     expect(wrapper.text()).toContain('已汇聚 · 确定性裁决')
     expect(wrapper.text()).toContain('790 ms')
     expect(wrapper.text()).toContain('610 ms')
