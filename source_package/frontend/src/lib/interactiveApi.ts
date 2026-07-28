@@ -92,6 +92,8 @@ export type AgentActivityId =
   | 'knowledge'
   | 'task'
   | 'verification'
+  | 'evidence_review'
+  | 'pedagogy_review'
   | 'review'
 
 export type AgentActivityStatus =

@@ -8,7 +8,15 @@ from typing import Any, Mapping, Sequence
 
 
 AGENT_IDS = frozenset(
-    {"diagnosis", "knowledge", "task", "verification", "review"}
+    {
+        "diagnosis",
+        "knowledge",
+        "task",
+        "verification",
+        "evidence_review",
+        "pedagogy_review",
+        "review",
+    }
 )
 AGENT_STATUSES = frozenset(
     {

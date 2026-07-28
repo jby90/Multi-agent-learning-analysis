@@ -87,6 +87,10 @@ describe('AgentStage', () => {
     expect(wrapper.get('.parallel-proof').classes()).toContain('is-running')
     expect(wrapper.text()).toContain('R-02')
     expect(wrapper.text()).toContain('R-03')
+    expect(wrapper.text()).toContain('证据审核 Agent')
+    expect(wrapper.text()).toContain('教学适配 Agent')
+    expect(wrapper.find('[data-agent="evidence_review"]').exists()).toBe(true)
+    expect(wrapper.find('[data-agent="pedagogy_review"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('双路并行执行中')
   })
 
@@ -107,8 +111,8 @@ describe('AgentStage', () => {
           correlation_id: 'msg-artifact-1',
           parallel_elapsed_ms: 820,
           branches: [
-            { branch_id: 'R-02', status: 'succeeded', required: true, elapsed_ms: 790 },
-            { branch_id: 'R-03', status: 'succeeded', required: true, elapsed_ms: 610 },
+            { branch_id: 'evidence_review', status: 'succeeded', required: true, elapsed_ms: 790 },
+            { branch_id: 'pedagogy_review', status: 'succeeded', required: true, elapsed_ms: 610 },
           ],
         },
       ),

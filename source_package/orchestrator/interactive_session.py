@@ -302,6 +302,13 @@ class InteractiveSessionManager:
         def observe(event: str, details: Mapping[str, Any]) -> None:
             cycle = int(details.get("cycle", 1))
             event_details = {"cycle": cycle, **dict(details)}
+            if self._publish_specialist_review_activity(
+                session,
+                event,
+                event_details,
+                producer_agent=producer_agent,
+            ):
+                return
             if event == "producer_started":
                 self._publish_activity(
                     session,
@@ -992,6 +999,13 @@ class InteractiveSessionManager:
             return candidate.product
 
         def observe(event: str, details: Mapping[str, Any]) -> None:
+            if self._publish_specialist_review_activity(
+                session,
+                event,
+                details,
+                producer_agent="task",
+            ):
+                return
             if event == "producer_started":
                 self._publish_activity(
                     session,
@@ -1688,6 +1702,47 @@ class InteractiveSessionManager:
             peers=peers,
             details=details,
         )
+
+    @staticmethod
+    def _publish_specialist_review_activity(
+        session: _InteractiveSession,
+        event: str,
+        details: Mapping[str, Any],
+        *,
+        producer_agent: str,
+    ) -> bool:
+        if event not in {
+            "specialist_review_started",
+            "specialist_review_completed",
+        }:
+            return False
+        agent = details.get("agent")
+        if agent not in {"evidence_review", "pedagogy_review"}:
+            return False
+        completed = event == "specialist_review_completed"
+        raw_status = details.get("status")
+        status = (
+            "blocked"
+            if completed and raw_status == "blocked"
+            else "done" if completed else "working"
+        )
+        label = details.get("label")
+        if not isinstance(label, str) or not label.strip():
+            label = (
+                "事实与证据审核执行中"
+                if agent == "evidence_review"
+                else "教学适配审核执行中"
+            )
+        InteractiveSessionManager._publish_activity(
+            session,
+            agent,
+            status,
+            "specialist_quality_review",
+            label,
+            peers=(producer_agent, "review"),
+            details=details,
+        )
+        return True
 
     @staticmethod
     def _start_follow_up(

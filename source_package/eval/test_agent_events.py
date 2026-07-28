@@ -53,6 +53,21 @@ def test_wait_after_wakes_when_an_agent_event_arrives() -> None:
     assert [event["agent"] for event in events] == ["task"]
 
 
+def test_event_stream_accepts_independent_quality_specialists() -> None:
+    stream = AgentEventStream("trace-specialists")
+    evidence = stream.publish(
+        agent="evidence_review",
+        status="working",
+        activity="specialist_quality_review",
+        label="正在独立核验事实与证据",
+        stage="S5_REVIEW",
+        peers=("pedagogy_review", "review"),
+    )
+
+    assert evidence["agent"] == "evidence_review"
+    assert evidence["peers"] == ["pedagogy_review", "review"]
+
+
 @pytest.mark.parametrize(
     ("agent", "status"),
     [("system", "working"), ("task", "thinking")],

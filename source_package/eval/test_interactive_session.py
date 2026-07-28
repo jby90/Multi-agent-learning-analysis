@@ -310,14 +310,40 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         if event["agent"] == "review"
         and event["activity"] == "parallel_quality_review"
     ]
+    specialist_events = [
+        event
+        for event in manager.get_agent_events(session_id)
+        if event["agent"] in {"evidence_review", "pedagogy_review"}
+        and event["activity"] == "specialist_quality_review"
+    ]
 
     assert [event["status"] for event in task_events] == ["working", "waiting"]
     assert [event["status"] for event in parallel_review_events] == [
         "collaborating",
         "reviewing",
     ]
+    assert {
+        (event["agent"], event["status"])
+        for event in specialist_events
+    } == {
+        ("evidence_review", "working"),
+        ("evidence_review", "done"),
+        ("pedagogy_review", "working"),
+        ("pedagogy_review", "done"),
+    }
     assert lecture["state"] == "S3_TASK"
     assert lecture["artifact"]["payload"]["type"] == "lecture_note"
+    audited_specialist_verdict = next(
+        message
+        for message in lecture["messages"]
+        if message["payload"]["type"] == "review_verdict"
+        and message["payload"]["content"].get("specialist_reviews")
+    )
+    verdict_content = audited_specialist_verdict["payload"]["content"]
+    assert [
+        item["agent"] for item in verdict_content["specialist_reviews"]
+    ] == ["evidence_review", "pedagogy_review"]
+    assert verdict_content["arbitration"]["mode"] == "deterministic_rule_table"
     assert all(
         message["payload"]["type"] not in {"quiz_set", "practice_guide"}
         for message in lecture["messages"]

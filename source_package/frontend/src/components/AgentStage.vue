@@ -29,8 +29,10 @@ const reducedMotion = ref(false)
 let motionTimer: number | undefined
 let previousTick = 0
 
+type PrimaryAgentActivityId = Exclude<AgentActivityId, 'evidence_review' | 'pedagogy_review'>
+
 type AgentCard = {
-  id: AgentActivityId
+  id: PrimaryAgentActivityId
   status: AgentActivityStatus
   label: string
   peers: AgentActivityId[]
@@ -50,9 +52,9 @@ const agentOrder = [
   'review',
   'verification',
   'task',
-] as const satisfies readonly AgentActivityId[]
+] as const satisfies readonly PrimaryAgentActivityId[]
 
-const stateOwners: Partial<Record<StateId, AgentActivityId>> = {
+const stateOwners: Partial<Record<StateId, PrimaryAgentActivityId>> = {
   S1_DIAGNOSIS: 'diagnosis',
   S2_KNOWLEDGE: 'knowledge',
   S3_TASK: 'task',
@@ -68,7 +70,7 @@ const latestEvents = computed(() => {
   return latest
 })
 
-const fallbackActive = computed<AgentActivityId | undefined>(() => {
+const fallbackActive = computed<PrimaryAgentActivityId | undefined>(() => {
   if (['S10_DONE', 'S_FAIL'].includes(props.view.currentState)) return undefined
   const latestMessage = [...props.view.visibleMessages]
     .reverse()
@@ -112,7 +114,9 @@ const reviewFanOut = computed(() => {
 })
 
 type ReviewBranchProof = {
-  branchId: 'R-02' | 'R-03'
+  agentId: 'evidence_review' | 'pedagogy_review'
+  ruleId: 'R-02' | 'R-03'
+  axisLabel: string
   label: string
   status: 'running' | 'succeeded' | 'failed'
   elapsedMs?: number
@@ -128,9 +132,32 @@ type ParallelReviewProof = {
   savedMs?: number
 }
 
-const branchLabels: Record<ReviewBranchProof['branchId'], string> = {
+const branchLabels: Record<ReviewBranchProof['ruleId'], string> = {
   'R-02': '事实与证据核验',
   'R-03': '难度与岗位适配',
+}
+
+const specialistDefinitions = {
+  evidence_review: {
+    ruleId: 'R-02',
+    label: '证据审核 Agent',
+  },
+  pedagogy_review: {
+    ruleId: 'R-03',
+    label: '教学适配 Agent',
+  },
+} as const
+
+function specialistAgentId(value: unknown): ReviewBranchProof['agentId'] | undefined {
+  if (value === 'evidence_review' || value === 'R-02') return 'evidence_review'
+  if (value === 'pedagogy_review' || value === 'R-03') return 'pedagogy_review'
+  return undefined
+}
+
+function eventAgentLabel(agent: AgentActivityId): string {
+  if (agent === 'evidence_review') return specialistDefinitions.evidence_review.label
+  if (agent === 'pedagogy_review') return specialistDefinitions.pedagogy_review.label
+  return agentLabel(agent)
 }
 
 function detailString(details: Record<string, unknown> | undefined, key: string): string | undefined {
@@ -156,14 +183,14 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
   const aggregation = detailString(details, 'aggregation')
   const isComplete = aggregation === 'deterministic'
   const rawBranches = Array.isArray(details?.branches) ? details.branches : []
-  const completedBranches = new Map<string, { status: 'succeeded' | 'failed'; elapsedMs?: number }>()
+  const completedBranches = new Map<ReviewBranchProof['agentId'], { status: 'succeeded' | 'failed'; elapsedMs?: number }>()
   for (const raw of rawBranches) {
     if (!raw || typeof raw !== 'object') continue
     const branch = raw as Record<string, unknown>
-    const branchId = branch.branch_id
+    const branchId = specialistAgentId(branch.branch_id)
     const status = branch.status
     if (
-      (branchId === 'R-02' || branchId === 'R-03')
+      branchId
       && (status === 'succeeded' || status === 'failed')
     ) {
       completedBranches.set(branchId, {
@@ -179,12 +206,19 @@ const parallelReviewProof = computed<ParallelReviewProof | undefined>(() => {
   const elapsedMs = isComplete
     ? detailNumber(details, 'parallel_elapsed_ms')
     : undefined
-  const branches = (['R-02', 'R-03'] as const).map((branchId): ReviewBranchProof => {
-    const completed = completedBranches.get(branchId)
+  const branches = (['evidence_review', 'pedagogy_review'] as const).map((agentId): ReviewBranchProof => {
+    const completed = completedBranches.get(agentId)
+    const specialistEvent = latestEvents.value.get(agentId)
+    const liveStatus = specialistEvent?.status === 'blocked'
+      ? 'failed'
+      : specialistEvent?.status === 'done' ? 'succeeded' : 'running'
+    const definition = specialistDefinitions[agentId]
     return {
-      branchId,
-      label: branchLabels[branchId],
-      status: completed?.status ?? 'running',
+      agentId,
+      ruleId: definition.ruleId,
+      label: definition.label,
+      axisLabel: branchLabels[definition.ruleId],
+      status: completed?.status ?? liveStatus,
       elapsedMs: completed?.elapsedMs,
     }
   })
@@ -437,15 +471,17 @@ function statusLabel(status: AgentActivityStatus): string {
         <div class="parallel-proof-flow">
           <article
             v-for="branch in parallelReviewProof.branches"
-            :key="branch.branchId"
+            :key="branch.agentId"
             class="proof-branch"
             :class="`is-${branch.status}`"
+            :data-agent="branch.agentId"
           >
             <div class="proof-branch-title">
-              <code>{{ branch.branchId }}</code>
+              <code>{{ branch.ruleId }}</code>
               <span>{{ branch.status === 'running' ? 'RUNNING' : branch.status.toUpperCase() }}</span>
             </div>
             <strong>{{ branch.label }}</strong>
+            <small class="proof-axis">{{ branch.axisLabel }}</small>
             <div class="proof-progress" aria-hidden="true"><i></i></div>
             <time>{{ elapsedLabel(branch.elapsedMs) }}</time>
           </article>
@@ -487,7 +523,7 @@ function statusLabel(status: AgentActivityStatus): string {
     >
       <li v-for="event in recentEvents" :key="event.sequence">
         <span :data-agent="event.agent"></span>
-        <b>{{ agentLabel(event.agent) }}</b>
+        <b>{{ eventAgentLabel(event.agent) }}</b>
         <p>{{ event.label }}</p>
         <small>#{{ event.sequence }}</small>
       </li>
@@ -587,6 +623,7 @@ function statusLabel(status: AgentActivityStatus): string {
 .proof-branch-title code { color: #60ddff; font: 800 9px/1 ui-monospace,monospace; }
 .proof-branch-title span { color: #638b9e; font: 700 7px/1 ui-monospace,monospace; letter-spacing: .09em; }
 .proof-branch > strong { overflow: hidden; color: #dff5ff; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.proof-axis { grid-column: 1/-1; color: #718fa1; font-size: 8px; line-height: 1.2; }
 .proof-branch time { color: #7da8ba; font: 700 8px/1 ui-monospace,monospace; }
 .proof-progress { grid-column: 1/-1; height: 3px; overflow: hidden; background: rgba(255,255,255,.055); border-radius: 99px; }
 .proof-progress i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg,#2acdf7,#7aeaff,#2acdf7); box-shadow: 0 0 8px rgba(61,218,255,.7); transform-origin: left; }
@@ -596,6 +633,9 @@ function statusLabel(status: AgentActivityStatus): string {
 .proof-branch.is-succeeded .proof-progress i { background: #54d89a; box-shadow: 0 0 8px rgba(84,216,154,.55); }
 .proof-branch.is-failed { border-color: rgba(255,112,112,.45); }
 .proof-branch.is-failed .proof-progress i { background: #ff7474; }
+.proof-branch[data-agent="pedagogy_review"] { background: rgba(27,25,61,.94); border-color: rgba(177,143,255,.3); }
+.proof-branch[data-agent="pedagogy_review"] .proof-branch-title code { color: #c0a0ff; }
+.proof-branch[data-agent="pedagogy_review"] .proof-progress i { background: linear-gradient(90deg,#8f70eb,#c4a9ff,#8f70eb); box-shadow: 0 0 8px rgba(174,139,255,.55); }
 .proof-merge { position: relative; z-index: 3; grid-column: 2; grid-row: 1; display: grid; place-items: center; gap: 3px; color: #5edfff; text-align: center; }
 .proof-merge > span { display: grid; place-items: center; width: 37px; height: 37px; background: #082a3d; border: 1px solid rgba(80,220,255,.52); border-radius: 50%; box-shadow: 0 0 0 5px rgba(56,205,244,.045),0 0 17px rgba(56,205,244,.18); }
 .proof-merge > span i { width: 9px; height: 9px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: proof-spin .8s linear infinite; }

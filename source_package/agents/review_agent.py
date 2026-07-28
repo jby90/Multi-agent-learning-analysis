@@ -22,8 +22,11 @@ from sqlglot import exp
 from sqlglot.errors import ParseError
 
 from agents.kb_loader import KnowledgeChunk, require_valid_chunks
+from agents.evidence_review_agent import EvidenceReviewAgent
+from agents.pedagogy_review_agent import PedagogyReviewAgent
 from agents.sandbox import validate_and_rewrite
 from agents.query_authority import QueryAuthority, query_authority_from_mapping
+from agents.review_arbiter import DeterministicReviewArbiter
 from agents.verification_agent import _render_claims, _result_is_empty
 from coordination.artifacts import ArtifactEnvelope
 from coordination.contracts import LearningContract
@@ -1428,6 +1431,7 @@ def _verdict_draft(
     llm_results: Sequence[LLMResult] = (),
     r02_checks: int = 0,
     r03_checked: bool = False,
+    specialist_reviews: Sequence[Mapping[str, Any]] = (),
     started: float | None = None,
 ) -> dict[str, Any]:
     reviewed_msg_id = str(product["msg_id"])
@@ -1438,6 +1442,13 @@ def _verdict_draft(
         "reviewed_payload_type": payload_type,
         "reviewed_msg_id": reviewed_msg_id,
     }
+    if specialist_reviews:
+        content["specialist_reviews"] = [dict(item) for item in specialist_reviews]
+        content["arbitration"] = {
+            "agent": "review",
+            "mode": "deterministic_rule_table",
+            "decision": decision,
+        }
     draft: dict[str, Any] = {
         "trace_id": trace_id,
         "agent": "review",
@@ -1538,6 +1549,26 @@ class ReviewAgent:
             if knowledge_chunks is not None
             else _approved_knowledge_chunks()
         )
+        self._evidence_review_agent = EvidenceReviewAgent(
+            trace_id,
+            evaluator=lambda product: _r02_reviews(
+                product,
+                self._llm_call,
+                knowledge_chunks=self._knowledge_chunks,
+            ),
+        )
+        self._pedagogy_review_agent = PedagogyReviewAgent(
+            trace_id,
+            evaluator=lambda product, report, profile, learned: _r03_review(
+                product,
+                self._llm_call,
+                report,
+                profile,
+                learned_knowledge_points=learned,
+                knowledge_chunks=self._knowledge_chunks,
+            ),
+        )
+        self._arbiter = DeterministicReviewArbiter()
         self._r04_preflight_results: dict[
             str,
             tuple[tuple[LLMResult, ...], int],
@@ -1655,53 +1686,94 @@ class ReviewAgent:
             stage_id="quality-review-axes",
             branches=(
                 BranchSpec(
-                    branch_id="R-02",
-                    task=lambda: _r02_reviews(
-                        artifact.materialize(),
-                        self._llm_call,
-                        knowledge_chunks=self._knowledge_chunks,
-                    ),
+                    branch_id=self._evidence_review_agent.agent_id,
+                    task=lambda: self._evidence_review_agent.review(artifact),
                 ),
                 BranchSpec(
-                    branch_id="R-03",
-                    task=lambda: _r03_review(
-                        artifact.materialize(),
-                        self._llm_call,
-                        learning_report,
-                        student_profile,
+                    branch_id=self._pedagogy_review_agent.agent_id,
+                    task=lambda: self._pedagogy_review_agent.review(
+                        artifact,
+                        learning_report=learning_report,
+                        student_profile=student_profile,
                         learned_knowledge_points=learned_knowledge_points,
-                        knowledge_chunks=self._knowledge_chunks,
                     ),
                 ),
             ),
         )
         is_parallel = self._parallel_executor.max_concurrency > 1
         if is_parallel and activity_observer is not None:
+            for agent_id, rule_id, label in (
+                ("evidence_review", "R-02", "正在独立核验事实与证据"),
+                ("pedagogy_review", "R-03", "正在独立审核难度与岗位适配"),
+            ):
+                activity_observer(
+                    "specialist_review_started",
+                    {
+                        "agent": agent_id,
+                        "rule_id": rule_id,
+                        "label": label,
+                        "stage_id": stage.stage_id,
+                        "contract_id": contract_id,
+                        "artifact_id": artifact.artifact_id,
+                    },
+                )
             activity_observer(
                 "parallel_review_started",
                 {
                     "stage_id": stage.stage_id,
                     "axes": ["R-02", "R-03"],
+                    "agents": ["evidence_review", "pedagogy_review"],
                     "fan_out": 2,
                     "aggregation": "pending",
                     "contract_id": contract_id,
                     "artifact_id": artifact.artifact_id,
                 },
             )
+
+        def observe_stage(event: str, details: Mapping[str, Any]) -> None:
+            if not is_parallel or activity_observer is None:
+                return
+            if event not in {"branch_completed", "branch_failed"}:
+                return
+            branch_id = details.get("branch_id")
+            if branch_id not in {"evidence_review", "pedagogy_review"}:
+                return
+            activity_observer(
+                "specialist_review_completed",
+                {
+                    **dict(details),
+                    "agent": branch_id,
+                    "rule_id": "R-02" if branch_id == "evidence_review" else "R-03",
+                    "status": "done" if event == "branch_completed" else "blocked",
+                    "label": (
+                        "事实与证据核验完成"
+                        if branch_id == "evidence_review"
+                        else "难度与岗位适配审核完成"
+                    ),
+                    "contract_id": contract_id,
+                    "artifact_id": artifact.artifact_id,
+                },
+            )
+
         stage_result = self._parallel_executor.execute(
             stage,
             correlation_id=reviewed_msg_id,
+            observer=observe_stage,
         ).require_success()
-        r02_hits, r02_results, r02_checks = stage_result.require("R-02")
-        r03_hit, r03_result, difficulty_action, difficulty_gap = (
-            stage_result.require("R-03")
-        )
+        evidence_result = stage_result.require("evidence_review")
+        pedagogy_result = stage_result.require("pedagogy_review")
+        arbitration = self._arbiter.decide(evidence_result, pedagogy_result)
+        r02_results = evidence_result.llm_results
+        r02_checks = evidence_result.checks
+        r03_result = pedagogy_result.llm_result
+        difficulty_action = arbitration.difficulty_action
         if is_parallel and activity_observer is not None:
             activity_observer(
                 "parallel_review_completed",
                 {
                     "stage_id": stage.stage_id,
                     "axes": ["R-02", "R-03"],
+                    "agents": ["evidence_review", "pedagogy_review"],
                     "r02_checks": r02_checks,
                     "r03_checked": r03_result is not None,
                     "fan_out": 2,
@@ -1713,23 +1785,14 @@ class ReviewAgent:
                     "artifact_id": artifact.artifact_id,
                 },
             )
-        hits = r02_hits + (() if r03_hit is None else (r03_hit,))
+        hits = tuple(hit.as_dict() for hit in arbitration.hits)
         llm_results = (
             r04_results
             + follow_up_results
             + r02_results
             + (() if r03_result is None else (r03_result,))
         )
-        if not hits:
-            decision = "approve"
-        elif (
-            len(hits) == 1
-            and hits[0]["rule_id"] == "R-03"
-            and difficulty_gap == 1
-        ):
-            decision = "approve_with_fix"
-        else:
-            decision = "reject"
+        decision = arbitration.decision
         return _verdict_draft(
             trace_id=self._trace_id,
             role="verdict",
@@ -1741,6 +1804,26 @@ class ReviewAgent:
             llm_results=llm_results,
             r02_checks=r04_checks + follow_up_checks + r02_checks,
             r03_checked=r03_result is not None,
+            specialist_reviews=(
+                {
+                    "agent": evidence_result.agent_id,
+                    "rule_id": "R-02",
+                    "artifact_id": evidence_result.artifact_id,
+                    "contract_id": evidence_result.contract_id,
+                    "status": "completed",
+                    "checks": evidence_result.checks,
+                    "hit_count": len(evidence_result.hits),
+                },
+                {
+                    "agent": pedagogy_result.agent_id,
+                    "rule_id": "R-03",
+                    "artifact_id": pedagogy_result.artifact_id,
+                    "contract_id": pedagogy_result.contract_id,
+                    "status": "completed",
+                    "checked": pedagogy_result.llm_result is not None,
+                    "hit_count": 0 if pedagogy_result.hit is None else 1,
+                },
+            ),
             started=started,
         )
 
