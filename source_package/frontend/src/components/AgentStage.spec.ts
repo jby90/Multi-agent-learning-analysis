@@ -40,7 +40,23 @@ describe('AgentStage', () => {
     const wrapper = mount(AgentStage, { props: { view } })
     expect(wrapper.get('[data-agent="knowledge"]').classes()).toContain('is-working')
     expect(wrapper.get('[data-teacher-agent="knowledge"]').attributes('data-teacher-state')).toBe('working')
+    expect(wrapper.get('[data-agent="knowledge"]').find('.agent-ambient-mote').exists()).toBe(false)
+    expect(wrapper.findAll('.agent-ambient-mote')).toHaveLength(4)
     expect(wrapper.text()).toContain('领域知识正在执行当前阶段')
+  })
+
+  it('keeps completed and standby agents subtly alive', () => {
+    const completed = event(1, 'diagnosis', 'done', 'diagnosis completed')
+    const wrapper = mount(AgentStage, { props: { view, events: [completed] } })
+    const doneMote = wrapper.get('[data-agent="diagnosis"] .agent-ambient-mote')
+    const standbyMote = wrapper.get('[data-agent="task"] .agent-ambient-mote')
+
+    expect(doneMote.classes()).toContain('is-complete')
+    expect(doneMote.attributes('style')).toContain('left:')
+    expect(doneMote.attributes('style')).toContain('top:')
+    expect(standbyMote.classes()).not.toContain('is-complete')
+    expect(wrapper.get('[data-agent="diagnosis"] .agent-avatar').attributes('style')).toContain('translateY')
+    expect(wrapper.get('[data-agent="task"] .agent-avatar').attributes('style')).toContain('translateY')
   })
 
   it('renders collaboration and approach states from live events', () => {

@@ -364,12 +364,42 @@ function routeMotionStyle(route: typeof agentRoutes[number], offset = 0) {
   }
 }
 
-function activeAvatarStyle(agent: AgentCard) {
-  if (!['working', 'collaborating', 'reviewing', 'debating'].includes(agent.status)) return undefined
-  const lift = Math.sin(motionProgress.value * Math.PI * 2) * 5
+function avatarMotionStyle(agent: AgentCard, index: number) {
+  if (reducedMotion.value || agent.status === 'blocked') return undefined
+  const phase = cycle(index * .137) * Math.PI * 2
+  const isActive = ['working', 'collaborating', 'reviewing', 'debating'].includes(agent.status)
+  const isComplete = ['approved', 'done'].includes(agent.status)
+  const amplitude = isActive ? 5 : isComplete ? 1.8 : 1.1
+  const lift = Math.sin(phase) * amplitude
+  const scale = isActive
+    ? 1.06 + Math.abs(lift) / 70
+    : isComplete
+      ? 1.01 + (Math.sin(phase) + 1) * .006
+      : 1 + (Math.sin(phase) + 1) * .003
   return {
     animation: 'none',
-    transform: `translateY(${lift.toFixed(1)}px) scale(${(1.06 + Math.abs(lift) / 70).toFixed(3)})`,
+    transform: `translateY(${lift.toFixed(1)}px) scale(${scale.toFixed(3)})`,
+    background: isComplete
+      ? `radial-gradient(circle at 50% 62%,rgba(83,224,158,${(.1 + (Math.sin(phase) + 1) * .025).toFixed(3)}),transparent 68%)`
+      : undefined,
+  }
+}
+
+function hasAmbientMotion(agent: AgentCard): boolean {
+  return agent.status !== 'blocked'
+    && !['working', 'collaborating', 'reviewing', 'debating'].includes(agent.status)
+}
+
+function ambientMoteStyle(agent: AgentCard, index: number) {
+  if (reducedMotion.value) return { display: 'none' }
+  const isComplete = ['approved', 'done'].includes(agent.status)
+  const phase = cycle(index * .173) * Math.PI * 2
+  const radius = isComplete ? 23 : 19
+  const center = 30
+  return {
+    left: `${(center + Math.cos(phase) * radius).toFixed(1)}px`,
+    top: `${(center + Math.sin(phase) * radius * .56).toFixed(1)}px`,
+    opacity: (.42 + (Math.sin(phase) + 1) * .2).toFixed(2),
   }
 }
 
@@ -541,8 +571,15 @@ function statusLabel(status: AgentActivityStatus): string {
           :aria-label="`${agentLabel(agent.id)}，${agentPurpose(agent.id)}，${statusLabel(agent.status)}`"
         >
           <span class="agent-signal" aria-hidden="true"></span>
-          <span class="agent-avatar" :style="activeAvatarStyle(agent)">
+          <span class="agent-avatar" :style="avatarMotionStyle(agent, index)">
             <AgentTeacherAvatar :agent="agent.id" :status="agent.status" :size="58" />
+            <i
+              v-if="hasAmbientMotion(agent)"
+              class="agent-ambient-mote"
+              :class="{ 'is-complete': agent.status === 'approved' || agent.status === 'done' }"
+              :style="ambientMoteStyle(agent, index)"
+              aria-hidden="true"
+            ></i>
             <span class="agent-motion-bars" aria-hidden="true"><i></i><i></i><i></i></span>
           </span>
           <span class="agent-copy">
@@ -723,6 +760,8 @@ function statusLabel(status: AgentActivityStatus): string {
 .agent-stage-roster li.is-approaching { transform: translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))); }
 .agent-avatar { position: relative; display: grid; place-items: center; width: 60px; height: 60px; overflow: hidden; color: currentColor; background: radial-gradient(circle at 50% 62%,rgba(82,219,255,.1),transparent 66%); border-radius: 13px; }
 .agent-avatar::after { position: absolute; right: 4px; left: 4px; top: -8px; height: 2px; content: ''; opacity: 0; background: linear-gradient(90deg, transparent, currentColor, transparent); box-shadow: 0 0 8px currentColor; }
+.agent-ambient-mote { position: absolute; z-index: 2; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; background: #66899b; border-radius: 50%; box-shadow: 0 0 5px currentColor; pointer-events: none; }
+.agent-ambient-mote.is-complete { width: 4px; height: 4px; margin: -2px 0 0 -2px; background: #6be5a9; box-shadow: 0 0 5px #58dda0,0 0 11px rgba(83,224,158,.46); }
 .agent-motion-bars { position: absolute; right: 3px; bottom: 3px; display: none; align-items: end; gap: 2px; height: 12px; padding: 2px; background: rgba(4,19,30,.82); border-radius: 3px; }
 .agent-motion-bars i { width: 2px; height: 4px; background: currentColor; box-shadow: 0 0 4px currentColor; animation: work-bars .42s ease-in-out infinite alternate; }
 .agent-motion-bars i:nth-child(2) { height: 9px; animation-delay: -.14s; }
