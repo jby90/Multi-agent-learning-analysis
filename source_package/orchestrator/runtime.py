@@ -13,6 +13,7 @@ from agents.review_agent import ReviewAgent
 from agents.sandbox import DatabaseSettings, ReadOnlyExecutor
 from agents.task_agent import TaskAgent
 from agents.verification_agent import VerificationAgent
+from coordination.parallel import bounded_llm_executor
 from orchestrator.llm import call_llm, warm_default_client
 
 
@@ -62,7 +63,11 @@ def build_review_agent(trace_id: str) -> ReviewAgent:
     """Build the live 32B review agent after warming the shared client."""
 
     warm_default_client()
-    return ReviewAgent(trace_id=trace_id, llm_call=call_llm)
+    return ReviewAgent(
+        trace_id=trace_id,
+        llm_call=call_llm,
+        parallel_executor=bounded_llm_executor(call_llm, max_concurrency=2),
+    )
 
 
 def build_rebuttal_generator(trace_id: str) -> RebuttalGenerator:

@@ -22,6 +22,8 @@ from agents.review_agent import ReviewAgent, evaluate_hard_rules
 from agents.sandbox import DatabaseSettings, ReadOnlyExecutor
 from agents.task_agent import TaskAgent, TaskCatalog, load_task_catalog
 from agents.verification_agent import VerificationAgent
+from coordination.contracts import LearningContract
+from coordination.parallel import bounded_llm_executor
 from eval.case_matrix import EvaluationCase, load_case_matrix
 from eval.trace_dataset import (
     AttemptRecord,
@@ -295,8 +297,13 @@ class _EvaluationRuntime:
             trace_id,
             llm_call=self.cache,
             knowledge_chunks=self.chunks,
+            parallel_executor=bounded_llm_executor(
+                self.cache,
+                max_concurrency=2,
+            ),
         )
         self.rebuttal = RebuttalGenerator(trace_id, llm_call=self.cache)
+        self.learning_contract: LearningContract | None = None
         self.learned_knowledge_points: list[str] = []
         self._approved_review_decisions: dict[str, str] = {}
 
@@ -439,8 +446,12 @@ class _EvaluationRuntime:
                 learning_report=diagnosis,
                 student_profile=self.profile,
                 learned_knowledge_points=tuple(self.learned_knowledge_points),
+                learning_contract=self.learning_contract,
             )
-        return self.review.review(product)
+        return self.review.review(
+            product,
+            learning_contract=self.learning_contract,
+        )
 
     def _re_review_call(
         self,
@@ -458,8 +469,14 @@ class _EvaluationRuntime:
                 learning_report=diagnosis,
                 student_profile=self.profile,
                 learned_knowledge_points=tuple(self.learned_knowledge_points),
+                learning_contract=self.learning_contract,
             )
-        return self.review.re_review(product, original, rebuttal)
+        return self.review.re_review(
+            product,
+            original,
+            rebuttal,
+            learning_contract=self.learning_contract,
+        )
 
     def produce_and_review(
         self,
@@ -469,7 +486,12 @@ class _EvaluationRuntime:
         diagnosis: Mapping[str, Any],
     ) -> dict[str, Any]:
         cycles = 0
-        while cycles < 4:
+        max_cycles = (
+            self.learning_contract.quality_policy.max_review_cycles
+            if self.learning_contract is not None
+            else 4
+        )
+        while cycles < max_cycles:
             cycles += 1
             product, actual_transition = self._send_transition(producer())
             if (
@@ -534,10 +556,18 @@ class _EvaluationRuntime:
             ),
             "T01",
         )
-        return self.transition(
+        diagnosis = self.transition(
             self.diagnosis.assess(self.case.profile_id, self.case.answers),
             "T02",
         )
+        self.learning_contract = LearningContract.from_diagnosis(
+            profile=self.profile,
+            diagnosis=diagnosis,
+            domain_id=self.catalog.domain_id,
+            domain_package_sha256=self.catalog.domain_package_sha256,
+        )
+        self.audit(self.learning_contract.control_draft(self.trace_id))
+        return diagnosis
 
     def teach(
         self,
@@ -682,7 +712,12 @@ class _EvaluationRuntime:
             )
         )
         result = self.audit(self.verification.answer(question))
-        verdict = self.audit(self.review.review(result))
+        verdict = self.audit(
+            self.review.review(
+                result,
+                learning_contract=self.learning_contract,
+            )
+        )
         if verdict.get("verdict", {}).get("decision") not in {
             "approve",
             "approve_with_fix",

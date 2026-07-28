@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
@@ -26,6 +25,9 @@ from agents.kb_loader import KnowledgeChunk, require_valid_chunks
 from agents.sandbox import validate_and_rewrite
 from agents.query_authority import QueryAuthority, query_authority_from_mapping
 from agents.verification_agent import _render_claims, _result_is_empty
+from coordination.artifacts import ArtifactEnvelope
+from coordination.contracts import LearningContract
+from coordination.parallel import BranchSpec, ParallelStage, ParallelStageExecutor
 from orchestrator.llm import LLMResult, TokenUsage, call_llm
 
 
@@ -1519,12 +1521,18 @@ class ReviewAgent:
         llm_call: Callable[..., Any] = call_llm,
         clock: Callable[[], datetime] | None = None,
         knowledge_chunks: Sequence[KnowledgeChunk] | None = None,
+        parallel_executor: ParallelStageExecutor | None = None,
     ) -> None:
         if not isinstance(trace_id, str) or not trace_id.strip():
             raise ValueError("trace_id must be a non-empty string")
         self._trace_id = trace_id
         self._llm_call = llm_call
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        # Production wiring opts into bounded concurrency explicitly. Direct
+        # construction remains deterministic for narrow unit-level callers.
+        self._parallel_executor = parallel_executor or ParallelStageExecutor(
+            max_concurrency=1
+        )
         self._knowledge_chunks = (
             tuple(knowledge_chunks)
             if knowledge_chunks is not None
@@ -1566,6 +1574,7 @@ class ReviewAgent:
         student_profile: Mapping[str, Any] | None = None,
         learned_knowledge_points: Sequence[str] = (),
         activity_observer: Callable[[str, Mapping[str, Any]], None] | None = None,
+        learning_contract: LearningContract | None = None,
     ) -> dict[str, Any]:
         if not isinstance(product, Mapping):
             raise ValueError("product must be a mapping")
@@ -1575,6 +1584,11 @@ class ReviewAgent:
             raise ValueError("product.msg_id must be a non-empty string")
         if not isinstance(payload_type, str) or not payload_type.strip():
             raise ValueError("product payload.type must be a non-empty string")
+        if learning_contract is not None:
+            learning_contract.validate_context(
+                profile=student_profile,
+                diagnosis=learning_report,
+            )
         hard_hits = evaluate_hard_rules(product)
         if hard_hits:
             return _verdict_draft(
@@ -1628,72 +1642,76 @@ class ReviewAgent:
                 r03_checked=False,
                 started=started,
             )
-        parallel_scope = getattr(self._llm_call, "parallel_scope", None)
-        if callable(parallel_scope):
-            parallel_started = perf_counter()
-            if activity_observer is not None:
-                activity_observer(
-                    "parallel_review_started",
-                    {
-                        "axes": ["R-02", "R-03"],
-                        "fan_out": 2,
-                        "aggregation": "pending",
-                    },
-                )
-            with parallel_scope():
-                with ThreadPoolExecutor(
-                    max_workers=2,
-                    thread_name_prefix="review-axis",
-                ) as pool:
-                    r02_future = pool.submit(
-                        _r02_reviews,
-                        product,
+        contract_id = (
+            learning_contract.contract_id
+            if learning_contract is not None
+            else f"legacy-{self._trace_id}"
+        )
+        artifact = ArtifactEnvelope.from_message(
+            product,
+            contract_id=contract_id,
+        )
+        stage = ParallelStage[Any](
+            stage_id="quality-review-axes",
+            branches=(
+                BranchSpec(
+                    branch_id="R-02",
+                    task=lambda: _r02_reviews(
+                        artifact.materialize(),
                         self._llm_call,
                         knowledge_chunks=self._knowledge_chunks,
-                    )
-                    r03_future = pool.submit(
-                        _r03_review,
-                        product,
+                    ),
+                ),
+                BranchSpec(
+                    branch_id="R-03",
+                    task=lambda: _r03_review(
+                        artifact.materialize(),
                         self._llm_call,
                         learning_report,
                         student_profile,
                         learned_knowledge_points=learned_knowledge_points,
                         knowledge_chunks=self._knowledge_chunks,
-                    )
-                    r02_hits, r02_results, r02_checks = r02_future.result()
-                    (
-                        r03_hit,
-                        r03_result,
-                        difficulty_action,
-                        difficulty_gap,
-                    ) = r03_future.result()
-            if activity_observer is not None:
-                activity_observer(
-                    "parallel_review_completed",
-                    {
-                        "axes": ["R-02", "R-03"],
-                        "r02_checks": r02_checks,
-                        "r03_checked": r03_result is not None,
-                        "fan_out": 2,
-                        "aggregation": "deterministic",
-                        "parallel_elapsed_ms": round(
-                            max(0.0, perf_counter() - parallel_started) * 1000
-                        ),
-                    },
-                )
-        else:
-            r02_hits, r02_results, r02_checks = _r02_reviews(
-                product,
-                self._llm_call,
-                knowledge_chunks=self._knowledge_chunks,
+                    ),
+                ),
+            ),
+        )
+        is_parallel = self._parallel_executor.max_concurrency > 1
+        if is_parallel and activity_observer is not None:
+            activity_observer(
+                "parallel_review_started",
+                {
+                    "stage_id": stage.stage_id,
+                    "axes": ["R-02", "R-03"],
+                    "fan_out": 2,
+                    "aggregation": "pending",
+                    "contract_id": contract_id,
+                    "artifact_id": artifact.artifact_id,
+                },
             )
-            r03_hit, r03_result, difficulty_action, difficulty_gap = _r03_review(
-                product,
-                self._llm_call,
-                learning_report,
-                student_profile,
-                learned_knowledge_points=learned_knowledge_points,
-                knowledge_chunks=self._knowledge_chunks,
+        stage_result = self._parallel_executor.execute(
+            stage,
+            correlation_id=reviewed_msg_id,
+        ).require_success()
+        r02_hits, r02_results, r02_checks = stage_result.require("R-02")
+        r03_hit, r03_result, difficulty_action, difficulty_gap = (
+            stage_result.require("R-03")
+        )
+        if is_parallel and activity_observer is not None:
+            activity_observer(
+                "parallel_review_completed",
+                {
+                    "stage_id": stage.stage_id,
+                    "axes": ["R-02", "R-03"],
+                    "r02_checks": r02_checks,
+                    "r03_checked": r03_result is not None,
+                    "fan_out": 2,
+                    "aggregation": "deterministic",
+                    "parallel_elapsed_ms": stage_result.elapsed_ms,
+                    "correlation_id": stage_result.correlation_id,
+                    "branches": stage_result.summary()["branches"],
+                    "contract_id": contract_id,
+                    "artifact_id": artifact.artifact_id,
+                },
             )
         hits = r02_hits + (() if r03_hit is None else (r03_hit,))
         llm_results = (
@@ -1735,12 +1753,18 @@ class ReviewAgent:
         learning_report: Mapping[str, Any] | None = None,
         student_profile: Mapping[str, Any] | None = None,
         learned_knowledge_points: Sequence[str] = (),
+        learning_contract: LearningContract | None = None,
     ) -> dict[str, Any]:
         if not all(
             isinstance(item, Mapping)
             for item in (product, original_verdict, rebuttal)
         ):
             raise ValueError("product, original_verdict, and rebuttal must be mappings")
+        if learning_contract is not None:
+            learning_contract.validate_context(
+                profile=student_profile,
+                diagnosis=learning_report,
+            )
         product_msg_id = product.get("msg_id")
         if not isinstance(product_msg_id, str) or not product_msg_id.strip():
             raise ValueError("product.msg_id must be a non-empty string")

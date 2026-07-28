@@ -111,6 +111,8 @@ class CounterEvidence:
 
 @dataclass(frozen=True, slots=True)
 class TaskCatalog:
+    domain_id: str
+    domain_package_sha256: str
     demo_parameters: dict[str, str]
     templates: dict[str, TaskTemplate]
     counter_evidence: dict[str, CounterEvidence]
@@ -416,6 +418,8 @@ def load_task_catalog(
                     f"diagnostic route {point}/{difficulty} does not match {template_id}"
                 )
     return TaskCatalog(
+        domain_id=domain.domain_id,
+        domain_package_sha256=domain.package_sha256,
         demo_parameters=parameters,
         templates=templates,
         counter_evidence=counters,
@@ -491,6 +495,18 @@ class TaskAgent:
         self._llm_call = llm_call
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
+
+    @property
+    def domain_id(self) -> str:
+        """Return the immutable domain package identity used by this agent."""
+
+        return self._catalog.domain_id
+
+    @property
+    def domain_package_sha256(self) -> str:
+        """Bind learning contracts to the exact validated domain package."""
+
+        return self._catalog.domain_package_sha256
 
     @property
     def misconception_ids(self) -> tuple[str, ...]:

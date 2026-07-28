@@ -38,6 +38,7 @@ from agents.verification_agent import (
     _render_claims,
     _result_is_empty,
 )
+from coordination.contracts import LearningContract
 from orchestrator.demo_session import (
     DemoOptions,
     _DemoRuntime,
@@ -110,6 +111,7 @@ class _InteractiveSession:
     awaiting: str
     artifact: dict[str, Any] | None = None
     diagnosis: dict[str, Any] | None = None
+    learning_contract: LearningContract | None = None
     lecture: dict[str, Any] | None = None
     active_task: dict[str, Any] | None = None
     learning_task: dict[str, Any] | None = None
@@ -262,6 +264,15 @@ class InteractiveSessionManager:
             "profile_assessment",
             "知识盲区与起始难度已确定",
         )
+        learning_contract = LearningContract.from_diagnosis(
+            profile=session.runtime.profile,
+            diagnosis=diagnosis,
+            domain_id=session.runtime.task.domain_id,
+            domain_package_sha256=session.runtime.task.domain_package_sha256,
+        )
+        session.runtime.audit(
+            learning_contract.control_draft(session.runtime.options.trace_id)
+        )
         self._publish_activity(
             session,
             "knowledge",
@@ -270,6 +281,7 @@ class InteractiveSessionManager:
             "已进入个性化知识生成队列",
         )
         session.diagnosis = diagnosis
+        session.learning_contract = learning_contract
         session.artifact = diagnosis
         session.awaiting = "advance"
         session.outcome = None
@@ -380,6 +392,7 @@ class InteractiveSessionManager:
                 produced_transition,
                 approved_transition,
                 on_event=observe,
+                learning_contract=session.learning_contract,
             )
         except ReviewFlowTerminal as terminal:
             self._finish_review_stop(
@@ -1060,6 +1073,7 @@ class InteractiveSessionManager:
                 student_profile=runtime.profile,
                 learned_knowledge_points=runtime.learned_knowledge_points,
                 activity_observer=observe,
+                learning_contract=session.learning_contract,
             ),
             generate_rebuttal=runtime.rebuttal.generate,
             re_review=lambda value, verdict, rebuttal: runtime.review.re_review(
@@ -1069,8 +1083,13 @@ class InteractiveSessionManager:
                 learning_report=session.diagnosis,
                 student_profile=runtime.profile,
                 learned_knowledge_points=runtime.learned_knowledge_points,
+                learning_contract=session.learning_contract,
             ),
-            max_cycles=4,
+            max_cycles=(
+                session.learning_contract.quality_policy.max_review_cycles
+                if session.learning_contract is not None
+                else 4
+            ),
             terminal_action="refuse",
             on_event=observe,
         )
@@ -1612,6 +1631,11 @@ class InteractiveSessionManager:
             "outcome": session.outcome,
             "mode": session.runtime.mode,
             "profile": dict(session.runtime.profile),
+            "learning_contract": (
+                session.learning_contract.as_dict()
+                if session.learning_contract is not None
+                else None
+            ),
             "messages": _trace_messages(trace_path),
             "artifact": session.artifact,
             "interaction": session.interaction,

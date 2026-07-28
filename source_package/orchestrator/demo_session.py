@@ -21,6 +21,8 @@ from agents.review_agent import ReviewAgent, evaluate_hard_rules
 from agents.sandbox import DatabaseSettings, ReadOnlyExecutor
 from agents.task_agent import TaskAgent
 from agents.verification_agent import VerificationAgent
+from coordination.contracts import LearningContract
+from coordination.parallel import bounded_llm_executor
 from orchestrator.bus import MessageBus
 from orchestrator.demo_answers import (
     CONCLUSION_TASK_ID,
@@ -256,7 +258,14 @@ class _DemoRuntime:
             executor=executor_factory(),
             query_id_factory=_query_id_factory(options.trace_id),
         )
-        self.review = ReviewAgent(options.trace_id, llm_call=self.cache)
+        self.review = ReviewAgent(
+            options.trace_id,
+            llm_call=self.cache,
+            parallel_executor=bounded_llm_executor(
+                self.cache,
+                max_concurrency=2,
+            ),
+        )
         self.rebuttal = RebuttalGenerator(options.trace_id, llm_call=self.cache)
         self.learned_knowledge_points: list[str] = []
 
@@ -400,6 +409,7 @@ def _produce_reviewed_product(
     produced_transition: str,
     approved_transition: str,
     on_event: Callable[[str, Mapping[str, Any]], None] | None = None,
+    learning_contract: LearningContract | None = None,
 ) -> dict[str, Any]:
     def review(product: Mapping[str, Any]) -> dict[str, Any]:
         return runtime.review.review(
@@ -412,6 +422,7 @@ def _produce_reviewed_product(
                 if on_event is not None
                 else None
             ),
+            learning_contract=learning_contract,
         )
 
     def re_review(
@@ -426,6 +437,7 @@ def _produce_reviewed_product(
             learning_report=learning_report,
             student_profile=runtime.profile,
             learned_knowledge_points=tuple(runtime.learned_knowledge_points),
+            learning_contract=learning_contract,
         )
 
     def remember(
@@ -454,6 +466,11 @@ def _produce_reviewed_product(
             resolve_fallback=runtime.resolve_review_fallback,
             on_approved=remember,
             on_event=on_event,
+            max_cycles=(
+                learning_contract.quality_policy.max_review_cycles
+                if learning_contract is not None
+                else 4
+            ),
         )
     except (ReviewFlowInterrupted, ReviewFlowTerminal):
         raise
@@ -573,6 +590,13 @@ def run_demo_session(
         runtime.diagnosis.assess(options.profile_id, PRETEST_ANSWERS),
         "T02",
     )
+    learning_contract = LearningContract.from_diagnosis(
+        profile=runtime.profile,
+        diagnosis=diagnosis,
+        domain_id=runtime.task.domain_id,
+        domain_package_sha256=runtime.task.domain_package_sha256,
+    )
+    runtime.audit(learning_contract.control_draft(options.trace_id))
     diagnosis_content = _payload_content(diagnosis)
     blind_spots = diagnosis_content.get("blind_spots")
     if not isinstance(blind_spots, list) or not blind_spots:
@@ -589,6 +613,7 @@ def run_demo_session(
         diagnosis,
         "T03",
         "T04",
+        learning_contract=learning_contract,
     )
     first_task = _produce_reviewed_product(
         runtime,
@@ -596,6 +621,7 @@ def run_demo_session(
         diagnosis,
         "T09",
         "T10",
+        learning_contract=learning_contract,
     )
     first_question = _payload_content(first_task).get("question")
     if not isinstance(first_question, str) or not first_question.strip():
@@ -612,6 +638,7 @@ def run_demo_session(
         diagnosis,
         "T12",
         "T13",
+        learning_contract=learning_contract,
     )
 
     runtime.transition(
@@ -633,6 +660,7 @@ def run_demo_session(
         diagnosis,
         "T09",
         "T10",
+        learning_contract=learning_contract,
     )
     runtime.transition(_student_answer_draft(options.trace_id), "T15")
 
@@ -644,7 +672,10 @@ def run_demo_session(
         raise DemoSessionError("counter-evidence task did not contain a question")
     runtime.audit(_student_sql_draft(options.trace_id, counter_question))
     probe_result = runtime.audit(runtime.verification.answer(counter_question))
-    probe_verdict = runtime.review.review(probe_result)
+    probe_verdict = runtime.review.review(
+        probe_result,
+        learning_contract=learning_contract,
+    )
     runtime.audit(probe_verdict)
     if probe_verdict.get("verdict", {}).get("decision") not in {
         "approve",

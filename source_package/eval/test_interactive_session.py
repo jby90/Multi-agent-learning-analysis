@@ -235,6 +235,19 @@ def test_pretest_hides_answer_key_and_scores_submitted_choices(
     }
     assert outcome["state"] == "S2_KNOWLEDGE"
     assert outcome["awaiting"] == "advance"
+    contract = outcome["learning_contract"]
+    assert contract["contract_id"].startswith("lc-")
+    assert contract["learner"]["profile_id"] == "planner_new"
+    assert contract["domain_id"] == "production_progress"
+    contract_events = [
+        message["payload"]["content"]
+        for message in outcome["messages"]
+        if message["payload"]["content"].get("event")
+        == "learning_contract_ready"
+    ]
+    assert [event["learning_contract"]["contract_id"] for event in contract_events] == [
+        contract["contract_id"]
+    ]
 
 
 def test_advance_returns_reviewed_lecture_then_reviewed_sql_task(
