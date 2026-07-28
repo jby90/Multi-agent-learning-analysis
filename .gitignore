@@ -1,0 +1,33 @@
+# Local credentials and machine-specific configuration
+**/.env
+!.env.example
+**/*.local
+
+# Python caches and local environments
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.venv/
+
+# Frontend dependencies and generated output
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Generated evaluation output
+**/eval/results/
+**/eval/output/
+**/output/
+
+# Large offline deployment images stay on disk and are reproducible from checksums
+Docker镜像/*.tar
+
+# Temporary inspection/rendering artifacts
+/tmp/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

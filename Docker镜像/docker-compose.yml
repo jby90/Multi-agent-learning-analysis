@@ -1,0 +1,74 @@
+name: multiagent-decision-1-1-0
+
+services:
+  database:
+    image: multiagent-decision-database:1.1.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      MYSQL_DATABASE: ref_contest_db
+      MYSQL_USER: ref_reader
+      MYSQL_PASSWORD: ${REF_READER_PASSWORD:?REF_READER_PASSWORD is required}
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-13306}:3306"
+    volumes:
+      - database_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping --host=127.0.0.1 --user=root --password=\"$$MYSQL_ROOT_PASSWORD\" --silent",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  backend:
+    image: multiagent-decision-backend:1.1.0
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: database
+      MYSQL_PORT: "3306"
+      REF_READER_PASSWORD: ${REF_READER_PASSWORD:?REF_READER_PASSWORD is required}
+      REF_DOMAIN_CONFIG: production_progress
+      REF_DEMO_MODE: live
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-18765}:8765"
+    volumes:
+      - backend_runtime:/app/runtime
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.create_connection(('127.0.0.1',8765),2); s.close()",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  frontend:
+    image: multiagent-decision-frontend:1.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-18080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  database_data:
+  backend_runtime:

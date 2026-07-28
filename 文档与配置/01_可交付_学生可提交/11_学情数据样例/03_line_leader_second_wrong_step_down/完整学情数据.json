@@ -1,0 +1,2730 @@
+{
+  "collaboration_intermediate_data": {
+    "messages": [
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-001",
+        "payload": {
+          "content": {
+            "action": "session_start",
+            "state": "S0_INIT",
+            "student_profile_ref": "line_leader"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 1,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:13.610634+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-002",
+        "payload": {
+          "content": {
+            "action": "profile_loaded",
+            "assessment_label": "岗前测评",
+            "knowledge_dimensions": [
+              "三道工序与传导关系",
+              "计划量与实际量口径",
+              "完成率计算",
+              "偏差率与风险等级",
+              "月度聚合方法",
+              "异常识别标准",
+              "传导时滞分析",
+              "异常衰减规律",
+              "责任单元定位",
+              "跨工序归因方法",
+              "工序枚举与命名边界",
+              "年总量、月计划数与当日实际数",
+              "完成率字段口径",
+              "准时率字段口径",
+              "预警数与严重预警数",
+              "物量态势总览及工序分布",
+              "部门与工序适用关系",
+              "年度计划、计划应累计与年度实际",
+              "年度统计总览及计划实际分布",
+              "每月计划、实际、对比与情况总览"
+            ],
+            "profile": {
+              "background": "高职毕业一线班组长，现场熟，理论与数据双弱",
+              "difficulty_start": "basic",
+              "gaps_prior": [
+                "计划量与实际量口径",
+                "完成率计算",
+                "异常识别标准",
+                "责任单元定位"
+              ],
+              "lecture_style": "步骤化短句、每步带检查点、基础案例优先",
+              "profile_id": "line_leader",
+              "strengths": [
+                "现场操作经验"
+              ],
+              "title": "一线班组长（晋升培训）"
+            },
+            "training_scene": "船厂数字化岗位培训"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 2,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:13.613338+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-003",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-002",
+            "from_state": "S0_INIT",
+            "to_state": "S1_DIAGNOSIS",
+            "transition_id": "T01",
+            "trigger": "画像载入成功"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 3,
+        "timestamp": "2026-07-26T05:20:13.614389+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "diagnosis",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-004",
+        "payload": {
+          "content": {
+            "blind_spots": [
+              "计划量与实际量口径",
+              "完成率计算",
+              "异常识别标准",
+              "责任单元定位",
+              "传导时滞分析",
+              "月度聚合方法"
+            ],
+            "diagnosis_narrative": "",
+            "difficulty": "basic",
+            "event": "diagnosis_ready",
+            "hit_misconceptions": [
+              "M-01",
+              "M-04",
+              "M-02",
+              "M-03"
+            ],
+            "llm_latency_ms": 0,
+            "narrative_fallback": true,
+            "narrative_fallback_reason": "llm_disabled",
+            "pretest_score": {
+              "correct": 0,
+              "rate": 0.0,
+              "total": 5
+            },
+            "profile_id": "line_leader",
+            "suggestions": []
+          },
+          "type": "profile_assessment"
+        },
+        "role": "produce",
+        "step": 4,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:13.615424+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-005",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-004",
+            "from_state": "S1_DIAGNOSIS",
+            "to_state": "S2_KNOWLEDGE",
+            "transition_id": "T02",
+            "trigger": "学情报告过总线校验"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 5,
+        "timestamp": "2026-07-26T05:20:13.616453+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "knowledge",
+        "claims": [
+          {
+            "kind": "fact",
+            "text": "判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。"
+          },
+          {
+            "kind": "fact",
+            "text": "识别时不要只看单月是否接近或越过下限。"
+          },
+          {
+            "kind": "fact",
+            "text": "单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。"
+          },
+          {
+            "kind": "fact",
+            "text": "常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。"
+          },
+          {
+            "kind": "fact",
+            "text": "正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。"
+          },
+          {
+            "kind": "fact",
+            "text": "完成率 = 实际量 ÷ 计划量。"
+          },
+          {
+            "kind": "fact",
+            "text": "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。"
+          },
+          {
+            "kind": "fact",
+            "text": "月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "kb_chunk",
+            "quote": "判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。",
+            "ref": "KB-006",
+            "supports_claim": "判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "识别时不要只看单月是否接近或越过下限。",
+            "ref": "KB-006",
+            "supports_claim": "识别时不要只看单月是否接近或越过下限。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。",
+            "ref": "KB-006",
+            "supports_claim": "单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。",
+            "ref": "KB-006",
+            "supports_claim": "常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。",
+            "ref": "KB-006",
+            "supports_claim": "正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "**完成率 = 实际量 ÷ 计划量**。",
+            "ref": "KB-003",
+            "supports_claim": "完成率 = 实际量 ÷ 计划量。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。",
+            "ref": "KB-006",
+            "supports_claim": "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。",
+            "ref": "KB-006",
+            "supports_claim": "月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。"
+          }
+        ],
+        "latency_ms": 13375,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-006",
+        "payload": {
+          "content": {
+            "coverage": [
+              "异常识别标准",
+              "完成率计算"
+            ],
+            "difficulty": "basic",
+            "event": "product_ready",
+            "knowledge_point": "异常识别标准",
+            "knowledge_point_match": true,
+            "knowledge_point_match_basis": {
+              "matched_knowledge_points": [
+                "异常识别标准"
+              ],
+              "unmatched_knowledge_points": [
+                "完成率计算"
+              ]
+            },
+            "lecture_md": "## 前置基础\n\n完成率 = 实际量 ÷ 计划量。\n\n## 异常识别标准\n\n### 本节目标\n- 能依据正常波动区间判定月度完成率是否异常\n- 能区分正常波动与异常信号\n- 能避免常见误判方式\n\n### 核心概念\n- **正常波动**：月完成率在合理区间内变化，属于正常现象。\n- **异常信号**：完成率连续多月偏低或伴随风险记录增多，需进一步关注。\n\n### 判定步骤\n1. **第一步：对照正常波动区间**\n   - 检查当前月完成率是否在项目定义的正常波动范围内。\n   - 检查点：当前完成率是否接近或越过下限？\n\n2. **第二步：观察是否持续**\n   - 若单月偏低，先作为观察信号，不立即定性为异常。\n   - 检查点：后续月份是否持续偏低？\n\n3. **第三步：核查风险记录**\n   - 若完成率持续偏低，检查是否有风险记录同步增多。\n   - 检查点：是否发现新增风险项？\n\n4. **第四步：形成判断**\n   - 结合持续性和风险记录，做出有依据的判断。\n   - 检查点：是否形成明确结论并记录依据？\n\n### 常见错误提醒\n- 不要仅凭单月完成率接近下限就判断为异常。\n- 避免将一次正常波动直接视为趋势。\n- 不要看到完成率偏低就立即定性为严重问题。\n\n### 小结\n- 识别异常要结合波动区间、持续性和风险记录。\n- 单月偏低不等于趋势，需观察后续数据。\n- 所有判断应有依据，避免主观定性。\n\n## 依据要点\n\n判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。\n\n识别时不要只看单月是否接近或越过下限。\n\n单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。\n\n常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。\n\n正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。\n\n## 本项目异常识别口径卡\n\n本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。\n\n月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。",
+            "llm_latency_ms": 13372,
+            "quote_validation": {
+              "checked": 5,
+              "failed": 0,
+              "failures": [],
+              "m_id_leaks": 0,
+              "passed": 5,
+              "scaffold_leaks": 0
+            },
+            "responsibility_scope": [
+              "异常识别标准",
+              "完成率计算"
+            ],
+            "retrieved_chunk_ids": [
+              "KB-006",
+              "KB-003"
+            ],
+            "teaching_fact_cards": [
+              {
+                "card_id": "KB-006-BASIC-ANOMALY-RANGE",
+                "card_version": "1.0.0",
+                "chunk_id": "KB-006",
+                "fact_ids": [
+                  "TF-006-001",
+                  "TF-006-002"
+                ]
+              }
+            ]
+          },
+          "type": "lecture_note"
+        },
+        "role": "produce",
+        "step": 6,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:26.992859+00:00",
+        "token_usage": {
+          "completion_tokens": 718,
+          "prompt_tokens": 1115,
+          "total_tokens": 1833
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-007",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-006",
+            "from_state": "S2_KNOWLEDGE",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T03",
+            "trigger": "讲义产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 7,
+        "timestamp": "2026-07-26T05:20:32.370136+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "latency_ms": 5360,
+        "model": "qwen3-32b",
+        "msg_id": "p7-e2e-030-a01-008",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "llm_latency_ms": 5360,
+            "r02_checks": 13,
+            "r03_checked": false,
+            "reviewed_msg_id": "p7-e2e-030-a01-006",
+            "reviewed_payload_type": "lecture_note"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 8,
+        "timestamp": "2026-07-26T05:20:32.377136+00:00",
+        "token_usage": {
+          "completion_tokens": 202,
+          "prompt_tokens": 1483,
+          "total_tokens": 1685
+        },
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-009",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-008",
+            "from_state": "S5_REVIEW",
+            "to_state": "S3_TASK",
+            "transition_id": "T04",
+            "trigger": "verdict=approve ∧ 被审对象=讲义"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 9,
+        "timestamp": "2026-07-26T05:20:32.382136+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"H2601唯一低于0.88\"],\"expected_rows\":[{\"complete_rate\":\"0.6236\",\"ship_no\":\"H2601\"},{\"complete_rate\":\"0.8924\",\"ship_no\":\"H2604\"},{\"complete_rate\":\"0.9472\",\"ship_no\":\"H2605\"},{\"complete_rate\":\"0.9727\",\"ship_no\":\"H2606\"},{\"complete_rate\":\"0.9776\",\"ship_no\":\"H2602\"},{\"complete_rate\":\"0.9779\",\"ship_no\":\"H2603\"}],\"standard_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\"}",
+            "ref": "T-05"
+          }
+        ],
+        "latency_ms": 2359,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-010",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+            "difficulty": "basic",
+            "event": "product_ready",
+            "family": "Q5",
+            "guide_intro": "先确认完成率的计算方式，再检查数据来源是否包含计划量和实际量，最后根据排名判断异常船的范围。",
+            "knowledge_point": "异常识别标准",
+            "llm_latency_ms": 2358,
+            "query_authority": {
+              "dimension_columns": [
+                "ship_no"
+              ],
+              "family": "Q5",
+              "filter_columns": [
+                "period_date",
+                "process_code"
+              ],
+              "group_by_columns": [
+                "ship_no"
+              ],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "ship_no",
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+              "template_id": "T-05",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+            "questions": [
+              {
+                "id": "T-05",
+                "prompt": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。"
+              }
+            ],
+            "responsibility_scope": [
+              "异常识别标准",
+              "完成率计算"
+            ],
+            "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+            "template_id": "T-05"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 10,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:34.743751+00:00",
+        "token_usage": {
+          "completion_tokens": 85,
+          "prompt_tokens": 327,
+          "total_tokens": 412
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-011",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-010",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 11,
+        "timestamp": "2026-07-26T05:20:34.748751+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-012",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-030-a01-010",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 12,
+        "timestamp": "2026-07-26T05:20:34.754752+00:00",
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-013",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-012",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 13,
+        "timestamp": "2026-07-26T05:20:34.758753+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-014",
+        "payload": {
+          "content": {
+            "event": "student_sql_submitted",
+            "question": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 14,
+        "timestamp": "2026-07-26T05:20:34.765752+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-015",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-014",
+            "from_state": "S7_STUDENT",
+            "to_state": "S4_VERIFY",
+            "transition_id": "T11",
+            "trigger": "学生提交SQL类操作"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 15,
+        "timestamp": "2026-07-26T05:20:34.770040+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "verification",
+        "claims": [
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2601结果：完成率为62.36%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2604结果：完成率为89.24%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2605结果：完成率为94.72%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2606结果：完成率为97.27%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2602结果：完成率为97.76%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2603结果：完成率为97.79%。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+            "ref": "p7-e2e-030-a01-sql-01",
+            "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2601结果：完成率为62.36%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+            "ref": "p7-e2e-030-a01-sql-01",
+            "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2604结果：完成率为89.24%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+            "ref": "p7-e2e-030-a01-sql-01",
+            "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2605结果：完成率为94.72%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+            "ref": "p7-e2e-030-a01-sql-01",
+            "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2606结果：完成率为97.27%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+            "ref": "p7-e2e-030-a01-sql-01",
+            "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2602结果：完成率为97.76%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+            "ref": "p7-e2e-030-a01-sql-01",
+            "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2603结果：完成率为97.79%。"
+          }
+        ],
+        "latency_ms": 3357,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-016",
+        "payload": {
+          "content": {
+            "columns": [
+              "ship_no",
+              "complete_rate"
+            ],
+            "event": "query_completed",
+            "executed_sql": "SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200",
+            "family": "Q5",
+            "generated_sql": "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+            "generation_cached_tokens": 0,
+            "generation_completion_tokens": 121,
+            "generation_llm_latency_ms": 2554,
+            "generation_model": "qwen3-235b-a22b",
+            "generation_prompt_tokens": 2543,
+            "generation_total_tokens": 2664,
+            "llm_latency_ms": 3046,
+            "query_authority": {
+              "dimension_columns": [
+                "ship_no"
+              ],
+              "family": "Q5",
+              "filter_columns": [
+                "period_date",
+                "process_code"
+              ],
+              "group_by_columns": [
+                "ship_no"
+              ],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "ship_no",
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+              "template_id": "T-05",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "query_elapsed_ms": 304,
+            "query_id": "p7-e2e-030-a01-sql-01",
+            "question": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+            "raw_llm_family": "Q5",
+            "routing_cached_tokens": 0,
+            "routing_completion_tokens": 6,
+            "routing_fallback": false,
+            "routing_fallback_reason": "none",
+            "routing_family_mismatch": false,
+            "routing_few_shot_ids": [
+              "FS-09",
+              "FS-10",
+              "FS-13",
+              "FS-14"
+            ],
+            "routing_final_family": "Q5",
+            "routing_llm_latency_ms": 492,
+            "routing_model": "qwen3-32b",
+            "routing_predicted_family": "Q5",
+            "routing_prompt_profile": "Q5",
+            "routing_prompt_tokens": 1192,
+            "routing_total_tokens": 1198,
+            "row_count": 6,
+            "rows": [
+              {
+                "complete_rate": "0.6236",
+                "ship_no": "H2601"
+              },
+              {
+                "complete_rate": "0.8924",
+                "ship_no": "H2604"
+              },
+              {
+                "complete_rate": "0.9472",
+                "ship_no": "H2605"
+              },
+              {
+                "complete_rate": "0.9727",
+                "ship_no": "H2606"
+              },
+              {
+                "complete_rate": "0.9776",
+                "ship_no": "H2602"
+              },
+              {
+                "complete_rate": "0.9779",
+                "ship_no": "H2603"
+              }
+            ]
+          },
+          "type": "sql_result"
+        },
+        "role": "produce",
+        "step": 16,
+        "timestamp": "2026-07-26T05:20:38.128529+00:00",
+        "token_usage": {
+          "completion_tokens": 127,
+          "prompt_tokens": 3735,
+          "total_tokens": 3862
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-017",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-016",
+            "from_state": "S4_VERIFY",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T12",
+            "trigger": "查询执行完毕"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 17,
+        "timestamp": "2026-07-26T05:20:38.132529+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-018",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-030-a01-016",
+            "reviewed_payload_type": "sql_result"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 18,
+        "timestamp": "2026-07-26T05:20:38.142537+00:00",
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "none",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-019",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-018",
+            "from_state": "S5_REVIEW",
+            "to_state": "S9_PATH_UPDATE",
+            "transition_id": "T13",
+            "trigger": "approve ∧ 被审对象=数据结论"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 19,
+        "timestamp": "2026-07-26T05:20:38.147538+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-020",
+        "payload": {
+          "content": {
+            "case_id": "E2E-030",
+            "completed_nodes": [
+              "岗前测评",
+              "岗位微课",
+              "数据实操"
+            ],
+            "current_node": "结论判断",
+            "difficulty_action": "keep",
+            "event": "path_updated",
+            "has_next": true,
+            "learning_goal_achieved": false
+          },
+          "type": "learning_path_update"
+        },
+        "role": "system",
+        "step": 20,
+        "timestamp": "2026-07-26T05:20:38.153529+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-021",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-020",
+            "from_state": "S9_PATH_UPDATE",
+            "to_state": "S3_TASK",
+            "transition_id": "T19",
+            "trigger": "路径更新完毕 ∧ 还有下一环节"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 21,
+        "timestamp": "2026-07-26T05:20:38.164529+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"H2601唯一低于0.88\"],\"expected_rows\":[{\"complete_rate\":\"0.6236\",\"ship_no\":\"H2601\"},{\"complete_rate\":\"0.8924\",\"ship_no\":\"H2604\"},{\"complete_rate\":\"0.9472\",\"ship_no\":\"H2605\"},{\"complete_rate\":\"0.9727\",\"ship_no\":\"H2606\"},{\"complete_rate\":\"0.9776\",\"ship_no\":\"H2602\"},{\"complete_rate\":\"0.9779\",\"ship_no\":\"H2603\"}],\"standard_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\"}",
+            "ref": "T-05"
+          }
+        ],
+        "latency_ms": 2101,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-022",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "作为一线班组长，你在2025-05月度总结中需要分析各船YCL完成率并列出排名，同时识别出存在异常的船舶。",
+            "difficulty": "basic",
+            "event": "product_ready",
+            "family": "Q5",
+            "guide_intro": "先确认YCL完成率的计算方式，再检查数据来源是否包含计划量与实际量，最后根据结果判断哪些船可能存在问题。",
+            "knowledge_point": "异常识别标准",
+            "llm_latency_ms": 2100,
+            "query_authority": {
+              "dimension_columns": [
+                "ship_no"
+              ],
+              "family": "Q5",
+              "filter_columns": [
+                "period_date",
+                "process_code"
+              ],
+              "group_by_columns": [
+                "ship_no"
+              ],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "ship_no",
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+              "template_id": "T-05",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "作为一线班组长，你在2025-05月度总结中需要分析各船YCL完成率并列出排名，同时识别出存在异常的船舶。",
+            "questions": [
+              {
+                "id": "T-05",
+                "prompt": "作为一线班组长，你在2025-05月度总结中需要分析各船YCL完成率并列出排名，同时识别出存在异常的船舶。"
+              }
+            ],
+            "responsibility_scope": [
+              "异常识别标准",
+              "完成率计算"
+            ],
+            "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+            "template_id": "T-05"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 22,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:40.271704+00:00",
+        "token_usage": {
+          "completion_tokens": 86,
+          "prompt_tokens": 327,
+          "total_tokens": 413
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-023",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-022",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 23,
+        "timestamp": "2026-07-26T05:20:40.273704+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-024",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-030-a01-022",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 24,
+        "timestamp": "2026-07-26T05:20:40.277705+00:00",
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-025",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-024",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 25,
+        "timestamp": "2026-07-26T05:20:40.281708+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-026",
+        "payload": {
+          "content": {
+            "answer_result": "wrong",
+            "event": "student_answer",
+            "requested_action": "probe",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 26,
+        "timestamp": "2026-07-26T05:20:40.286707+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-027",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-026",
+            "from_state": "S7_STUDENT",
+            "to_state": "S8_PROBE",
+            "transition_id": "T15",
+            "trigger": "学生答题：首次错误"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 27,
+        "timestamp": "2026-07-26T05:20:40.293226+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"2-4月/6-7月均正常，5月0.6236持续性异常非波动\"],\"expected_rows\":[{\"complete_rate\":\"0.9435\",\"month_label\":\"2025-02\"},{\"complete_rate\":\"0.9534\",\"month_label\":\"2025-03\"},{\"complete_rate\":\"0.9061\",\"month_label\":\"2025-04\"},{\"complete_rate\":\"0.6236\",\"month_label\":\"2025-05\"},{\"complete_rate\":\"1.0067\",\"month_label\":\"2025-06\"},{\"complete_rate\":\"0.9698\",\"month_label\":\"2025-07\"}],\"standard_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' GROUP BY month_label ORDER BY month_label\"}",
+            "ref": "M-03:1"
+          }
+        ],
+        "latency_ms": 2221,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-028",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动",
+            "event": "counter_evidence_ready",
+            "family": "Q4",
+            "guide_intro": "请结合完成率的定义和异常波动的判断标准，逐步分析数据，注意核对时间节点和数据口径是否一致。",
+            "llm_latency_ms": 2221,
+            "misconception": "M-03",
+            "question": "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动",
+            "standard_stem": "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动"
+          },
+          "type": "quiz_set"
+        },
+        "probe": {
+          "questions": [
+            "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动"
+          ],
+          "target_misconception": "M-03",
+          "wrong_attempts": 1
+        },
+        "role": "probe",
+        "step": 28,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:20:42.519283+00:00",
+        "token_usage": {
+          "completion_tokens": 92,
+          "prompt_tokens": 346,
+          "total_tokens": 438
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-029",
+        "payload": {
+          "content": {
+            "event": "student_sql_submitted",
+            "question": "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 29,
+        "timestamp": "2026-07-26T05:20:42.520794+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "verification",
+        "claims": [
+          {
+            "kind": "data_conclusion",
+            "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-02结果：完成率为94.35%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-03结果：完成率为95.34%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-04结果：完成率为90.61%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-05结果：完成率为62.36%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-06结果：完成率为100.67%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-07结果：完成率为96.98%。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+            "ref": "p7-e2e-030-a01-sql-02",
+            "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-02结果：完成率为94.35%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+            "ref": "p7-e2e-030-a01-sql-02",
+            "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-03结果：完成率为95.34%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+            "ref": "p7-e2e-030-a01-sql-02",
+            "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-04结果：完成率为90.61%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+            "ref": "p7-e2e-030-a01-sql-02",
+            "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-05结果：完成率为62.36%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+            "ref": "p7-e2e-030-a01-sql-02",
+            "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-06结果：完成率为100.67%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+            "ref": "p7-e2e-030-a01-sql-02",
+            "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-07结果：完成率为96.98%。"
+          }
+        ],
+        "latency_ms": 4274,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-030",
+        "payload": {
+          "content": {
+            "columns": [
+              "month_label",
+              "complete_rate"
+            ],
+            "event": "query_completed",
+            "executed_sql": "SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200",
+            "family": "Q4",
+            "generated_sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+            "generation_cached_tokens": 0,
+            "generation_completion_tokens": 151,
+            "generation_llm_latency_ms": 3538,
+            "generation_model": "qwen3-235b-a22b",
+            "generation_prompt_tokens": 2672,
+            "generation_total_tokens": 2823,
+            "llm_latency_ms": 3955,
+            "query_elapsed_ms": 315,
+            "query_id": "p7-e2e-030-a01-sql-02",
+            "question": "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动",
+            "raw_llm_family": "Q4",
+            "routing_cached_tokens": 0,
+            "routing_completion_tokens": 6,
+            "routing_fallback": false,
+            "routing_fallback_reason": "none",
+            "routing_family_mismatch": false,
+            "routing_few_shot_ids": [
+              "FS-07",
+              "FS-08",
+              "FS-15",
+              "FS-11"
+            ],
+            "routing_final_family": "Q4",
+            "routing_llm_latency_ms": 417,
+            "routing_model": "qwen3-32b",
+            "routing_predicted_family": "Q4",
+            "routing_prompt_profile": "Q4",
+            "routing_prompt_tokens": 1200,
+            "routing_total_tokens": 1206,
+            "row_count": 6,
+            "rows": [
+              {
+                "complete_rate": "0.9435",
+                "month_label": "2025-02"
+              },
+              {
+                "complete_rate": "0.9534",
+                "month_label": "2025-03"
+              },
+              {
+                "complete_rate": "0.9061",
+                "month_label": "2025-04"
+              },
+              {
+                "complete_rate": "0.6236",
+                "month_label": "2025-05"
+              },
+              {
+                "complete_rate": "1.0067",
+                "month_label": "2025-06"
+              },
+              {
+                "complete_rate": "0.9698",
+                "month_label": "2025-07"
+              }
+            ]
+          },
+          "type": "sql_result"
+        },
+        "role": "produce",
+        "step": 30,
+        "timestamp": "2026-07-26T05:20:46.796211+00:00",
+        "token_usage": {
+          "completion_tokens": 157,
+          "prompt_tokens": 3872,
+          "total_tokens": 4029
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-031",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-030-a01-030",
+            "reviewed_payload_type": "sql_result"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 31,
+        "timestamp": "2026-07-26T05:20:46.810226+00:00",
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "none",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-032",
+        "payload": {
+          "content": {
+            "answer_result": "wrong",
+            "event": "probe_outcome",
+            "source": "student",
+            "target_misconception": "M-03"
+          },
+          "type": "control"
+        },
+        "probe": {
+          "target_misconception": "M-03",
+          "wrong_attempts": 1
+        },
+        "role": "system",
+        "step": 32,
+        "timestamp": "2026-07-26T05:20:46.813218+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-033",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-032",
+            "difficulty_action": "step_down",
+            "from_state": "S8_PROBE",
+            "to_state": "S2_KNOWLEDGE",
+            "transition_id": "T17",
+            "trigger": "反证后二次仍错"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 33,
+        "timestamp": "2026-07-26T05:20:46.828306+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "knowledge",
+        "claims": [
+          {
+            "kind": "fact",
+            "text": "完成率 = 实际量 ÷ 计划量。"
+          },
+          {
+            "kind": "fact",
+            "text": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+          },
+          {
+            "kind": "fact",
+            "text": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+          },
+          {
+            "kind": "fact",
+            "text": "两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。"
+          },
+          {
+            "kind": "fact",
+            "text": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+          },
+          {
+            "kind": "fact",
+            "text": "实际量（actual_qty）是车间实际报工的完成量。"
+          },
+          {
+            "kind": "fact",
+            "text": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "kb_chunk",
+            "quote": "**完成率 = 实际量 ÷ 计划量**。",
+            "ref": "KB-003",
+            "supports_claim": "完成率 = 实际量 ÷ 计划量。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "对月度或任意区间做聚合时，正确口径是**加权比值**：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。",
+            "ref": "KB-003",
+            "supports_claim": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。",
+            "ref": "KB-003",
+            "supports_claim": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。",
+            "ref": "KB-003",
+            "supports_claim": "两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "生产进度表中每条日级记录同时携带两个数量字段：**计划量（plan_qty）**是排产系统下达的当日应完成量；",
+            "ref": "KB-002",
+            "supports_claim": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "**实际量（actual_qty）**是车间实际报工的完成量。",
+            "ref": "KB-002",
+            "supports_claim": "实际量（actual_qty）是车间实际报工的完成量。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "两者是完全不同的口径，混用是本领域最高频的分析错误。",
+            "ref": "KB-002",
+            "supports_claim": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+          }
+        ],
+        "latency_ms": 14652,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-034",
+        "payload": {
+          "content": {
+            "coverage": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "difficulty": "basic",
+            "event": "product_ready",
+            "knowledge_point": "完成率计算",
+            "knowledge_point_match": true,
+            "knowledge_point_match_basis": {
+              "matched_knowledge_points": [
+                "完成率计算"
+              ],
+              "unmatched_knowledge_points": [
+                "计划量与实际量口径"
+              ]
+            },
+            "lecture_md": "## 前置基础\n\n生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；\n\n实际量（actual_qty）是车间实际报工的完成量。\n\n两者是完全不同的口径，混用是本领域最高频的分析错误。\n\n## 完成率计算微课讲义\n\n### 本节目标\n- 明确完成率的定义与计算公式\n- 掌握加权比值的正确计算方法\n- 能够区分计划量与实际量\n- 避免常见计算错误\n\n### 核心概念\n- **完成率**：实际完成量与计划量的比值，反映生产任务的完成情况。\n- **计划量（plan_qty）**：排产系统下达的当日应完成量。\n- **实际量（actual_qty）**：车间实际报工的完成量。\n\n### 计算步骤\n1. **确认计算区间**：选择需要计算的月份或任意时间段。\n   - 检查点：是否明确时间范围？\n2. **分别汇总计划量与实际量**：使用SUM函数对区间内的plan_qty和actual_qty求和。\n   - 检查点：是否分别汇总？\n3. **计算完成率**：完成率 = SUM(actual_qty) ÷ SUM(plan_qty)\n   - 检查点：是否使用加权比值？\n\n### 常见错误提醒\n- **错误1**：使用日完成率的平均值代替加权比值。\n  - 原因：大生产量日子的权重被忽略，结果被小量日拉偏。\n- **错误2**：混淆计划量与实际量。\n  - 原因：两者是不同口径，混用会导致误判生产情况。\n\n### 小结\n- 完成率 = 实际量 ÷ 计划量\n- 计算时必须使用加权比值（SUM口径）\n- 区分清楚计划量与实际量，避免混淆\n- 避免使用日完成率的平均值\n\n## 依据要点\n\n完成率 = 实际量 ÷ 计划量。\n\n对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。\n\n禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。\n\n两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。",
+            "llm_latency_ms": 14649,
+            "quote_validation": {
+              "checked": 6,
+              "failed": 0,
+              "failures": [],
+              "m_id_leaks": 0,
+              "passed": 6,
+              "scaffold_leaks": 0
+            },
+            "responsibility_scope": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "retrieved_chunk_ids": [
+              "KB-003",
+              "KB-002"
+            ]
+          },
+          "type": "lecture_note"
+        },
+        "role": "produce",
+        "step": 34,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:21:01.534925+00:00",
+        "token_usage": {
+          "completion_tokens": 861,
+          "prompt_tokens": 1316,
+          "total_tokens": 2177
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-035",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-034",
+            "from_state": "S2_KNOWLEDGE",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T03",
+            "trigger": "讲义产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 35,
+        "timestamp": "2026-07-26T05:21:01.539806+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-036",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-030-a01-034",
+            "reviewed_payload_type": "lecture_note"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 36,
+        "timestamp": "2026-07-26T05:21:01.547688+00:00",
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-037",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-036",
+            "from_state": "S5_REVIEW",
+            "to_state": "S3_TASK",
+            "transition_id": "T04",
+            "trigger": "verdict=approve ∧ 被审对象=讲义"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 37,
+        "timestamp": "2026-07-26T05:21:01.550283+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"完成率0.6236\"],\"expected_rows\":[{\"complete_rate\":\"0.6236\"}],\"standard_sql\":\"SELECT ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+            "ref": "T-02"
+          }
+        ],
+        "latency_ms": 2549,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-030-a01-038",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "你是涂装车间班组长，现需统计本班组负责的H26012025-05YCL项目在2025-05的月完成率，以便分析生产进度。",
+            "difficulty": "basic",
+            "event": "product_ready",
+            "family": "Q3",
+            "guide_intro": "请先确认计划量和实际量的统计口径是否一致，再根据公式分步计算完成率。",
+            "knowledge_point": "完成率计算",
+            "llm_latency_ms": 2549,
+            "query_authority": {
+              "dimension_columns": [],
+              "family": "Q3",
+              "filter_columns": [
+                "period_date",
+                "process_code",
+                "ship_no"
+              ],
+              "group_by_columns": [],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "计算H26012025-05YCL的月完成率",
+              "template_id": "T-02",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "你是涂装车间班组长，现需统计本班组负责的H26012025-05YCL项目在2025-05的月完成率，以便分析生产进度。",
+            "questions": [
+              {
+                "id": "T-02",
+                "prompt": "你是涂装车间班组长，现需统计本班组负责的H26012025-05YCL项目在2025-05的月完成率，以便分析生产进度。"
+              }
+            ],
+            "responsibility_scope": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "standard_stem": "计算H26012025-05YCL的月完成率",
+            "template_id": "T-02"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 38,
+        "student_profile_ref": "line_leader",
+        "timestamp": "2026-07-26T05:21:04.102059+00:00",
+        "token_usage": {
+          "completion_tokens": 88,
+          "prompt_tokens": 338,
+          "total_tokens": 426
+        },
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-039",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-038",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 39,
+        "timestamp": "2026-07-26T05:21:04.104061+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-040",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-030-a01-038",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 40,
+        "timestamp": "2026-07-26T05:21:04.107158+00:00",
+        "trace_id": "p7-e2e-030-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-041",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-040",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 41,
+        "timestamp": "2026-07-26T05:21:04.109158+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-042",
+        "payload": {
+          "content": {
+            "answer_result": "correct",
+            "event": "student_answer",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 42,
+        "timestamp": "2026-07-26T05:21:04.112158+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-043",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-042",
+            "from_state": "S7_STUDENT",
+            "to_state": "S9_PATH_UPDATE",
+            "transition_id": "T14",
+            "trigger": "学生答题：正确"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 43,
+        "timestamp": "2026-07-26T05:21:04.114158+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-044",
+        "payload": {
+          "content": {
+            "case_id": "E2E-030",
+            "completed_nodes": [
+              "岗前测评",
+              "岗位微课",
+              "数据实操",
+              "反证追问",
+              "降维讲解",
+              "重新作答"
+            ],
+            "current_node": "培养目标达成",
+            "difficulty_action": "step_down",
+            "event": "path_updated",
+            "has_next": false,
+            "knowledge_point": "异常识别标准",
+            "learning_goal_achieved": true,
+            "summary": "一线班组长（晋升培训）完成异常识别标准的真实评测链路，路径为second_wrong_step_down。"
+          },
+          "type": "learning_path_update"
+        },
+        "role": "system",
+        "step": 44,
+        "timestamp": "2026-07-26T05:21:04.116158+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-030-a01-045",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-030-a01-044",
+            "from_state": "S9_PATH_UPDATE",
+            "to_state": "S10_DONE",
+            "transition_id": "T20",
+            "trigger": "学习目标达成"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 45,
+        "timestamp": "2026-07-26T05:21:04.118158+00:00",
+        "trace_id": "p7-e2e-030-a01"
+      }
+    ],
+    "stage_message_ids": {
+      "counter_evidence": [
+        "p7-e2e-030-a01-028"
+      ],
+      "diagnosis": [
+        "p7-e2e-030-a01-004"
+      ],
+      "learning_path": [
+        "p7-e2e-030-a01-020",
+        "p7-e2e-030-a01-044"
+      ],
+      "lecture": [
+        "p7-e2e-030-a01-006",
+        "p7-e2e-030-a01-034"
+      ],
+      "lecture_evidence": [
+        "p7-e2e-030-a01-006",
+        "p7-e2e-030-a01-034"
+      ],
+      "probe_outcome": [
+        "p7-e2e-030-a01-032"
+      ],
+      "rebuttal": [
+        "p7-e2e-030-a01-028",
+        "p7-e2e-030-a01-032"
+      ],
+      "review": [
+        "p7-e2e-030-a01-008",
+        "p7-e2e-030-a01-012",
+        "p7-e2e-030-a01-018",
+        "p7-e2e-030-a01-024",
+        "p7-e2e-030-a01-031",
+        "p7-e2e-030-a01-036",
+        "p7-e2e-030-a01-040"
+      ],
+      "sql_execution": [
+        "p7-e2e-030-a01-016",
+        "p7-e2e-030-a01-030"
+      ],
+      "sql_submission": [
+        "p7-e2e-030-a01-014",
+        "p7-e2e-030-a01-029"
+      ],
+      "task": [
+        "p7-e2e-030-a01-010",
+        "p7-e2e-030-a01-022",
+        "p7-e2e-030-a01-038"
+      ]
+    }
+  },
+  "completeness_check": {
+    "accepted_final_resource_categories": {
+      "lecture": true,
+      "sql_result": true,
+      "task": true
+    },
+    "all_required_stages_present": true,
+    "raw_trace_verbatim": true,
+    "required_stages": [
+      "diagnosis",
+      "lecture",
+      "lecture_evidence",
+      "task",
+      "sql_submission",
+      "sql_execution",
+      "review",
+      "learning_path"
+    ],
+    "stage_presence": {
+      "counter_evidence": true,
+      "diagnosis": true,
+      "learning_path": true,
+      "lecture": true,
+      "lecture_evidence": true,
+      "probe_outcome": true,
+      "rebuttal": true,
+      "review": true,
+      "sql_execution": true,
+      "sql_submission": true,
+      "task": true
+    },
+    "terminal_s10": true
+  },
+  "final_learning_path": {
+    "agent": "system",
+    "claims": [],
+    "evidence": [],
+    "msg_id": "p7-e2e-030-a01-044",
+    "payload": {
+      "content": {
+        "case_id": "E2E-030",
+        "completed_nodes": [
+          "岗前测评",
+          "岗位微课",
+          "数据实操",
+          "反证追问",
+          "降维讲解",
+          "重新作答"
+        ],
+        "current_node": "培养目标达成",
+        "difficulty_action": "step_down",
+        "event": "path_updated",
+        "has_next": false,
+        "knowledge_point": "异常识别标准",
+        "learning_goal_achieved": true,
+        "summary": "一线班组长（晋升培训）完成异常识别标准的真实评测链路，路径为second_wrong_step_down。"
+      },
+      "type": "learning_path_update"
+    },
+    "role": "system",
+    "step": 44,
+    "timestamp": "2026-07-26T05:21:04.116158+00:00",
+    "trace_id": "p7-e2e-030-a01"
+  },
+  "final_resources": [
+    {
+      "agent": "knowledge",
+      "claims": [
+        {
+          "kind": "fact",
+          "text": "判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。"
+        },
+        {
+          "kind": "fact",
+          "text": "识别时不要只看单月是否接近或越过下限。"
+        },
+        {
+          "kind": "fact",
+          "text": "单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。"
+        },
+        {
+          "kind": "fact",
+          "text": "常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。"
+        },
+        {
+          "kind": "fact",
+          "text": "正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。"
+        },
+        {
+          "kind": "fact",
+          "text": "完成率 = 实际量 ÷ 计划量。"
+        },
+        {
+          "kind": "fact",
+          "text": "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。"
+        },
+        {
+          "kind": "fact",
+          "text": "月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "kb_chunk",
+          "quote": "判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。",
+          "ref": "KB-006",
+          "supports_claim": "判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "识别时不要只看单月是否接近或越过下限。",
+          "ref": "KB-006",
+          "supports_claim": "识别时不要只看单月是否接近或越过下限。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。",
+          "ref": "KB-006",
+          "supports_claim": "单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。",
+          "ref": "KB-006",
+          "supports_claim": "常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。",
+          "ref": "KB-006",
+          "supports_claim": "正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "**完成率 = 实际量 ÷ 计划量**。",
+          "ref": "KB-003",
+          "supports_claim": "完成率 = 实际量 ÷ 计划量。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。",
+          "ref": "KB-006",
+          "supports_claim": "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。",
+          "ref": "KB-006",
+          "supports_claim": "月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。"
+        }
+      ],
+      "latency_ms": 13375,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-006",
+      "payload": {
+        "content": {
+          "coverage": [
+            "异常识别标准",
+            "完成率计算"
+          ],
+          "difficulty": "basic",
+          "event": "product_ready",
+          "knowledge_point": "异常识别标准",
+          "knowledge_point_match": true,
+          "knowledge_point_match_basis": {
+            "matched_knowledge_points": [
+              "异常识别标准"
+            ],
+            "unmatched_knowledge_points": [
+              "完成率计算"
+            ]
+          },
+          "lecture_md": "## 前置基础\n\n完成率 = 实际量 ÷ 计划量。\n\n## 异常识别标准\n\n### 本节目标\n- 能依据正常波动区间判定月度完成率是否异常\n- 能区分正常波动与异常信号\n- 能避免常见误判方式\n\n### 核心概念\n- **正常波动**：月完成率在合理区间内变化，属于正常现象。\n- **异常信号**：完成率连续多月偏低或伴随风险记录增多，需进一步关注。\n\n### 判定步骤\n1. **第一步：对照正常波动区间**\n   - 检查当前月完成率是否在项目定义的正常波动范围内。\n   - 检查点：当前完成率是否接近或越过下限？\n\n2. **第二步：观察是否持续**\n   - 若单月偏低，先作为观察信号，不立即定性为异常。\n   - 检查点：后续月份是否持续偏低？\n\n3. **第三步：核查风险记录**\n   - 若完成率持续偏低，检查是否有风险记录同步增多。\n   - 检查点：是否发现新增风险项？\n\n4. **第四步：形成判断**\n   - 结合持续性和风险记录，做出有依据的判断。\n   - 检查点：是否形成明确结论并记录依据？\n\n### 常见错误提醒\n- 不要仅凭单月完成率接近下限就判断为异常。\n- 避免将一次正常波动直接视为趋势。\n- 不要看到完成率偏低就立即定性为严重问题。\n\n### 小结\n- 识别异常要结合波动区间、持续性和风险记录。\n- 单月偏低不等于趋势，需观察后续数据。\n- 所有判断应有依据，避免主观定性。\n\n## 依据要点\n\n判定月完成率是否异常，先对照本项目采用的正常波动区间，再区分正常波动与偏低信号。\n\n识别时不要只看单月是否接近或越过下限。\n\n单月偏低先作为观察信号，再结合后续月份是否持续，以及风险记录是否同步增多，判断是否需要升级关注。\n\n常见误判是把一次正常波动直接当成趋势，或看到偏低就立即作严重定性。\n\n正确做法是先识别信号，再核对持续性和伴随风险，形成有证据的判断。\n\n## 本项目异常识别口径卡\n\n本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。\n\n月完成率低于88%时，先作为偏低信号观察，不能仅凭单月数值直接定性；还须结合持续性或伴随的风险记录。",
+          "llm_latency_ms": 13372,
+          "quote_validation": {
+            "checked": 5,
+            "failed": 0,
+            "failures": [],
+            "m_id_leaks": 0,
+            "passed": 5,
+            "scaffold_leaks": 0
+          },
+          "responsibility_scope": [
+            "异常识别标准",
+            "完成率计算"
+          ],
+          "retrieved_chunk_ids": [
+            "KB-006",
+            "KB-003"
+          ],
+          "teaching_fact_cards": [
+            {
+              "card_id": "KB-006-BASIC-ANOMALY-RANGE",
+              "card_version": "1.0.0",
+              "chunk_id": "KB-006",
+              "fact_ids": [
+                "TF-006-001",
+                "TF-006-002"
+              ]
+            }
+          ]
+        },
+        "type": "lecture_note"
+      },
+      "role": "produce",
+      "step": 6,
+      "student_profile_ref": "line_leader",
+      "timestamp": "2026-07-26T05:20:26.992859+00:00",
+      "token_usage": {
+        "completion_tokens": 718,
+        "prompt_tokens": 1115,
+        "total_tokens": 1833
+      },
+      "trace_id": "p7-e2e-030-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"H2601唯一低于0.88\"],\"expected_rows\":[{\"complete_rate\":\"0.6236\",\"ship_no\":\"H2601\"},{\"complete_rate\":\"0.8924\",\"ship_no\":\"H2604\"},{\"complete_rate\":\"0.9472\",\"ship_no\":\"H2605\"},{\"complete_rate\":\"0.9727\",\"ship_no\":\"H2606\"},{\"complete_rate\":\"0.9776\",\"ship_no\":\"H2602\"},{\"complete_rate\":\"0.9779\",\"ship_no\":\"H2603\"}],\"standard_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\"}",
+          "ref": "T-05"
+        }
+      ],
+      "latency_ms": 2359,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-010",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+          "difficulty": "basic",
+          "event": "product_ready",
+          "family": "Q5",
+          "guide_intro": "先确认完成率的计算方式，再检查数据来源是否包含计划量和实际量，最后根据排名判断异常船的范围。",
+          "knowledge_point": "异常识别标准",
+          "llm_latency_ms": 2358,
+          "query_authority": {
+            "dimension_columns": [
+              "ship_no"
+            ],
+            "family": "Q5",
+            "filter_columns": [
+              "period_date",
+              "process_code"
+            ],
+            "group_by_columns": [
+              "ship_no"
+            ],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "ship_no",
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+            "template_id": "T-05",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+          "questions": [
+            {
+              "id": "T-05",
+              "prompt": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。"
+            }
+          ],
+          "responsibility_scope": [
+            "异常识别标准",
+            "完成率计算"
+          ],
+          "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+          "template_id": "T-05"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 10,
+      "student_profile_ref": "line_leader",
+      "timestamp": "2026-07-26T05:20:34.743751+00:00",
+      "token_usage": {
+        "completion_tokens": 85,
+        "prompt_tokens": 327,
+        "total_tokens": 412
+      },
+      "trace_id": "p7-e2e-030-a01"
+    },
+    {
+      "agent": "verification",
+      "claims": [
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2601结果：完成率为62.36%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2604结果：完成率为89.24%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2605结果：完成率为94.72%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2606结果：完成率为97.27%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2602结果：完成率为97.76%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2603结果：完成率为97.79%。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+          "ref": "p7-e2e-030-a01-sql-01",
+          "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2601结果：完成率为62.36%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+          "ref": "p7-e2e-030-a01-sql-01",
+          "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2604结果：完成率为89.24%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+          "ref": "p7-e2e-030-a01-sql-01",
+          "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2605结果：完成率为94.72%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+          "ref": "p7-e2e-030-a01-sql-01",
+          "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2606结果：完成率为97.27%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+          "ref": "p7-e2e-030-a01-sql-01",
+          "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2602结果：完成率为97.76%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\",\"executed_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"ship_no\":\"H2601\",\"complete_rate\":\"0.6236\"},{\"ship_no\":\"H2604\",\"complete_rate\":\"0.8924\"},{\"ship_no\":\"H2605\",\"complete_rate\":\"0.9472\"},{\"ship_no\":\"H2606\",\"complete_rate\":\"0.9727\"},{\"ship_no\":\"H2602\",\"complete_rate\":\"0.9776\"},{\"ship_no\":\"H2603\",\"complete_rate\":\"0.9779\"}]}",
+          "ref": "p7-e2e-030-a01-sql-01",
+          "supports_claim": "查询“作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。”的H2603结果：完成率为97.79%。"
+        }
+      ],
+      "latency_ms": 3357,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-016",
+      "payload": {
+        "content": {
+          "columns": [
+            "ship_no",
+            "complete_rate"
+          ],
+          "event": "query_completed",
+          "executed_sql": "SELECT ship_no, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC LIMIT 200",
+          "family": "Q5",
+          "generated_sql": "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+          "generation_cached_tokens": 0,
+          "generation_completion_tokens": 121,
+          "generation_llm_latency_ms": 2554,
+          "generation_model": "qwen3-235b-a22b",
+          "generation_prompt_tokens": 2543,
+          "generation_total_tokens": 2664,
+          "llm_latency_ms": 3046,
+          "query_authority": {
+            "dimension_columns": [
+              "ship_no"
+            ],
+            "family": "Q5",
+            "filter_columns": [
+              "period_date",
+              "process_code"
+            ],
+            "group_by_columns": [
+              "ship_no"
+            ],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "ship_no",
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+            "template_id": "T-05",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "query_elapsed_ms": 304,
+          "query_id": "p7-e2e-030-a01-sql-01",
+          "question": "作为一线班组长，你需要在2025-05月底总结时，统计各船YCL完成率并排出名次，同时找出完成率异常的船。",
+          "raw_llm_family": "Q5",
+          "routing_cached_tokens": 0,
+          "routing_completion_tokens": 6,
+          "routing_fallback": false,
+          "routing_fallback_reason": "none",
+          "routing_family_mismatch": false,
+          "routing_few_shot_ids": [
+            "FS-09",
+            "FS-10",
+            "FS-13",
+            "FS-14"
+          ],
+          "routing_final_family": "Q5",
+          "routing_llm_latency_ms": 492,
+          "routing_model": "qwen3-32b",
+          "routing_predicted_family": "Q5",
+          "routing_prompt_profile": "Q5",
+          "routing_prompt_tokens": 1192,
+          "routing_total_tokens": 1198,
+          "row_count": 6,
+          "rows": [
+            {
+              "complete_rate": "0.6236",
+              "ship_no": "H2601"
+            },
+            {
+              "complete_rate": "0.8924",
+              "ship_no": "H2604"
+            },
+            {
+              "complete_rate": "0.9472",
+              "ship_no": "H2605"
+            },
+            {
+              "complete_rate": "0.9727",
+              "ship_no": "H2606"
+            },
+            {
+              "complete_rate": "0.9776",
+              "ship_no": "H2602"
+            },
+            {
+              "complete_rate": "0.9779",
+              "ship_no": "H2603"
+            }
+          ]
+        },
+        "type": "sql_result"
+      },
+      "role": "produce",
+      "step": 16,
+      "timestamp": "2026-07-26T05:20:38.128529+00:00",
+      "token_usage": {
+        "completion_tokens": 127,
+        "prompt_tokens": 3735,
+        "total_tokens": 3862
+      },
+      "trace_id": "p7-e2e-030-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"H2601唯一低于0.88\"],\"expected_rows\":[{\"complete_rate\":\"0.6236\",\"ship_no\":\"H2601\"},{\"complete_rate\":\"0.8924\",\"ship_no\":\"H2604\"},{\"complete_rate\":\"0.9472\",\"ship_no\":\"H2605\"},{\"complete_rate\":\"0.9727\",\"ship_no\":\"H2606\"},{\"complete_rate\":\"0.9776\",\"ship_no\":\"H2602\"},{\"complete_rate\":\"0.9779\",\"ship_no\":\"H2603\"}],\"standard_sql\":\"SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC\"}",
+          "ref": "T-05"
+        }
+      ],
+      "latency_ms": 2101,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-022",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "作为一线班组长，你在2025-05月度总结中需要分析各船YCL完成率并列出排名，同时识别出存在异常的船舶。",
+          "difficulty": "basic",
+          "event": "product_ready",
+          "family": "Q5",
+          "guide_intro": "先确认YCL完成率的计算方式，再检查数据来源是否包含计划量与实际量，最后根据结果判断哪些船可能存在问题。",
+          "knowledge_point": "异常识别标准",
+          "llm_latency_ms": 2100,
+          "query_authority": {
+            "dimension_columns": [
+              "ship_no"
+            ],
+            "family": "Q5",
+            "filter_columns": [
+              "period_date",
+              "process_code"
+            ],
+            "group_by_columns": [
+              "ship_no"
+            ],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "ship_no",
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+            "template_id": "T-05",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "作为一线班组长，你在2025-05月度总结中需要分析各船YCL完成率并列出排名，同时识别出存在异常的船舶。",
+          "questions": [
+            {
+              "id": "T-05",
+              "prompt": "作为一线班组长，你在2025-05月度总结中需要分析各船YCL完成率并列出排名，同时识别出存在异常的船舶。"
+            }
+          ],
+          "responsibility_scope": [
+            "异常识别标准",
+            "完成率计算"
+          ],
+          "standard_stem": "查询2025-05各船YCL完成率排名并指出异常船",
+          "template_id": "T-05"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 22,
+      "student_profile_ref": "line_leader",
+      "timestamp": "2026-07-26T05:20:40.271704+00:00",
+      "token_usage": {
+        "completion_tokens": 86,
+        "prompt_tokens": 327,
+        "total_tokens": 413
+      },
+      "trace_id": "p7-e2e-030-a01"
+    },
+    {
+      "agent": "verification",
+      "claims": [
+        {
+          "kind": "data_conclusion",
+          "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-02结果：完成率为94.35%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-03结果：完成率为95.34%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-04结果：完成率为90.61%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-05结果：完成率为62.36%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-06结果：完成率为100.67%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-07结果：完成率为96.98%。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+          "ref": "p7-e2e-030-a01-sql-02",
+          "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-02结果：完成率为94.35%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+          "ref": "p7-e2e-030-a01-sql-02",
+          "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-03结果：完成率为95.34%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+          "ref": "p7-e2e-030-a01-sql-02",
+          "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-04结果：完成率为90.61%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+          "ref": "p7-e2e-030-a01-sql-02",
+          "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-05结果：完成率为62.36%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+          "ref": "p7-e2e-030-a01-sql-02",
+          "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-06结果：完成率为100.67%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label\",\"executed_sql\":\"SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200\",\"status\":\"completed\",\"row_count\":6,\"rows\":[{\"month_label\":\"2025-02\",\"complete_rate\":\"0.9435\"},{\"month_label\":\"2025-03\",\"complete_rate\":\"0.9534\"},{\"month_label\":\"2025-04\",\"complete_rate\":\"0.9061\"},{\"month_label\":\"2025-05\",\"complete_rate\":\"0.6236\"},{\"month_label\":\"2025-06\",\"complete_rate\":\"1.0067\"},{\"month_label\":\"2025-07\",\"complete_rate\":\"0.9698\"}]}",
+          "ref": "p7-e2e-030-a01-sql-02",
+          "supports_claim": "查询“查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动”的2025-07结果：完成率为96.98%。"
+        }
+      ],
+      "latency_ms": 4274,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-030",
+      "payload": {
+        "content": {
+          "columns": [
+            "month_label",
+            "complete_rate"
+          ],
+          "event": "query_completed",
+          "executed_sql": "SELECT DATE_FORMAT(period_date, '%Y-%m') AS month_label, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-02-01' AND period_date < '2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label LIMIT 200",
+          "family": "Q4",
+          "generated_sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+          "generation_cached_tokens": 0,
+          "generation_completion_tokens": 151,
+          "generation_llm_latency_ms": 3538,
+          "generation_model": "qwen3-235b-a22b",
+          "generation_prompt_tokens": 2672,
+          "generation_total_tokens": 2823,
+          "llm_latency_ms": 3955,
+          "query_elapsed_ms": 315,
+          "query_id": "p7-e2e-030-a01-sql-02",
+          "question": "查H2601YCL2-7月完成率序列，判断2025-05是否孤立波动",
+          "raw_llm_family": "Q4",
+          "routing_cached_tokens": 0,
+          "routing_completion_tokens": 6,
+          "routing_fallback": false,
+          "routing_fallback_reason": "none",
+          "routing_family_mismatch": false,
+          "routing_few_shot_ids": [
+            "FS-07",
+            "FS-08",
+            "FS-15",
+            "FS-11"
+          ],
+          "routing_final_family": "Q4",
+          "routing_llm_latency_ms": 417,
+          "routing_model": "qwen3-32b",
+          "routing_predicted_family": "Q4",
+          "routing_prompt_profile": "Q4",
+          "routing_prompt_tokens": 1200,
+          "routing_total_tokens": 1206,
+          "row_count": 6,
+          "rows": [
+            {
+              "complete_rate": "0.9435",
+              "month_label": "2025-02"
+            },
+            {
+              "complete_rate": "0.9534",
+              "month_label": "2025-03"
+            },
+            {
+              "complete_rate": "0.9061",
+              "month_label": "2025-04"
+            },
+            {
+              "complete_rate": "0.6236",
+              "month_label": "2025-05"
+            },
+            {
+              "complete_rate": "1.0067",
+              "month_label": "2025-06"
+            },
+            {
+              "complete_rate": "0.9698",
+              "month_label": "2025-07"
+            }
+          ]
+        },
+        "type": "sql_result"
+      },
+      "role": "produce",
+      "step": 30,
+      "timestamp": "2026-07-26T05:20:46.796211+00:00",
+      "token_usage": {
+        "completion_tokens": 157,
+        "prompt_tokens": 3872,
+        "total_tokens": 4029
+      },
+      "trace_id": "p7-e2e-030-a01"
+    },
+    {
+      "agent": "knowledge",
+      "claims": [
+        {
+          "kind": "fact",
+          "text": "完成率 = 实际量 ÷ 计划量。"
+        },
+        {
+          "kind": "fact",
+          "text": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+        },
+        {
+          "kind": "fact",
+          "text": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+        },
+        {
+          "kind": "fact",
+          "text": "两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。"
+        },
+        {
+          "kind": "fact",
+          "text": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+        },
+        {
+          "kind": "fact",
+          "text": "实际量（actual_qty）是车间实际报工的完成量。"
+        },
+        {
+          "kind": "fact",
+          "text": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "kb_chunk",
+          "quote": "**完成率 = 实际量 ÷ 计划量**。",
+          "ref": "KB-003",
+          "supports_claim": "完成率 = 实际量 ÷ 计划量。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "对月度或任意区间做聚合时，正确口径是**加权比值**：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。",
+          "ref": "KB-003",
+          "supports_claim": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。",
+          "ref": "KB-003",
+          "supports_claim": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。",
+          "ref": "KB-003",
+          "supports_claim": "两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "生产进度表中每条日级记录同时携带两个数量字段：**计划量（plan_qty）**是排产系统下达的当日应完成量；",
+          "ref": "KB-002",
+          "supports_claim": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "**实际量（actual_qty）**是车间实际报工的完成量。",
+          "ref": "KB-002",
+          "supports_claim": "实际量（actual_qty）是车间实际报工的完成量。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "两者是完全不同的口径，混用是本领域最高频的分析错误。",
+          "ref": "KB-002",
+          "supports_claim": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+        }
+      ],
+      "latency_ms": 14652,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-034",
+      "payload": {
+        "content": {
+          "coverage": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "difficulty": "basic",
+          "event": "product_ready",
+          "knowledge_point": "完成率计算",
+          "knowledge_point_match": true,
+          "knowledge_point_match_basis": {
+            "matched_knowledge_points": [
+              "完成率计算"
+            ],
+            "unmatched_knowledge_points": [
+              "计划量与实际量口径"
+            ]
+          },
+          "lecture_md": "## 前置基础\n\n生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；\n\n实际量（actual_qty）是车间实际报工的完成量。\n\n两者是完全不同的口径，混用是本领域最高频的分析错误。\n\n## 完成率计算微课讲义\n\n### 本节目标\n- 明确完成率的定义与计算公式\n- 掌握加权比值的正确计算方法\n- 能够区分计划量与实际量\n- 避免常见计算错误\n\n### 核心概念\n- **完成率**：实际完成量与计划量的比值，反映生产任务的完成情况。\n- **计划量（plan_qty）**：排产系统下达的当日应完成量。\n- **实际量（actual_qty）**：车间实际报工的完成量。\n\n### 计算步骤\n1. **确认计算区间**：选择需要计算的月份或任意时间段。\n   - 检查点：是否明确时间范围？\n2. **分别汇总计划量与实际量**：使用SUM函数对区间内的plan_qty和actual_qty求和。\n   - 检查点：是否分别汇总？\n3. **计算完成率**：完成率 = SUM(actual_qty) ÷ SUM(plan_qty)\n   - 检查点：是否使用加权比值？\n\n### 常见错误提醒\n- **错误1**：使用日完成率的平均值代替加权比值。\n  - 原因：大生产量日子的权重被忽略，结果被小量日拉偏。\n- **错误2**：混淆计划量与实际量。\n  - 原因：两者是不同口径，混用会导致误判生产情况。\n\n### 小结\n- 完成率 = 实际量 ÷ 计划量\n- 计算时必须使用加权比值（SUM口径）\n- 区分清楚计划量与实际量，避免混淆\n- 避免使用日完成率的平均值\n\n## 依据要点\n\n完成率 = 实际量 ÷ 计划量。\n\n对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。\n\n禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。\n\n两种算法在真实数据上结果不同，管理口径以加权比值为准——这与生产系统指标库中\"制作托盘完工率\"等率值指标的定义一致。",
+          "llm_latency_ms": 14649,
+          "quote_validation": {
+            "checked": 6,
+            "failed": 0,
+            "failures": [],
+            "m_id_leaks": 0,
+            "passed": 6,
+            "scaffold_leaks": 0
+          },
+          "responsibility_scope": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "retrieved_chunk_ids": [
+            "KB-003",
+            "KB-002"
+          ]
+        },
+        "type": "lecture_note"
+      },
+      "role": "produce",
+      "step": 34,
+      "student_profile_ref": "line_leader",
+      "timestamp": "2026-07-26T05:21:01.534925+00:00",
+      "token_usage": {
+        "completion_tokens": 861,
+        "prompt_tokens": 1316,
+        "total_tokens": 2177
+      },
+      "trace_id": "p7-e2e-030-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"完成率0.6236\"],\"expected_rows\":[{\"complete_rate\":\"0.6236\"}],\"standard_sql\":\"SELECT ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+          "ref": "T-02"
+        }
+      ],
+      "latency_ms": 2549,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-030-a01-038",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "你是涂装车间班组长，现需统计本班组负责的H26012025-05YCL项目在2025-05的月完成率，以便分析生产进度。",
+          "difficulty": "basic",
+          "event": "product_ready",
+          "family": "Q3",
+          "guide_intro": "请先确认计划量和实际量的统计口径是否一致，再根据公式分步计算完成率。",
+          "knowledge_point": "完成率计算",
+          "llm_latency_ms": 2549,
+          "query_authority": {
+            "dimension_columns": [],
+            "family": "Q3",
+            "filter_columns": [
+              "period_date",
+              "process_code",
+              "ship_no"
+            ],
+            "group_by_columns": [],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "计算H26012025-05YCL的月完成率",
+            "template_id": "T-02",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "你是涂装车间班组长，现需统计本班组负责的H26012025-05YCL项目在2025-05的月完成率，以便分析生产进度。",
+          "questions": [
+            {
+              "id": "T-02",
+              "prompt": "你是涂装车间班组长，现需统计本班组负责的H26012025-05YCL项目在2025-05的月完成率，以便分析生产进度。"
+            }
+          ],
+          "responsibility_scope": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "standard_stem": "计算H26012025-05YCL的月完成率",
+          "template_id": "T-02"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 38,
+      "student_profile_ref": "line_leader",
+      "timestamp": "2026-07-26T05:21:04.102059+00:00",
+      "token_usage": {
+        "completion_tokens": 88,
+        "prompt_tokens": 338,
+        "total_tokens": 426
+      },
+      "trace_id": "p7-e2e-030-a01"
+    }
+  ],
+  "format_version": "p7-learning-data-v1",
+  "input_profile": {
+    "case_parameters": {
+      "answers": {
+        "PT-1": "A",
+        "PT-2": "A",
+        "PT-3": "A",
+        "PT-4": "A",
+        "PT-5": "A"
+      },
+      "case_id": "E2E-030",
+      "expected_difficulty": "basic",
+      "knowledge_point": "异常识别标准",
+      "learning_path": "second_wrong_step_down",
+      "manual_review": true,
+      "misconception_id": "M-03",
+      "pretest_pattern": "A0",
+      "profile_id": "line_leader",
+      "task_template_id": "T-05"
+    },
+    "pretest_answers": {
+      "PT-1": "A",
+      "PT-2": "A",
+      "PT-3": "A",
+      "PT-4": "A",
+      "PT-5": "A"
+    },
+    "profile_definition": {
+      "background": "高职毕业一线班组长，现场熟，理论与数据双弱",
+      "difficulty_start": "basic",
+      "gaps_prior": [
+        "计划量与实际量口径",
+        "完成率计算",
+        "异常识别标准",
+        "责任单元定位"
+      ],
+      "lecture_style": "步骤化短句、每步带检查点、基础案例优先",
+      "profile_id": "line_leader",
+      "strengths": [
+        "现场操作经验"
+      ],
+      "title": "一线班组长（晋升培训）"
+    }
+  },
+  "official_view": "输入画像特征 + 多智能体协同决策中间数据 + 最终生成资源",
+  "provenance": {
+    "attempt": 1,
+    "case_id": "E2E-030",
+    "dataset_label": "当前正式 50×2 终验 Round 2",
+    "export_policy": "messages are copied from the frozen successful trace without editing",
+    "message_count": 45,
+    "terminal_state": "S10_DONE",
+    "trace_id": "p7-e2e-030-a01",
+    "trace_source": "当前正式 50×2 终验 Round 2"
+  },
+  "selection_rationale": "班组长连续答错后降维重学的完整链路"
+}

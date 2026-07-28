@@ -1,0 +1,24 @@
+{
+  "msg_id": "trace-invalid-a-001",
+  "trace_id": "trace-invalid-a",
+  "step": 1,
+  "agent": "knowledge",
+  "role": "produce",
+  "payload": {
+    "type": "lecture_note",
+    "content": {"title": "错误证据挂接样例"}
+  },
+  "evidence": [
+    {
+      "kind": "kb_chunk",
+      "ref": "kb-unrelated",
+      "quote": "这段证据讨论其他工序。",
+      "supports_claim": "其他工序的完成率正常。"
+    }
+  ],
+  "claims": [
+    {"text": "预处理工序完成率异常。", "kind": "fact"}
+  ],
+  "timestamp": "2026-07-14T10:00:00+08:00"
+}
+

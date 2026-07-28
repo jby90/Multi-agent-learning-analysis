@@ -1,0 +1,32 @@
+{
+  "msg_id": "trace-p1-007",
+  "trace_id": "trace-p1",
+  "step": 7,
+  "agent": "knowledge",
+  "role": "rebuttal",
+  "payload": {
+    "type": "rebuttal_case",
+    "content": {"response": "补充完整上下文后，请重新裁决。", "llm_latency_ms": 1110}
+  },
+  "evidence": [
+    {
+      "kind": "kb_chunk",
+      "ref": "kb-chunk-022-full",
+      "quote": "完整上下文明确区分计划量和实际量。",
+      "supports_claim": "该切片完整区分了计划量和实际量。"
+    }
+  ],
+  "claims": [
+    {"text": "该切片完整区分了计划量和实际量。", "kind": "fact"}
+  ],
+  "retry": {
+    "retry_count": 1,
+    "max_retries": 2,
+    "in_reply_to": "trace-p1-006",
+    "fallback": "human_review"
+  },
+  "model": "qwen3-235b-a22b",
+  "latency_ms": 1123,
+  "token_usage": {"prompt_tokens": 640, "completion_tokens": 142, "total_tokens": 782},
+  "timestamp": "2026-07-14T09:06:00+08:00"
+}

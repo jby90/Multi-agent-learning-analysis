@@ -1,0 +1,29 @@
+{
+  "msg_id": "trace-p1-005",
+  "trace_id": "trace-p1",
+  "step": 5,
+  "agent": "verification",
+  "role": "produce",
+  "payload": {
+    "type": "sql_result",
+    "content": {"query_id": "sql-run-005", "rows": [{"complete_rate": 0.6236}], "llm_latency_ms": 1460}
+  },
+  "evidence": [
+    {
+      "kind": "sql_query",
+      "ref": "sql-run-005",
+      "quote": "H2601, 2025-05, YCL, 0.6236",
+      "supports_claim": "H2601 在 2025 年 5 月的预处理完成率为 62.36%。"
+    }
+  ],
+  "claims": [
+    {
+      "text": "H2601 在 2025 年 5 月的预处理完成率为 62.36%。",
+      "kind": "data_conclusion"
+    }
+  ],
+  "model": "qwen3-235b-a22b",
+  "latency_ms": 1492,
+  "token_usage": {"prompt_tokens": 1810, "completion_tokens": 96, "total_tokens": 1906},
+  "timestamp": "2026-07-14T09:04:00+08:00"
+}

@@ -1,0 +1,19 @@
+{
+  "unsupported_literals": [
+    "成本",
+    "能耗",
+    "库存",
+    "薪资",
+    "天气",
+    "新闻",
+    "股价"
+  ],
+  "bounded_phrases": [
+    {
+      "prefix": "写",
+      "suffix": "诗",
+      "max_gap": 3
+    }
+  ],
+  "identity_message": "我是先行分段数据查询组件。当前配置只覆盖物量态势、部门工序统计和按船实际值。"
+}

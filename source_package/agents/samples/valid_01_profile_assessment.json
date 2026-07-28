@@ -1,0 +1,27 @@
+{
+  "msg_id": "trace-p1-001",
+  "trace_id": "trace-p1",
+  "step": 1,
+  "agent": "diagnosis",
+  "role": "produce",
+  "payload": {
+    "type": "profile_assessment",
+    "content": {"profile": "marine_student", "pretest_rate": 0.75, "llm_latency_ms": 710}
+  },
+  "evidence": [
+    {
+      "kind": "kb_chunk",
+      "ref": "profile-rubric-01",
+      "quote": "船舶工程画像已掌握基础工序常识。",
+      "supports_claim": "该学习者已掌握基础工序常识。"
+    }
+  ],
+  "claims": [
+    {"text": "该学习者已掌握基础工序常识。", "kind": "fact"}
+  ],
+  "student_profile_ref": "marine_student",
+  "model": "qwen3-32b",
+  "latency_ms": 722,
+  "token_usage": {"prompt_tokens": 420, "completion_tokens": 86, "total_tokens": 506},
+  "timestamp": "2026-07-14T09:00:00+08:00"
+}

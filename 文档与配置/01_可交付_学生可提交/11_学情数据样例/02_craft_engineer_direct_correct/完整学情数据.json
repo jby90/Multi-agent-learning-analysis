@@ -1,0 +1,2320 @@
+{
+  "collaboration_intermediate_data": {
+    "messages": [
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-001",
+        "payload": {
+          "content": {
+            "action": "session_start",
+            "state": "S0_INIT",
+            "student_profile_ref": "craft_engineer"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 1,
+        "student_profile_ref": "craft_engineer",
+        "timestamp": "2026-07-26T05:05:08.888219+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-002",
+        "payload": {
+          "content": {
+            "action": "profile_loaded",
+            "assessment_label": "岗前测评",
+            "knowledge_dimensions": [
+              "三道工序与传导关系",
+              "计划量与实际量口径",
+              "完成率计算",
+              "偏差率与风险等级",
+              "月度聚合方法",
+              "异常识别标准",
+              "传导时滞分析",
+              "异常衰减规律",
+              "责任单元定位",
+              "跨工序归因方法",
+              "工序枚举与命名边界",
+              "年总量、月计划数与当日实际数",
+              "完成率字段口径",
+              "准时率字段口径",
+              "预警数与严重预警数",
+              "物量态势总览及工序分布",
+              "部门与工序适用关系",
+              "年度计划、计划应累计与年度实际",
+              "年度统计总览及计划实际分布",
+              "每月计划、实际、对比与情况总览"
+            ],
+            "profile": {
+              "background": "船舶工艺背景转数字化岗，精通预处理/托盘工艺，不会数据工具",
+              "difficulty_start": "applied",
+              "gaps_prior": [
+                "完成率计算",
+                "月度聚合方法",
+                "跨工序归因方法"
+              ],
+              "lecture_style": "重讲数据工具与图表解读、少讲工艺常识",
+              "profile_id": "craft_engineer",
+              "strengths": [
+                "船舶工艺知识",
+                "现场生产经验"
+              ],
+              "title": "转岗数字化的工艺工程师"
+            },
+            "training_scene": "船厂数字化岗位培训"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 2,
+        "student_profile_ref": "craft_engineer",
+        "timestamp": "2026-07-26T05:05:08.892219+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-003",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-002",
+            "from_state": "S0_INIT",
+            "to_state": "S1_DIAGNOSIS",
+            "transition_id": "T01",
+            "trigger": "画像载入成功"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 3,
+        "timestamp": "2026-07-26T05:05:08.894218+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "diagnosis",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-004",
+        "payload": {
+          "content": {
+            "blind_spots": [
+              "完成率计算",
+              "月度聚合方法",
+              "跨工序归因方法",
+              "计划量与实际量口径"
+            ],
+            "diagnosis_narrative": "",
+            "difficulty": "applied",
+            "event": "diagnosis_ready",
+            "hit_misconceptions": [
+              "M-01"
+            ],
+            "llm_latency_ms": 0,
+            "narrative_fallback": true,
+            "narrative_fallback_reason": "llm_disabled",
+            "pretest_score": {
+              "correct": 4,
+              "rate": 0.8,
+              "total": 5
+            },
+            "profile_id": "craft_engineer",
+            "suggestions": []
+          },
+          "type": "profile_assessment"
+        },
+        "role": "produce",
+        "step": 4,
+        "student_profile_ref": "craft_engineer",
+        "timestamp": "2026-07-26T05:05:08.896220+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-005",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-004",
+            "from_state": "S1_DIAGNOSIS",
+            "to_state": "S2_KNOWLEDGE",
+            "transition_id": "T02",
+            "trigger": "学情报告过总线校验"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 5,
+        "timestamp": "2026-07-26T05:05:08.899125+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "knowledge",
+        "claims": [
+          {
+            "kind": "fact",
+            "text": "单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。"
+          },
+          {
+            "kind": "fact",
+            "text": "因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。"
+          },
+          {
+            "kind": "fact",
+            "text": "计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；"
+          },
+          {
+            "kind": "fact",
+            "text": "欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；"
+          },
+          {
+            "kind": "fact",
+            "text": "完成率＝实际量汇总÷计划量汇总；"
+          },
+          {
+            "kind": "fact",
+            "text": "偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。"
+          },
+          {
+            "kind": "fact",
+            "text": "完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。"
+          },
+          {
+            "kind": "fact",
+            "text": "若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。"
+          },
+          {
+            "kind": "fact",
+            "text": "偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。"
+          },
+          {
+            "kind": "fact",
+            "text": "完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。"
+          },
+          {
+            "kind": "fact",
+            "text": "两者可并列展示，但不作为两个独立问题重复汇报。"
+          },
+          {
+            "kind": "fact",
+            "text": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+          },
+          {
+            "kind": "fact",
+            "text": "偏差率低于项目高风险线：判高风险，当期优先核查；"
+          },
+          {
+            "kind": "fact",
+            "text": "偏差率落在中风险区间：判中风险，持续跟踪；"
+          },
+          {
+            "kind": "fact",
+            "text": "若项目规则规定连续两月中风险升级，则转入高风险管理；"
+          },
+          {
+            "kind": "fact",
+            "text": "偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。"
+          },
+          {
+            "kind": "fact",
+            "text": "若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；"
+          },
+          {
+            "kind": "fact",
+            "text": "不一致时标记为规则版本或数据质量问题，不静默覆盖。"
+          },
+          {
+            "kind": "fact",
+            "text": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "fact",
+            "text": "高风险不等于已造成下游停工或投料中断；"
+          },
+          {
+            "kind": "fact",
+            "text": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。"
+          },
+          {
+            "kind": "fact",
+            "text": "完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；"
+          },
+          {
+            "kind": "fact",
+            "text": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。"
+          },
+          {
+            "kind": "fact",
+            "text": "风险等级只描述“偏差有多大”，不回答“为什么偏差”。"
+          },
+          {
+            "kind": "fact",
+            "text": "在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。"
+          },
+          {
+            "kind": "speculation",
+            "text": "托盘化管理与中间产品导向是行业通用方法。"
+          },
+          {
+            "kind": "fact",
+            "text": "因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；"
+          },
+          {
+            "kind": "fact",
+            "text": "短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。"
+          },
+          {
+            "kind": "fact",
+            "text": "横向对比采用两层判断：先按风险等级识别优先核查工序；"
+          },
+          {
+            "kind": "fact",
+            "text": "因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；"
+          },
+          {
+            "kind": "fact",
+            "text": "不同工序数量口径或单位不同时，不直接比较欠产缺口大小。"
+          },
+          {
+            "kind": "fact",
+            "text": "不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。"
+          },
+          {
+            "kind": "fact",
+            "text": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+          },
+          {
+            "kind": "fact",
+            "text": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+          },
+          {
+            "kind": "fact",
+            "text": "判别方法：问\"应该做多少\"看计划量；"
+          },
+          {
+            "kind": "fact",
+            "text": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+          },
+          {
+            "kind": "fact",
+            "text": "完成率 = 实际量 ÷ 计划量。"
+          },
+          {
+            "kind": "fact",
+            "text": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+          },
+          {
+            "kind": "fact",
+            "text": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "kb_chunk",
+            "quote": "单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。",
+            "ref": "KB-003-A",
+            "supports_claim": "单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。",
+            "ref": "KB-003-A",
+            "supports_claim": "因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；",
+            "ref": "KB-003-A",
+            "supports_claim": "计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；",
+            "ref": "KB-003-A",
+            "supports_claim": "欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 完成率＝实际量汇总÷计划量汇总；",
+            "ref": "KB-003-A",
+            "supports_claim": "完成率＝实际量汇总÷计划量汇总；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。",
+            "ref": "KB-003-A",
+            "supports_claim": "偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。",
+            "ref": "KB-003-A",
+            "supports_claim": "完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。",
+            "ref": "KB-003-A",
+            "supports_claim": "若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。",
+            "ref": "KB-003-A",
+            "supports_claim": "偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。",
+            "ref": "KB-003-A",
+            "supports_claim": "完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "两者可并列展示，但不作为两个独立问题重复汇报。",
+            "ref": "KB-003-A",
+            "supports_claim": "两者可并列展示，但不作为两个独立问题重复汇报。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档：",
+            "ref": "KB-003-A",
+            "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率低于项目高风险线：判高风险，当期优先核查；",
+            "ref": "KB-003-A",
+            "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率落在中风险区间：判中风险，持续跟踪；",
+            "ref": "KB-003-A",
+            "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "若项目规则规定连续两月中风险升级，则转入高风险管理；",
+            "ref": "KB-003-A",
+            "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。",
+            "ref": "KB-003-A",
+            "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率低于项目高风险线：判高风险，当期优先核查；",
+            "ref": "KB-003-A",
+            "supports_claim": "偏差率低于项目高风险线：判高风险，当期优先核查；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率落在中风险区间：判中风险，持续跟踪；",
+            "ref": "KB-003-A",
+            "supports_claim": "偏差率落在中风险区间：判中风险，持续跟踪；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "若项目规则规定连续两月中风险升级，则转入高风险管理；",
+            "ref": "KB-003-A",
+            "supports_claim": "若项目规则规定连续两月中风险升级，则转入高风险管理；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。",
+            "ref": "KB-003-A",
+            "supports_claim": "偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；",
+            "ref": "KB-003-A",
+            "supports_claim": "若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "不一致时标记为规则版本或数据质量问题，不静默覆盖。",
+            "ref": "KB-003-A",
+            "supports_claim": "不一致时标记为规则版本或数据质量问题，不静默覆盖。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "风险等级用于确定核查优先级，不直接下原因结论：",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 高风险不等于已造成下游停工或投料中断；",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 风险等级只描述“偏差有多大”，不回答“为什么偏差”。",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 高风险不等于已造成下游停工或投料中断；",
+            "ref": "KB-003-A",
+            "supports_claim": "高风险不等于已造成下游停工或投料中断；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。",
+            "ref": "KB-003-A",
+            "supports_claim": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；",
+            "ref": "KB-003-A",
+            "supports_claim": "完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。",
+            "ref": "KB-003-A",
+            "supports_claim": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "- 风险等级只描述“偏差有多大”，不回答“为什么偏差”。",
+            "ref": "KB-003-A",
+            "supports_claim": "风险等级只描述“偏差有多大”，不回答“为什么偏差”。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。",
+            "ref": "KB-003-A",
+            "supports_claim": "在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；",
+            "ref": "KB-003-A",
+            "supports_claim": "因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。",
+            "ref": "KB-003-A",
+            "supports_claim": "短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "横向对比采用两层判断：先按风险等级识别优先核查工序；",
+            "ref": "KB-003-A",
+            "supports_claim": "横向对比采用两层判断：先按风险等级识别优先核查工序；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；",
+            "ref": "KB-003-A",
+            "supports_claim": "因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "不同工序数量口径或单位不同时，不直接比较欠产缺口大小。",
+            "ref": "KB-003-A",
+            "supports_claim": "不同工序数量口径或单位不同时，不直接比较欠产缺口大小。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。",
+            "ref": "KB-003-A",
+            "supports_claim": "不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "生产进度表中每条日级记录同时携带两个数量字段：**计划量（plan_qty）**是排产系统下达的当日应完成量；",
+            "ref": "KB-002",
+            "supports_claim": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "两者是完全不同的口径，混用是本领域最高频的分析错误。",
+            "ref": "KB-002",
+            "supports_claim": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "判别方法：问\"应该做多少\"看计划量；",
+            "ref": "KB-002",
+            "supports_claim": "判别方法：问\"应该做多少\"看计划量；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。",
+            "ref": "KB-002",
+            "supports_claim": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "**完成率 = 实际量 ÷ 计划量**。",
+            "ref": "KB-003",
+            "supports_claim": "完成率 = 实际量 ÷ 计划量。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "对月度或任意区间做聚合时，正确口径是**加权比值**：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。",
+            "ref": "KB-003",
+            "supports_claim": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。",
+            "ref": "KB-003",
+            "supports_claim": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+          }
+        ],
+        "latency_ms": 45329,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-012-a01-006",
+        "payload": {
+          "content": {
+            "coverage": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "difficulty": "applied",
+            "event": "product_ready",
+            "knowledge_point": "完成率计算",
+            "knowledge_point_match": true,
+            "knowledge_point_match_basis": {
+              "matched_knowledge_points": [
+                "完成率计算"
+              ],
+              "unmatched_knowledge_points": [
+                "计划量与实际量口径"
+              ]
+            },
+            "lecture_md": "## 前置基础\n\n生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；\n\n两者是完全不同的口径，混用是本领域最高频的分析错误。\n\n判别方法：问\"应该做多少\"看计划量；\n\n生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。\n\n完成率 = 实际量 ÷ 计划量。\n\n对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。\n\n禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。\n\n## 完成率计算与生产管理分析\n\n### 本节目标\n- 掌握计划量、实际量、完成率、欠产缺口与偏差率的计算方法。\n- 理解完成率与偏差率的关系及其在风险等级判读中的作用。\n- 能并列展示关键指标，识别优先核查工序。\n- 区分“风险判级”与“原因判断”，避免常见分析误区。\n\n### 核心概念\n- **计划量（plan_qty）**：排产系统下达的应完成数量。\n- **实际量（actual_qty）**：车间实际报工完成的数量。\n- **完成率**：实际量与计划量的比值，反映兑现程度。\n- **偏差率**：完成率与计划基准的偏离，便于风险判级。\n- **欠产缺口**：计划量与实际量之差的正值部分，表示未完成量。\n- **风险等级**：根据偏差率划分的优先核查级别。\n\n### 计算步骤\n1. 按船号、月份、工序等目标粒度分组，先汇总实际量与计划量。\n2. 计算关键指标：\n   - 计划差额 = 汇总计划量 - 汇总实际量\n   - 欠产缺口 = 取计划差额的正值（超计划对象为零）\n   - 完成率 = 汇总实际量 ÷ 汇总计划量\n   - 偏差率 = 完成率 - 1（或根据项目基准）\n3. 判读风险等级，按偏差率分为高、中、低三档。\n4. 并列展示所有指标，明确优先核查工序。\n\n### 方法要点\n- 完成率必须采用先汇总再相除的加权比值口径，不能直接平均。\n- 风险等级用于确定核查优先级，不直接下原因结论：\n- 不同工序数量口径或单位不同时，不直接比较欠产缺口大小。\n- 若计划量为零，应标记“无计划/不适用”，不强行计算。\n\n### 常见错误提醒\n1. 只报完成率，不报计划量、实际量和欠产缺口，无法判断影响规模。\n2. 将多个明细完成率直接平均，掩盖计划权重差异。\n3. 把风险判级当成原因判定，由高风险直接推出“产能不足”或“已影响下游”。\n4. 把完成率超过计划一律理解为正常或优秀，忽略计划基线和报工口径核查。\n5. 在计量单位或工作量权重不同的工序之间直接比较绝对数量。\n6. 把超计划对象的负计划差额当作欠产缺口计入，未对缺口取正。\n\n### 小结\n- 完成率与偏差率是同一进度事实的两种表达。\n- 风险等级用于识别优先核查对象，但不代表根本原因。\n- 数据分析需结合工序依赖、计划节点、齐套状态和缓冲量综合判断。\n\n## 依据要点\n\n单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。\n\n因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。\n\n计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；\n\n欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；\n\n完成率＝实际量汇总÷计划量汇总；\n\n偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。\n\n完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。\n\n若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。\n\n偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。\n\n完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。\n\n两者可并列展示，但不作为两个独立问题重复汇报。\n\n本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档：\n\n偏差率低于项目高风险线：判高风险，当期优先核查；\n\n偏差率落在中风险区间：判中风险，持续跟踪；\n\n若项目规则规定连续两月中风险升级，则转入高风险管理；\n\n偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。\n\n若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；\n\n不一致时标记为规则版本或数据质量问题，不静默覆盖。\n\n高风险不等于已造成下游停工或投料中断；\n\n是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。\n\n完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；\n\n在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。\n\n风险等级只描述“偏差有多大”，不回答“为什么偏差”。\n\n在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。\n\n因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；\n\n短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。\n\n横向对比采用两层判断：先按风险等级识别优先核查工序；\n\n因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；\n\n不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。",
+            "llm_latency_ms": 45325,
+            "quote_validation": {
+              "checked": 38,
+              "failed": 0,
+              "failures": [],
+              "m_id_leaks": 0,
+              "passed": 38,
+              "scaffold_leaks": 0
+            },
+            "responsibility_scope": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "retrieved_chunk_ids": [
+              "KB-003-A",
+              "KB-002",
+              "KB-003"
+            ]
+          },
+          "type": "lecture_note"
+        },
+        "role": "produce",
+        "step": 6,
+        "student_profile_ref": "craft_engineer",
+        "timestamp": "2026-07-26T05:05:54.231154+00:00",
+        "token_usage": {
+          "completion_tokens": 2903,
+          "prompt_tokens": 3175,
+          "total_tokens": 6078
+        },
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-007",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-006",
+            "from_state": "S2_KNOWLEDGE",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T03",
+            "trigger": "讲义产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 7,
+        "timestamp": "2026-07-26T05:05:58.224760+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "latency_ms": 3959,
+        "model": "qwen3-32b",
+        "msg_id": "p7-e2e-012-a01-008",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "llm_latency_ms": 3959,
+            "r02_checks": 41,
+            "r03_checked": false,
+            "reviewed_msg_id": "p7-e2e-012-a01-006",
+            "reviewed_payload_type": "lecture_note"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 8,
+        "timestamp": "2026-07-26T05:05:58.241761+00:00",
+        "token_usage": {
+          "completion_tokens": 122,
+          "prompt_tokens": 3188,
+          "total_tokens": 3310
+        },
+        "trace_id": "p7-e2e-012-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-009",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-008",
+            "from_state": "S5_REVIEW",
+            "to_state": "S3_TASK",
+            "transition_id": "T04",
+            "trigger": "verdict=approve ∧ 被审对象=讲义"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 9,
+        "timestamp": "2026-07-26T05:05:58.242763+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"YCL=0.6236，ZZTP=1.0249，AZTP=0.9149；YCL完成率最低\"],\"expected_rows\":[{\"complete_rate\":\"0.9149\",\"process_code\":\"AZTP\"},{\"complete_rate\":\"0.6236\",\"process_code\":\"YCL\"},{\"complete_rate\":\"1.0249\",\"process_code\":\"ZZTP\"}],\"standard_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\"}",
+            "ref": "T-02-A"
+          }
+        ],
+        "latency_ms": 2183,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-012-a01-010",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+            "difficulty": "applied",
+            "event": "product_ready",
+            "family": "Q6",
+            "guide_intro": "本次任务需要您结合数据工具，从数字化角度解读工序完成率，请注意关注数据的聚合方式和工序间的关联关系。",
+            "knowledge_point": "完成率计算",
+            "llm_latency_ms": 2182,
+            "query_authority": {
+              "dimension_columns": [
+                "process_code"
+              ],
+              "family": "Q6",
+              "filter_columns": [
+                "period_date",
+                "ship_no"
+              ],
+              "group_by_columns": [
+                "process_code"
+              ],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "process_code",
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询H26012025-05三道工序的完成率",
+              "template_id": "T-02-A",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+            "questions": [
+              {
+                "id": "T-02-A",
+                "prompt": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。"
+              }
+            ],
+            "responsibility_scope": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "standard_stem": "查询H26012025-05三道工序的完成率",
+            "template_id": "T-02-A"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 10,
+        "student_profile_ref": "craft_engineer",
+        "timestamp": "2026-07-26T05:06:00.429110+00:00",
+        "token_usage": {
+          "completion_tokens": 89,
+          "prompt_tokens": 335,
+          "total_tokens": 424
+        },
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-011",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-010",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 11,
+        "timestamp": "2026-07-26T05:06:00.431113+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-012",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-012-a01-010",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 12,
+        "timestamp": "2026-07-26T05:06:00.432123+00:00",
+        "trace_id": "p7-e2e-012-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-013",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-012",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 13,
+        "timestamp": "2026-07-26T05:06:00.433113+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-014",
+        "payload": {
+          "content": {
+            "event": "student_sql_submitted",
+            "question": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 14,
+        "timestamp": "2026-07-26T05:06:00.435114+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-015",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-014",
+            "from_state": "S7_STUDENT",
+            "to_state": "S4_VERIFY",
+            "transition_id": "T11",
+            "trigger": "学生提交SQL类操作"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 15,
+        "timestamp": "2026-07-26T05:06:00.436114+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "verification",
+        "claims": [
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的安装托盘结果：完成率为91.49%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的预处理结果：完成率为62.36%。"
+          },
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的制作托盘结果：完成率为102.49%。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\",\"executed_sql\":\"SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200\",\"status\":\"completed\",\"row_count\":3,\"rows\":[{\"process_code\":\"AZTP\",\"complete_rate\":\"0.9149\"},{\"process_code\":\"YCL\",\"complete_rate\":\"0.6236\"},{\"process_code\":\"ZZTP\",\"complete_rate\":\"1.0249\"}]}",
+            "ref": "p7-e2e-012-a01-sql-01",
+            "supports_claim": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的安装托盘结果：完成率为91.49%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\",\"executed_sql\":\"SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200\",\"status\":\"completed\",\"row_count\":3,\"rows\":[{\"process_code\":\"AZTP\",\"complete_rate\":\"0.9149\"},{\"process_code\":\"YCL\",\"complete_rate\":\"0.6236\"},{\"process_code\":\"ZZTP\",\"complete_rate\":\"1.0249\"}]}",
+            "ref": "p7-e2e-012-a01-sql-01",
+            "supports_claim": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的预处理结果：完成率为62.36%。"
+          },
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\",\"executed_sql\":\"SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200\",\"status\":\"completed\",\"row_count\":3,\"rows\":[{\"process_code\":\"AZTP\",\"complete_rate\":\"0.9149\"},{\"process_code\":\"YCL\",\"complete_rate\":\"0.6236\"},{\"process_code\":\"ZZTP\",\"complete_rate\":\"1.0249\"}]}",
+            "ref": "p7-e2e-012-a01-sql-01",
+            "supports_claim": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的制作托盘结果：完成率为102.49%。"
+          }
+        ],
+        "latency_ms": 3931,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-012-a01-016",
+        "payload": {
+          "content": {
+            "columns": [
+              "process_code",
+              "complete_rate"
+            ],
+            "event": "query_completed",
+            "executed_sql": "SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200",
+            "family": "Q6",
+            "generated_sql": "SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code",
+            "generation_cached_tokens": 0,
+            "generation_completion_tokens": 121,
+            "generation_llm_latency_ms": 3037,
+            "generation_model": "qwen3-235b-a22b",
+            "generation_prompt_tokens": 2639,
+            "generation_total_tokens": 2760,
+            "llm_latency_ms": 3453,
+            "query_authority": {
+              "dimension_columns": [
+                "process_code"
+              ],
+              "family": "Q6",
+              "filter_columns": [
+                "period_date",
+                "ship_no"
+              ],
+              "group_by_columns": [
+                "process_code"
+              ],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "process_code",
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询H26012025-05三道工序的完成率",
+              "template_id": "T-02-A",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "query_elapsed_ms": 474,
+            "query_id": "p7-e2e-012-a01-sql-01",
+            "question": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+            "raw_llm_family": "Q6",
+            "routing_cached_tokens": 0,
+            "routing_completion_tokens": 6,
+            "routing_fallback": false,
+            "routing_fallback_reason": "none",
+            "routing_family_mismatch": false,
+            "routing_few_shot_ids": [
+              "FS-11",
+              "FS-12",
+              "FS-07",
+              "FS-13"
+            ],
+            "routing_final_family": "Q6",
+            "routing_llm_latency_ms": 416,
+            "routing_model": "qwen3-32b",
+            "routing_predicted_family": "Q6",
+            "routing_prompt_profile": "Q6",
+            "routing_prompt_tokens": 1192,
+            "routing_total_tokens": 1198,
+            "row_count": 3,
+            "rows": [
+              {
+                "complete_rate": "0.9149",
+                "process_code": "AZTP"
+              },
+              {
+                "complete_rate": "0.6236",
+                "process_code": "YCL"
+              },
+              {
+                "complete_rate": "1.0249",
+                "process_code": "ZZTP"
+              }
+            ]
+          },
+          "type": "sql_result"
+        },
+        "role": "produce",
+        "step": 16,
+        "timestamp": "2026-07-26T05:06:04.368278+00:00",
+        "token_usage": {
+          "completion_tokens": 127,
+          "prompt_tokens": 3831,
+          "total_tokens": 3958
+        },
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-017",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-016",
+            "from_state": "S4_VERIFY",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T12",
+            "trigger": "查询执行完毕"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 17,
+        "timestamp": "2026-07-26T05:06:04.371275+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-018",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-012-a01-016",
+            "reviewed_payload_type": "sql_result"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 18,
+        "timestamp": "2026-07-26T05:06:04.375274+00:00",
+        "trace_id": "p7-e2e-012-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "none",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-019",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-018",
+            "from_state": "S5_REVIEW",
+            "to_state": "S9_PATH_UPDATE",
+            "transition_id": "T13",
+            "trigger": "approve ∧ 被审对象=数据结论"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 19,
+        "timestamp": "2026-07-26T05:06:04.377274+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-020",
+        "payload": {
+          "content": {
+            "case_id": "E2E-012",
+            "completed_nodes": [
+              "岗前测评",
+              "岗位微课",
+              "数据实操"
+            ],
+            "current_node": "结论判断",
+            "difficulty_action": "keep",
+            "event": "path_updated",
+            "has_next": true,
+            "learning_goal_achieved": false
+          },
+          "type": "learning_path_update"
+        },
+        "role": "system",
+        "step": 20,
+        "timestamp": "2026-07-26T05:06:04.379273+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-021",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-020",
+            "from_state": "S9_PATH_UPDATE",
+            "to_state": "S3_TASK",
+            "transition_id": "T19",
+            "trigger": "路径更新完毕 ∧ 还有下一环节"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 21,
+        "timestamp": "2026-07-26T05:06:04.382281+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"YCL=0.6236，ZZTP=1.0249，AZTP=0.9149；YCL完成率最低\"],\"expected_rows\":[{\"complete_rate\":\"0.9149\",\"process_code\":\"AZTP\"},{\"complete_rate\":\"0.6236\",\"process_code\":\"YCL\"},{\"complete_rate\":\"1.0249\",\"process_code\":\"ZZTP\"}],\"standard_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\"}",
+            "ref": "T-02-A"
+          }
+        ],
+        "latency_ms": 2056,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-012-a01-022",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "作为转岗数字化的工艺工程师，你需要分析H2601项目在2025-05期间三道关键工序的完成情况，请计算这三道工序的完成率。",
+            "difficulty": "applied",
+            "event": "product_ready",
+            "family": "Q6",
+            "guide_intro": "在分析完成率时，注意理解每道工序的数据来源和计算逻辑，确保准确反映生产进度。",
+            "knowledge_point": "完成率计算",
+            "llm_latency_ms": 2056,
+            "query_authority": {
+              "dimension_columns": [
+                "process_code"
+              ],
+              "family": "Q6",
+              "filter_columns": [
+                "period_date",
+                "ship_no"
+              ],
+              "group_by_columns": [
+                "process_code"
+              ],
+              "metric_columns": [
+                "complete_rate"
+              ],
+              "output_columns": [
+                "process_code",
+                "complete_rate"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询H26012025-05三道工序的完成率",
+              "template_id": "T-02-A",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "作为转岗数字化的工艺工程师，你需要分析H2601项目在2025-05期间三道关键工序的完成情况，请计算这三道工序的完成率。",
+            "questions": [
+              {
+                "id": "T-02-A",
+                "prompt": "作为转岗数字化的工艺工程师，你需要分析H2601项目在2025-05期间三道关键工序的完成情况，请计算这三道工序的完成率。"
+              }
+            ],
+            "responsibility_scope": [
+              "完成率计算",
+              "计划量与实际量口径"
+            ],
+            "standard_stem": "查询H26012025-05三道工序的完成率",
+            "template_id": "T-02-A"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 22,
+        "student_profile_ref": "craft_engineer",
+        "timestamp": "2026-07-26T05:06:06.440538+00:00",
+        "token_usage": {
+          "completion_tokens": 83,
+          "prompt_tokens": 335,
+          "total_tokens": 418
+        },
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-023",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-022",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 23,
+        "timestamp": "2026-07-26T05:06:06.442548+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-024",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-012-a01-022",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 24,
+        "timestamp": "2026-07-26T05:06:06.443549+00:00",
+        "trace_id": "p7-e2e-012-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-025",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-024",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 25,
+        "timestamp": "2026-07-26T05:06:06.445543+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-026",
+        "payload": {
+          "content": {
+            "answer_result": "correct",
+            "event": "student_answer",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 26,
+        "timestamp": "2026-07-26T05:06:06.446543+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-027",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-026",
+            "from_state": "S7_STUDENT",
+            "to_state": "S9_PATH_UPDATE",
+            "transition_id": "T14",
+            "trigger": "学生答题：正确"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 27,
+        "timestamp": "2026-07-26T05:06:06.447540+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-028",
+        "payload": {
+          "content": {
+            "case_id": "E2E-012",
+            "completed_nodes": [
+              "岗前测评",
+              "岗位微课",
+              "数据实操",
+              "直接作答"
+            ],
+            "current_node": "培养目标达成",
+            "difficulty_action": "keep",
+            "event": "path_updated",
+            "has_next": false,
+            "knowledge_point": "完成率计算",
+            "learning_goal_achieved": true,
+            "summary": "转岗数字化的工艺工程师完成完成率计算的真实评测链路，路径为direct_correct。"
+          },
+          "type": "learning_path_update"
+        },
+        "role": "system",
+        "step": 28,
+        "timestamp": "2026-07-26T05:06:06.448540+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-012-a01-029",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-012-a01-028",
+            "from_state": "S9_PATH_UPDATE",
+            "to_state": "S10_DONE",
+            "transition_id": "T20",
+            "trigger": "学习目标达成"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 29,
+        "timestamp": "2026-07-26T05:06:06.449540+00:00",
+        "trace_id": "p7-e2e-012-a01"
+      }
+    ],
+    "stage_message_ids": {
+      "counter_evidence": [],
+      "diagnosis": [
+        "p7-e2e-012-a01-004"
+      ],
+      "learning_path": [
+        "p7-e2e-012-a01-020",
+        "p7-e2e-012-a01-028"
+      ],
+      "lecture": [
+        "p7-e2e-012-a01-006"
+      ],
+      "lecture_evidence": [
+        "p7-e2e-012-a01-006"
+      ],
+      "probe_outcome": [],
+      "rebuttal": [],
+      "review": [
+        "p7-e2e-012-a01-008",
+        "p7-e2e-012-a01-012",
+        "p7-e2e-012-a01-018",
+        "p7-e2e-012-a01-024"
+      ],
+      "sql_execution": [
+        "p7-e2e-012-a01-016"
+      ],
+      "sql_submission": [
+        "p7-e2e-012-a01-014"
+      ],
+      "task": [
+        "p7-e2e-012-a01-010",
+        "p7-e2e-012-a01-022"
+      ]
+    }
+  },
+  "completeness_check": {
+    "accepted_final_resource_categories": {
+      "lecture": true,
+      "sql_result": true,
+      "task": true
+    },
+    "all_required_stages_present": true,
+    "raw_trace_verbatim": true,
+    "required_stages": [
+      "diagnosis",
+      "lecture",
+      "lecture_evidence",
+      "task",
+      "sql_submission",
+      "sql_execution",
+      "review",
+      "learning_path"
+    ],
+    "stage_presence": {
+      "counter_evidence": false,
+      "diagnosis": true,
+      "learning_path": true,
+      "lecture": true,
+      "lecture_evidence": true,
+      "probe_outcome": false,
+      "rebuttal": false,
+      "review": true,
+      "sql_execution": true,
+      "sql_submission": true,
+      "task": true
+    },
+    "terminal_s10": true
+  },
+  "final_learning_path": {
+    "agent": "system",
+    "claims": [],
+    "evidence": [],
+    "msg_id": "p7-e2e-012-a01-028",
+    "payload": {
+      "content": {
+        "case_id": "E2E-012",
+        "completed_nodes": [
+          "岗前测评",
+          "岗位微课",
+          "数据实操",
+          "直接作答"
+        ],
+        "current_node": "培养目标达成",
+        "difficulty_action": "keep",
+        "event": "path_updated",
+        "has_next": false,
+        "knowledge_point": "完成率计算",
+        "learning_goal_achieved": true,
+        "summary": "转岗数字化的工艺工程师完成完成率计算的真实评测链路，路径为direct_correct。"
+      },
+      "type": "learning_path_update"
+    },
+    "role": "system",
+    "step": 28,
+    "timestamp": "2026-07-26T05:06:06.448540+00:00",
+    "trace_id": "p7-e2e-012-a01"
+  },
+  "final_resources": [
+    {
+      "agent": "knowledge",
+      "claims": [
+        {
+          "kind": "fact",
+          "text": "单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。"
+        },
+        {
+          "kind": "fact",
+          "text": "因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。"
+        },
+        {
+          "kind": "fact",
+          "text": "计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；"
+        },
+        {
+          "kind": "fact",
+          "text": "欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；"
+        },
+        {
+          "kind": "fact",
+          "text": "完成率＝实际量汇总÷计划量汇总；"
+        },
+        {
+          "kind": "fact",
+          "text": "偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。"
+        },
+        {
+          "kind": "fact",
+          "text": "完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。"
+        },
+        {
+          "kind": "fact",
+          "text": "若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。"
+        },
+        {
+          "kind": "fact",
+          "text": "偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。"
+        },
+        {
+          "kind": "fact",
+          "text": "完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。"
+        },
+        {
+          "kind": "fact",
+          "text": "两者可并列展示，但不作为两个独立问题重复汇报。"
+        },
+        {
+          "kind": "fact",
+          "text": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+        },
+        {
+          "kind": "fact",
+          "text": "偏差率低于项目高风险线：判高风险，当期优先核查；"
+        },
+        {
+          "kind": "fact",
+          "text": "偏差率落在中风险区间：判中风险，持续跟踪；"
+        },
+        {
+          "kind": "fact",
+          "text": "若项目规则规定连续两月中风险升级，则转入高风险管理；"
+        },
+        {
+          "kind": "fact",
+          "text": "偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。"
+        },
+        {
+          "kind": "fact",
+          "text": "若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；"
+        },
+        {
+          "kind": "fact",
+          "text": "不一致时标记为规则版本或数据质量问题，不静默覆盖。"
+        },
+        {
+          "kind": "fact",
+          "text": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "fact",
+          "text": "高风险不等于已造成下游停工或投料中断；"
+        },
+        {
+          "kind": "fact",
+          "text": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。"
+        },
+        {
+          "kind": "fact",
+          "text": "完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；"
+        },
+        {
+          "kind": "fact",
+          "text": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。"
+        },
+        {
+          "kind": "fact",
+          "text": "风险等级只描述“偏差有多大”，不回答“为什么偏差”。"
+        },
+        {
+          "kind": "fact",
+          "text": "在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。"
+        },
+        {
+          "kind": "speculation",
+          "text": "托盘化管理与中间产品导向是行业通用方法。"
+        },
+        {
+          "kind": "fact",
+          "text": "因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；"
+        },
+        {
+          "kind": "fact",
+          "text": "短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。"
+        },
+        {
+          "kind": "fact",
+          "text": "横向对比采用两层判断：先按风险等级识别优先核查工序；"
+        },
+        {
+          "kind": "fact",
+          "text": "因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；"
+        },
+        {
+          "kind": "fact",
+          "text": "不同工序数量口径或单位不同时，不直接比较欠产缺口大小。"
+        },
+        {
+          "kind": "fact",
+          "text": "不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。"
+        },
+        {
+          "kind": "fact",
+          "text": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+        },
+        {
+          "kind": "fact",
+          "text": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+        },
+        {
+          "kind": "fact",
+          "text": "判别方法：问\"应该做多少\"看计划量；"
+        },
+        {
+          "kind": "fact",
+          "text": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+        },
+        {
+          "kind": "fact",
+          "text": "完成率 = 实际量 ÷ 计划量。"
+        },
+        {
+          "kind": "fact",
+          "text": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+        },
+        {
+          "kind": "fact",
+          "text": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "kb_chunk",
+          "quote": "单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。",
+          "ref": "KB-003-A",
+          "supports_claim": "单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。",
+          "ref": "KB-003-A",
+          "supports_claim": "因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；",
+          "ref": "KB-003-A",
+          "supports_claim": "计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；",
+          "ref": "KB-003-A",
+          "supports_claim": "欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 完成率＝实际量汇总÷计划量汇总；",
+          "ref": "KB-003-A",
+          "supports_claim": "完成率＝实际量汇总÷计划量汇总；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。",
+          "ref": "KB-003-A",
+          "supports_claim": "偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。",
+          "ref": "KB-003-A",
+          "supports_claim": "完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。",
+          "ref": "KB-003-A",
+          "supports_claim": "若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。",
+          "ref": "KB-003-A",
+          "supports_claim": "偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。",
+          "ref": "KB-003-A",
+          "supports_claim": "完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "两者可并列展示，但不作为两个独立问题重复汇报。",
+          "ref": "KB-003-A",
+          "supports_claim": "两者可并列展示，但不作为两个独立问题重复汇报。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档：",
+          "ref": "KB-003-A",
+          "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率低于项目高风险线：判高风险，当期优先核查；",
+          "ref": "KB-003-A",
+          "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率落在中风险区间：判中风险，持续跟踪；",
+          "ref": "KB-003-A",
+          "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "若项目规则规定连续两月中风险升级，则转入高风险管理；",
+          "ref": "KB-003-A",
+          "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。",
+          "ref": "KB-003-A",
+          "supports_claim": "本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率低于项目高风险线：判高风险，当期优先核查；",
+          "ref": "KB-003-A",
+          "supports_claim": "偏差率低于项目高风险线：判高风险，当期优先核查；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率落在中风险区间：判中风险，持续跟踪；",
+          "ref": "KB-003-A",
+          "supports_claim": "偏差率落在中风险区间：判中风险，持续跟踪；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "若项目规则规定连续两月中风险升级，则转入高风险管理；",
+          "ref": "KB-003-A",
+          "supports_claim": "若项目规则规定连续两月中风险升级，则转入高风险管理；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。",
+          "ref": "KB-003-A",
+          "supports_claim": "偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；",
+          "ref": "KB-003-A",
+          "supports_claim": "若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "不一致时标记为规则版本或数据质量问题，不静默覆盖。",
+          "ref": "KB-003-A",
+          "supports_claim": "不一致时标记为规则版本或数据质量问题，不静默覆盖。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "风险等级用于确定核查优先级，不直接下原因结论：",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 高风险不等于已造成下游停工或投料中断；",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 风险等级只描述“偏差有多大”，不回答“为什么偏差”。",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级用于确定核查优先级，不直接下原因结论："
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 高风险不等于已造成下游停工或投料中断；",
+          "ref": "KB-003-A",
+          "supports_claim": "高风险不等于已造成下游停工或投料中断；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。",
+          "ref": "KB-003-A",
+          "supports_claim": "是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；",
+          "ref": "KB-003-A",
+          "supports_claim": "完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。",
+          "ref": "KB-003-A",
+          "supports_claim": "在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "- 风险等级只描述“偏差有多大”，不回答“为什么偏差”。",
+          "ref": "KB-003-A",
+          "supports_claim": "风险等级只描述“偏差有多大”，不回答“为什么偏差”。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。",
+          "ref": "KB-003-A",
+          "supports_claim": "在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；",
+          "ref": "KB-003-A",
+          "supports_claim": "因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。",
+          "ref": "KB-003-A",
+          "supports_claim": "短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "横向对比采用两层判断：先按风险等级识别优先核查工序；",
+          "ref": "KB-003-A",
+          "supports_claim": "横向对比采用两层判断：先按风险等级识别优先核查工序；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；",
+          "ref": "KB-003-A",
+          "supports_claim": "因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "不同工序数量口径或单位不同时，不直接比较欠产缺口大小。",
+          "ref": "KB-003-A",
+          "supports_claim": "不同工序数量口径或单位不同时，不直接比较欠产缺口大小。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。",
+          "ref": "KB-003-A",
+          "supports_claim": "不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "生产进度表中每条日级记录同时携带两个数量字段：**计划量（plan_qty）**是排产系统下达的当日应完成量；",
+          "ref": "KB-002",
+          "supports_claim": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "两者是完全不同的口径，混用是本领域最高频的分析错误。",
+          "ref": "KB-002",
+          "supports_claim": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "判别方法：问\"应该做多少\"看计划量；",
+          "ref": "KB-002",
+          "supports_claim": "判别方法：问\"应该做多少\"看计划量；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。",
+          "ref": "KB-002",
+          "supports_claim": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "**完成率 = 实际量 ÷ 计划量**。",
+          "ref": "KB-003",
+          "supports_claim": "完成率 = 实际量 ÷ 计划量。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "对月度或任意区间做聚合时，正确口径是**加权比值**：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。",
+          "ref": "KB-003",
+          "supports_claim": "对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。",
+          "ref": "KB-003",
+          "supports_claim": "禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。"
+        }
+      ],
+      "latency_ms": 45329,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-012-a01-006",
+      "payload": {
+        "content": {
+          "coverage": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "difficulty": "applied",
+          "event": "product_ready",
+          "knowledge_point": "完成率计算",
+          "knowledge_point_match": true,
+          "knowledge_point_match_basis": {
+            "matched_knowledge_points": [
+              "完成率计算"
+            ],
+            "unmatched_knowledge_points": [
+              "计划量与实际量口径"
+            ]
+          },
+          "lecture_md": "## 前置基础\n\n生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；\n\n两者是完全不同的口径，混用是本领域最高频的分析错误。\n\n判别方法：问\"应该做多少\"看计划量；\n\n生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。\n\n完成率 = 实际量 ÷ 计划量。\n\n对月度或任意区间做聚合时，正确口径是加权比值：先分别汇总区间内的实际量与计划量，再相除，即 SUM(actual_qty)/SUM(plan_qty)。\n\n禁止用\"日完成率的平均值\"（AVG）代替：大生产量日子的权重理应更高，日均平均会被小量日拉偏。\n\n## 完成率计算与生产管理分析\n\n### 本节目标\n- 掌握计划量、实际量、完成率、欠产缺口与偏差率的计算方法。\n- 理解完成率与偏差率的关系及其在风险等级判读中的作用。\n- 能并列展示关键指标，识别优先核查工序。\n- 区分“风险判级”与“原因判断”，避免常见分析误区。\n\n### 核心概念\n- **计划量（plan_qty）**：排产系统下达的应完成数量。\n- **实际量（actual_qty）**：车间实际报工完成的数量。\n- **完成率**：实际量与计划量的比值，反映兑现程度。\n- **偏差率**：完成率与计划基准的偏离，便于风险判级。\n- **欠产缺口**：计划量与实际量之差的正值部分，表示未完成量。\n- **风险等级**：根据偏差率划分的优先核查级别。\n\n### 计算步骤\n1. 按船号、月份、工序等目标粒度分组，先汇总实际量与计划量。\n2. 计算关键指标：\n   - 计划差额 = 汇总计划量 - 汇总实际量\n   - 欠产缺口 = 取计划差额的正值（超计划对象为零）\n   - 完成率 = 汇总实际量 ÷ 汇总计划量\n   - 偏差率 = 完成率 - 1（或根据项目基准）\n3. 判读风险等级，按偏差率分为高、中、低三档。\n4. 并列展示所有指标，明确优先核查工序。\n\n### 方法要点\n- 完成率必须采用先汇总再相除的加权比值口径，不能直接平均。\n- 风险等级用于确定核查优先级，不直接下原因结论：\n- 不同工序数量口径或单位不同时，不直接比较欠产缺口大小。\n- 若计划量为零，应标记“无计划/不适用”，不强行计算。\n\n### 常见错误提醒\n1. 只报完成率，不报计划量、实际量和欠产缺口，无法判断影响规模。\n2. 将多个明细完成率直接平均，掩盖计划权重差异。\n3. 把风险判级当成原因判定，由高风险直接推出“产能不足”或“已影响下游”。\n4. 把完成率超过计划一律理解为正常或优秀，忽略计划基线和报工口径核查。\n5. 在计量单位或工作量权重不同的工序之间直接比较绝对数量。\n6. 把超计划对象的负计划差额当作欠产缺口计入，未对缺口取正。\n\n### 小结\n- 完成率与偏差率是同一进度事实的两种表达。\n- 风险等级用于识别优先核查对象，但不代表根本原因。\n- 数据分析需结合工序依赖、计划节点、齐套状态和缓冲量综合判断。\n\n## 依据要点\n\n单看完成率不足以支持生产管理判断：完成率相同，计划量大的对象欠量更多，影响也更大。\n\n因此应用层应把计划量、实际量、欠产缺口、完成率和偏差率并列展示，一次看清“计划多少、完成多少、还差多少、偏离多大”。\n\n计划差额＝计划量汇总−实际量汇总，正值为欠产，负值为超计划；\n\n欠产缺口＝计划差额取正（超计划对象的欠产缺口为零，负差额不计入缺口）；\n\n完成率＝实际量汇总÷计划量汇总；\n\n偏差率＝完成率相对计划基准的偏离（计划全部兑现时为零，不足为负、超出为正）。\n\n完成率必须采用先汇总、后相除的加权比值口径，不能把日完成率或明细完成率直接算术平均。\n\n若计划量汇总为零，应标记“无计划/不适用”，不强行算为零或满额。\n\n偏差率是完成率相对计划基准的偏离，负值表示实际低于计划，正值表示实际高于计划。\n\n完成率与偏差率是同一进度事实的两种表达：完成率直观看兑现程度，偏差率便于套用风险判级。\n\n两者可并列展示，但不作为两个独立问题重复汇报。\n\n本知识片沿用项目风险口径，用偏差率判级，分为高、中、低三档：\n\n偏差率低于项目高风险线：判高风险，当期优先核查；\n\n偏差率落在中风险区间：判中风险，持续跟踪；\n\n若项目规则规定连续两月中风险升级，则转入高风险管理；\n\n偏差率优于中风险区间：判低欠产风险，从完成率角度未见明显欠产。\n\n若数据表另存风险等级字段，应与偏差率推导结果核对，边界记录尤其要校验；\n\n不一致时标记为规则版本或数据质量问题，不静默覆盖。\n\n高风险不等于已造成下游停工或投料中断；\n\n是否影响下游，还需结合工序依赖、计划节点、齐套状态和缓冲量核验。\n\n完成率明显超过计划时，可能是提前完成，也可能与计划基线偏低、跨期报工或重复计量有关；\n\n在项目未设超计划风险线时，应作为核查提示，不自行判为高风险。\n\n风险等级只描述“偏差有多大”，不回答“为什么偏差”。\n\n在同一船号、同一月份内，可将各工序的计划量、实际量、欠产缺口、完成率、偏差率和风险等级并列展示。\n\n因此上游工序欠产不仅是自身进度问题，还可能沿配套链影响下游齐套；\n\n短板工序需优先核查，并据此触发对下游齐套的核查，而非直接断定下游已受影响。\n\n横向对比采用两层判断：先按风险等级识别优先核查工序；\n\n因此“风险等级最高的工序”更准确的表述是当月优先核查工序，不能仅凭完成率认定为全流程根因；\n\n不能据此写成“上游已导致下游异常”或“上游产能不足”——下游影响和根因需进入后续下钻分析。",
+          "llm_latency_ms": 45325,
+          "quote_validation": {
+            "checked": 38,
+            "failed": 0,
+            "failures": [],
+            "m_id_leaks": 0,
+            "passed": 38,
+            "scaffold_leaks": 0
+          },
+          "responsibility_scope": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "retrieved_chunk_ids": [
+            "KB-003-A",
+            "KB-002",
+            "KB-003"
+          ]
+        },
+        "type": "lecture_note"
+      },
+      "role": "produce",
+      "step": 6,
+      "student_profile_ref": "craft_engineer",
+      "timestamp": "2026-07-26T05:05:54.231154+00:00",
+      "token_usage": {
+        "completion_tokens": 2903,
+        "prompt_tokens": 3175,
+        "total_tokens": 6078
+      },
+      "trace_id": "p7-e2e-012-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"YCL=0.6236，ZZTP=1.0249，AZTP=0.9149；YCL完成率最低\"],\"expected_rows\":[{\"complete_rate\":\"0.9149\",\"process_code\":\"AZTP\"},{\"complete_rate\":\"0.6236\",\"process_code\":\"YCL\"},{\"complete_rate\":\"1.0249\",\"process_code\":\"ZZTP\"}],\"standard_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\"}",
+          "ref": "T-02-A"
+        }
+      ],
+      "latency_ms": 2183,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-012-a01-010",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+          "difficulty": "applied",
+          "event": "product_ready",
+          "family": "Q6",
+          "guide_intro": "本次任务需要您结合数据工具，从数字化角度解读工序完成率，请注意关注数据的聚合方式和工序间的关联关系。",
+          "knowledge_point": "完成率计算",
+          "llm_latency_ms": 2182,
+          "query_authority": {
+            "dimension_columns": [
+              "process_code"
+            ],
+            "family": "Q6",
+            "filter_columns": [
+              "period_date",
+              "ship_no"
+            ],
+            "group_by_columns": [
+              "process_code"
+            ],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "process_code",
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询H26012025-05三道工序的完成率",
+            "template_id": "T-02-A",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+          "questions": [
+            {
+              "id": "T-02-A",
+              "prompt": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。"
+            }
+          ],
+          "responsibility_scope": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "standard_stem": "查询H26012025-05三道工序的完成率",
+          "template_id": "T-02-A"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 10,
+      "student_profile_ref": "craft_engineer",
+      "timestamp": "2026-07-26T05:06:00.429110+00:00",
+      "token_usage": {
+        "completion_tokens": 89,
+        "prompt_tokens": 335,
+        "total_tokens": 424
+      },
+      "trace_id": "p7-e2e-012-a01"
+    },
+    {
+      "agent": "verification",
+      "claims": [
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的安装托盘结果：完成率为91.49%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的预处理结果：完成率为62.36%。"
+        },
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的制作托盘结果：完成率为102.49%。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\",\"executed_sql\":\"SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200\",\"status\":\"completed\",\"row_count\":3,\"rows\":[{\"process_code\":\"AZTP\",\"complete_rate\":\"0.9149\"},{\"process_code\":\"YCL\",\"complete_rate\":\"0.6236\"},{\"process_code\":\"ZZTP\",\"complete_rate\":\"1.0249\"}]}",
+          "ref": "p7-e2e-012-a01-sql-01",
+          "supports_claim": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的安装托盘结果：完成率为91.49%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\",\"executed_sql\":\"SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200\",\"status\":\"completed\",\"row_count\":3,\"rows\":[{\"process_code\":\"AZTP\",\"complete_rate\":\"0.9149\"},{\"process_code\":\"YCL\",\"complete_rate\":\"0.6236\"},{\"process_code\":\"ZZTP\",\"complete_rate\":\"1.0249\"}]}",
+          "ref": "p7-e2e-012-a01-sql-01",
+          "supports_claim": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的预处理结果：完成率为62.36%。"
+        },
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\",\"executed_sql\":\"SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200\",\"status\":\"completed\",\"row_count\":3,\"rows\":[{\"process_code\":\"AZTP\",\"complete_rate\":\"0.9149\"},{\"process_code\":\"YCL\",\"complete_rate\":\"0.6236\"},{\"process_code\":\"ZZTP\",\"complete_rate\":\"1.0249\"}]}",
+          "ref": "p7-e2e-012-a01-sql-01",
+          "supports_claim": "查询“作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。”的制作托盘结果：完成率为102.49%。"
+        }
+      ],
+      "latency_ms": 3931,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-012-a01-016",
+      "payload": {
+        "content": {
+          "columns": [
+            "process_code",
+            "complete_rate"
+          ],
+          "event": "query_completed",
+          "executed_sql": "SELECT process_code, ROUND(SUM(actual_qty) / SUM(plan_qty), 4) AS complete_rate FROM fact_production_progress WHERE ship_no = 'H2601' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' GROUP BY process_code ORDER BY process_code LIMIT 200",
+          "family": "Q6",
+          "generated_sql": "SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code",
+          "generation_cached_tokens": 0,
+          "generation_completion_tokens": 121,
+          "generation_llm_latency_ms": 3037,
+          "generation_model": "qwen3-235b-a22b",
+          "generation_prompt_tokens": 2639,
+          "generation_total_tokens": 2760,
+          "llm_latency_ms": 3453,
+          "query_authority": {
+            "dimension_columns": [
+              "process_code"
+            ],
+            "family": "Q6",
+            "filter_columns": [
+              "period_date",
+              "ship_no"
+            ],
+            "group_by_columns": [
+              "process_code"
+            ],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "process_code",
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询H26012025-05三道工序的完成率",
+            "template_id": "T-02-A",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "query_elapsed_ms": 474,
+          "query_id": "p7-e2e-012-a01-sql-01",
+          "question": "作为转岗数字化的工艺工程师，您需要分析H2601项目在2025-05期间三道关键工序的完成情况，请查询这三道工序的完成率。",
+          "raw_llm_family": "Q6",
+          "routing_cached_tokens": 0,
+          "routing_completion_tokens": 6,
+          "routing_fallback": false,
+          "routing_fallback_reason": "none",
+          "routing_family_mismatch": false,
+          "routing_few_shot_ids": [
+            "FS-11",
+            "FS-12",
+            "FS-07",
+            "FS-13"
+          ],
+          "routing_final_family": "Q6",
+          "routing_llm_latency_ms": 416,
+          "routing_model": "qwen3-32b",
+          "routing_predicted_family": "Q6",
+          "routing_prompt_profile": "Q6",
+          "routing_prompt_tokens": 1192,
+          "routing_total_tokens": 1198,
+          "row_count": 3,
+          "rows": [
+            {
+              "complete_rate": "0.9149",
+              "process_code": "AZTP"
+            },
+            {
+              "complete_rate": "0.6236",
+              "process_code": "YCL"
+            },
+            {
+              "complete_rate": "1.0249",
+              "process_code": "ZZTP"
+            }
+          ]
+        },
+        "type": "sql_result"
+      },
+      "role": "produce",
+      "step": 16,
+      "timestamp": "2026-07-26T05:06:04.368278+00:00",
+      "token_usage": {
+        "completion_tokens": 127,
+        "prompt_tokens": 3831,
+        "total_tokens": 3958
+      },
+      "trace_id": "p7-e2e-012-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"YCL=0.6236，ZZTP=1.0249，AZTP=0.9149；YCL完成率最低\"],\"expected_rows\":[{\"complete_rate\":\"0.9149\",\"process_code\":\"AZTP\"},{\"complete_rate\":\"0.6236\",\"process_code\":\"YCL\"},{\"complete_rate\":\"1.0249\",\"process_code\":\"ZZTP\"}],\"standard_sql\":\"SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code\"}",
+          "ref": "T-02-A"
+        }
+      ],
+      "latency_ms": 2056,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-012-a01-022",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "作为转岗数字化的工艺工程师，你需要分析H2601项目在2025-05期间三道关键工序的完成情况，请计算这三道工序的完成率。",
+          "difficulty": "applied",
+          "event": "product_ready",
+          "family": "Q6",
+          "guide_intro": "在分析完成率时，注意理解每道工序的数据来源和计算逻辑，确保准确反映生产进度。",
+          "knowledge_point": "完成率计算",
+          "llm_latency_ms": 2056,
+          "query_authority": {
+            "dimension_columns": [
+              "process_code"
+            ],
+            "family": "Q6",
+            "filter_columns": [
+              "period_date",
+              "ship_no"
+            ],
+            "group_by_columns": [
+              "process_code"
+            ],
+            "metric_columns": [
+              "complete_rate"
+            ],
+            "output_columns": [
+              "process_code",
+              "complete_rate"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询H26012025-05三道工序的完成率",
+            "template_id": "T-02-A",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "作为转岗数字化的工艺工程师，你需要分析H2601项目在2025-05期间三道关键工序的完成情况，请计算这三道工序的完成率。",
+          "questions": [
+            {
+              "id": "T-02-A",
+              "prompt": "作为转岗数字化的工艺工程师，你需要分析H2601项目在2025-05期间三道关键工序的完成情况，请计算这三道工序的完成率。"
+            }
+          ],
+          "responsibility_scope": [
+            "完成率计算",
+            "计划量与实际量口径"
+          ],
+          "standard_stem": "查询H26012025-05三道工序的完成率",
+          "template_id": "T-02-A"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 22,
+      "student_profile_ref": "craft_engineer",
+      "timestamp": "2026-07-26T05:06:06.440538+00:00",
+      "token_usage": {
+        "completion_tokens": 83,
+        "prompt_tokens": 335,
+        "total_tokens": 418
+      },
+      "trace_id": "p7-e2e-012-a01"
+    }
+  ],
+  "format_version": "p7-learning-data-v1",
+  "input_profile": {
+    "case_parameters": {
+      "answers": {
+        "PT-1": "A",
+        "PT-2": "B",
+        "PT-3": "C",
+        "PT-4": "B",
+        "PT-5": "C"
+      },
+      "case_id": "E2E-012",
+      "expected_difficulty": "applied",
+      "knowledge_point": "完成率计算",
+      "learning_path": "direct_correct",
+      "manual_review": true,
+      "misconception_id": null,
+      "pretest_pattern": "A4",
+      "profile_id": "craft_engineer",
+      "task_template_id": "T-02"
+    },
+    "pretest_answers": {
+      "PT-1": "A",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "profile_definition": {
+      "background": "船舶工艺背景转数字化岗，精通预处理/托盘工艺，不会数据工具",
+      "difficulty_start": "applied",
+      "gaps_prior": [
+        "完成率计算",
+        "月度聚合方法",
+        "跨工序归因方法"
+      ],
+      "lecture_style": "重讲数据工具与图表解读、少讲工艺常识",
+      "profile_id": "craft_engineer",
+      "strengths": [
+        "船舶工艺知识",
+        "现场生产经验"
+      ],
+      "title": "转岗数字化的工艺工程师"
+    }
+  },
+  "official_view": "输入画像特征 + 多智能体协同决策中间数据 + 最终生成资源",
+  "provenance": {
+    "attempt": 1,
+    "case_id": "E2E-012",
+    "dataset_label": "当前正式 50×2 终验 Round 2",
+    "export_policy": "messages are copied from the frozen successful trace without editing",
+    "message_count": 29,
+    "terminal_state": "S10_DONE",
+    "trace_id": "p7-e2e-012-a01",
+    "trace_source": "当前正式 50×2 终验 Round 2"
+  },
+  "selection_rationale": "工艺工程师首次答对并正常进阶的完整对照链路"
+}

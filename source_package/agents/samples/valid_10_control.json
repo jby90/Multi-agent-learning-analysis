@@ -1,0 +1,19 @@
+{
+  "msg_id": "trace-p1-010",
+  "trace_id": "trace-p1",
+  "step": 10,
+  "agent": "system",
+  "role": "system",
+  "payload": {
+    "type": "control",
+    "content": {"action": "continue", "next_state": "S3_TASK"}
+  },
+  "evidence": [],
+  "retry": {
+    "retry_count": 0,
+    "max_retries": 2,
+    "fallback": "degrade_to_template"
+  },
+  "timestamp": "2026-07-14T09:09:00+08:00"
+}
+

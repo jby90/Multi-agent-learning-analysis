@@ -1,0 +1,23 @@
+{
+  "msg_id": "trace-invalid-b-001",
+  "trace_id": "trace-invalid-b",
+  "step": 1,
+  "agent": "review",
+  "role": "verdict",
+  "payload": {
+    "type": "review_verdict",
+    "content": {"reviewed_msg_id": "trace-invalid-b-source"}
+  },
+  "evidence": [
+    {"kind": "review_rule", "ref": "R-02", "quote": "引用必须支持结论。"}
+  ],
+  "verdict": {
+    "decision": "reject",
+    "rule_hits": [
+      {"rule_id": "R-02", "reason": "引用不支持结论。"}
+    ],
+    "difficulty_action": "none"
+  },
+  "timestamp": "2026-07-14T10:01:00+08:00"
+}
+

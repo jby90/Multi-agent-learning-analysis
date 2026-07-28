@@ -1,0 +1,79 @@
+{
+  "verified_at": "2026-07-26T11:37:41.913069+00:00",
+  "frontend_url": "http://127.0.0.1:18080",
+  "session_id": "16902120a8c4422e88524d08380375b3",
+  "model_mode": "deterministic fixed stubs; no external model call",
+  "database_mode": "real MySQL container with packaged CSV import",
+  "final_state": "S10_DONE",
+  "image_tags": [
+    "multiagent-decision-database:1.1.0",
+    "multiagent-decision-backend:1.1.0",
+    "multiagent-decision-frontend:1.1.0"
+  ],
+  "post_import_verification": {
+    "verified_at": "2026-07-26T11:54:47.0172322Z",
+    "tar_imported_by_delivery_script": true,
+    "delivery_start_script_passed": true,
+    "frontend_http_passed": true,
+    "session_and_five_question_pretest_passed": true,
+    "database_row_counts": {
+      "dim_date": 181,
+      "dim_process": 3,
+      "dim_ship": 6,
+      "dim_workshop": 6,
+      "fact_production_progress": 6516
+    },
+    "reader_permission": "SELECT only"
+  },
+  "steps": [
+    {
+      "step": "create",
+      "state": "S1_DIAGNOSIS",
+      "awaiting": "pretest"
+    },
+    {
+      "step": "pretest_questions",
+      "count": 5
+    },
+    {
+      "step": "diagnosis",
+      "state": "S2_KNOWLEDGE"
+    },
+    {
+      "step": "lecture",
+      "state": "S3_TASK",
+      "artifact_type": "lecture_note"
+    },
+    {
+      "step": "initial_task",
+      "template_id": "T-01"
+    },
+    {
+      "step": "initial_answer",
+      "state": "S9_PATH_UPDATE"
+    },
+    {
+      "step": "follow_up_start",
+      "round": 1,
+      "prompt": "查询H26012025-05YCL的计划量与实际量"
+    },
+    {
+      "step": "follow_up_round_2",
+      "round": 2,
+      "prompt": "对照计划量与实际完成量，哪一个能说明已经做了多少？"
+    },
+    {
+      "step": "follow_up_mastered",
+      "interaction": "data_collision"
+    },
+    {
+      "step": "advanced_task",
+      "template_id": "T-01-A",
+      "message": "根据本次作答表现，已为你提高一档难度。"
+    },
+    {
+      "step": "complete",
+      "state": "S10_DONE"
+    }
+  ]
+}

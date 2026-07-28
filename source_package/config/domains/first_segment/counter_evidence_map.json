@@ -1,0 +1,16 @@
+{
+  "mappings": [
+    {
+      "misconception": "M-FS01",
+      "question_template": "分别读取{date}{process}的当日实际数和完成率，核对是否混成同一口径",
+      "family": "SEC003_STATUS_FINISH",
+      "standard_sqls": [
+        "SELECT ACTUALNUM, FINISHRATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'"
+      ],
+      "expected_results": [
+        [{"ACTUALNUM": "1369", "FINISHRATE": "0.4231"}]
+      ],
+      "expected_points": ["ACTUALNUM与FINISHRATE是两个独立存储字段"]
+    }
+  ]
+}

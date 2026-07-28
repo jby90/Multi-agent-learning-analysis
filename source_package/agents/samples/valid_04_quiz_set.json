@@ -1,0 +1,16 @@
+{
+  "msg_id": "trace-p1-004",
+  "trace_id": "trace-p1",
+  "step": 4,
+  "agent": "task",
+  "role": "produce",
+  "payload": {
+    "type": "quiz_set",
+    "content": {"questions": [{"id": "q1", "prompt": "哪个字段表示实际量？"}], "llm_latency_ms": 980}
+  },
+  "evidence": [],
+  "model": "qwen3-235b-a22b",
+  "latency_ms": 991,
+  "token_usage": {"prompt_tokens": 510, "completion_tokens": 122, "total_tokens": 632},
+  "timestamp": "2026-07-14T09:03:00+08:00"
+}

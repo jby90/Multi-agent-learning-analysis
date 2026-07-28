@@ -1,0 +1,36 @@
+{
+  "parameter_order": ["date", "process", "dept", "ship", "month"],
+  "template_ids": [
+    "T-FS01", "T-FS02", "T-FS03", "T-FS04", "T-FS05",
+    "T-FS06", "T-FS07", "T-FS08", "T-FS09", "T-FS10"
+  ],
+  "misconception_ids": ["M-FS01"],
+  "difficulties": ["basic"],
+  "metric_text_terms": {
+    "YEARNUM": ["年总量", "YEARNUM"],
+    "MONTHNUM": ["月计划数", "MONTHNUM"],
+    "ACTUALNUM": ["当日实际数", "月实际数", "ACTUALNUM"],
+    "FINISHRATE": ["完成率", "FINISHRATE"],
+    "ONTIMERATE": ["准时率", "按期率", "ONTIMERATE"],
+    "SERWARNNUM": ["严重预警数", "SERWARNNUM"],
+    "WARNNUM": ["预警数", "WARNNUM"],
+    "ndjhs": ["年度计划数", "ndjhs"],
+    "JHYLJ": ["年计划累计数", "JHYLJ"],
+    "NDSJS": ["年度实际数", "NDSJS"],
+    "PLANNUM": ["月计划数", "PLANNUM"],
+    "QG_NUM": ["切割实际值", "QG_NUM"],
+    "XZL_NUM": ["小组立实际值", "XZL_NUM"]
+  },
+  "diagnostic_template_ids": {
+    "工序与部门枚举": {"basic": "T-FS01"},
+    "物量数量口径": {"basic": "T-FS02"},
+    "完成率存储字段": {"basic": "T-FS03"},
+    "准时率存储字段": {"basic": "T-FS04"},
+    "预警字段与空值": {"basic": "T-FS05"},
+    "物量态势总览": {"basic": "T-FS06"},
+    "部门工序适用记录": {"basic": "T-FS07"},
+    "年度过程统计": {"basic": "T-FS08"},
+    "月度过程统计": {"basic": "T-FS09"},
+    "按船实际值": {"basic": "T-FS10"}
+  }
+}

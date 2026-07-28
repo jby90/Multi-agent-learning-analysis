@@ -1,0 +1,24 @@
+{
+  "currency": "CNY",
+  "unit": "per_million_tokens",
+  "region": "中国内地",
+  "retrieved_at": "2026-07-17",
+  "source_url": "https://help.aliyun.com/zh/model-studio/model-pricing",
+  "cache_policy": "standard_input_price_without_cache_discount",
+  "prices": {
+    "qwen3-32b": {
+      "input_cny_per_million": "2",
+      "output_cny_per_million": "8"
+    },
+    "qwen3-235b-a22b": {
+      "input_cny_per_million": "2",
+      "output_cny_per_million": "8"
+    }
+  },
+  "traditional_training_estimate": {
+    "development_hours": "8",
+    "hourly_cny": "200",
+    "learner_count": 50,
+    "note": "人工粗估，可编辑；按8小时课程开发、200元/小时、50名学员摊销，不是trace实测数据。"
+  }
+}

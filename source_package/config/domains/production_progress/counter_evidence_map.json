@@ -1,0 +1,100 @@
+{
+  "mappings": [
+    {
+      "misconception": "M-01",
+      "question_template": "分别查{ship}{month}{process}的计划量与实际完成量，对照你的结论",
+      "family": "Q2",
+      "standard_sqls": [
+        "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'"
+      ],
+      "expected_results": [
+        [
+          {"plan_qty": "1855.06", "actual_qty": "1156.87"}
+        ]
+      ],
+      "expected_points": ["计划1855.06≠实际1156.87，混用即结论反转"]
+    },
+    {
+      "misconception": "M-02",
+      "question_template": "查{process_down}在{month}与{month_down}的完成率对比",
+      "family": "Q4",
+      "standard_sqls": [
+        "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='ZZTP' AND period_date>='2025-05-01' AND period_date<'2025-07-01' GROUP BY month_label ORDER BY month_label"
+      ],
+      "expected_results": [
+        [
+          {"month_label": "2025-05", "complete_rate": "1.0249"},
+          {"month_label": "2025-06", "complete_rate": "0.7545"}
+        ]
+      ],
+      "expected_points": ["异常当月下游正常(1.0249)、次月才显现(0.7545)——时滞实证"]
+    },
+    {
+      "misconception": "M-03",
+      "question_template": "查{ship}{process}2-7月完成率序列，判断{month}是否孤立波动",
+      "family": "Q4",
+      "standard_sqls": [
+        "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' GROUP BY month_label ORDER BY month_label"
+      ],
+      "expected_results": [
+        [
+          {"month_label": "2025-02", "complete_rate": "0.9435"},
+          {"month_label": "2025-03", "complete_rate": "0.9534"},
+          {"month_label": "2025-04", "complete_rate": "0.9061"},
+          {"month_label": "2025-05", "complete_rate": "0.6236"},
+          {"month_label": "2025-06", "complete_rate": "1.0067"},
+          {"month_label": "2025-07", "complete_rate": "0.9698"}
+        ]
+      ],
+      "expected_points": ["2-4月/6-7月均正常，5月0.6236持续性异常非波动"]
+    },
+    {
+      "misconception": "M-04",
+      "question_template": "分别按船级与工序级聚合{month}完成率，对比差异",
+      "family": "Q5+Q3",
+      "standard_sqls": [
+        "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+        "SELECT ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'"
+      ],
+      "expected_results": [
+        [
+          {"ship_no": "H2601", "complete_rate": "0.6236"},
+          {"ship_no": "H2604", "complete_rate": "0.8924"},
+          {"ship_no": "H2605", "complete_rate": "0.9472"},
+          {"ship_no": "H2606", "complete_rate": "0.9727"},
+          {"ship_no": "H2602", "complete_rate": "0.9776"},
+          {"ship_no": "H2603", "complete_rate": "0.9779"}
+        ],
+        [
+          {"complete_rate": "0.6236"}
+        ]
+      ],
+      "expected_points": ["层级不同数字不同：船级排名vs单工序0.6236"]
+    },
+    {
+      "misconception": "M-05",
+      "question_template": "查{ship}异常链三工序各自完成率缺口",
+      "family": "Q6",
+      "standard_sqls": [
+        "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label"
+      ],
+      "expected_results": [
+        [
+          {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+          {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+          {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+          {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+          {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+          {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+          {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+          {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+          {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+          {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+          {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+          {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+        ]
+      ],
+      "expected_points": ["缺口=1-完成率：37.64%→24.55%→14.99%，本样本呈表观收窄；强度方向不预设，数值形态不等于传导或机制结论（口径=完成率缺口百分点，非绝对量）"]
+    }
+  ]
+}

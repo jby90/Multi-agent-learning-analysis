@@ -1,0 +1,238 @@
+{
+  "text2sql_output_schema": {
+    "type": "object",
+    "required": [
+      "sql",
+      "family",
+      "explanation"
+    ],
+    "properties": {
+      "sql": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "family": {
+        "enum": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4",
+          "Q5",
+          "Q6",
+          "Q7",
+          "OUT_OF_SCOPE"
+        ]
+      },
+      "explanation": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "router_output_schema": {
+    "type": "object",
+    "required": [
+      "family"
+    ],
+    "properties": {
+      "family": {
+        "enum": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4",
+          "Q5",
+          "Q6",
+          "Q7",
+          "OUT_OF_SCOPE"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "generation_preamble": "# 数据验证智能体 System Prompt\n\n你是船舶制造数据查询助手。只输出JSON：{\"sql\":\"单条SELECT或null\",\"family\":\"Q1-Q7或OUT_OF_SCOPE\",\"explanation\":\"一句话中文\"}。\n\n模式族定义：\nQ1：指定船号、工序和月份或区间，查询一个计划量、实际量、完成率或偏差率指标。\nQ2：指定船号、工序和月份或区间，同时比较计划量与实际量。\nQ3：指定船号、工序和月份或区间，查询完成率或相对计划的偏差率。\nQ4：同一船号的单一工序按月份形成时间序列。\nQ5：固定工序和时间范围，按船号横向分组比较或排名。\nQ6：同一船号同时对照两个及以上工序，包含跨工序时序、影响或异常链路。\nQ7：按责任单元或车间下钻、分组、比较完成率或高风险记录。\nOUT_OF_SCOPE：问题不属于以上七族。\n\n规则：\n1. 只允许单条SELECT；禁止写操作、多语句、注释。\n2. 只使用下方schema中的表和字段；日期口径见字段字典。\n3. 计划量=plan_qty，实际量=actual_qty，完成率=complete_rate；严禁混用（这是本领域最高频错误）。\n4. 月度/区间聚合的完成率一律用 ROUND(SUM(actual_qty)/SUM(plan_qty),4)，偏差率一律用 ROUND((SUM(actual_qty)-SUM(plan_qty))/SUM(plan_qty),4)；禁止对日级rate字段取AVG作为聚合率值。\n5. 族边界优先级（2026-07-14裁决回写）：涉及责任单元/车间的下钻、分组一律归Q7；Q4仅用于单工序月度序列，同时对照两种及以上工序时（即使含月份、区间或时序）归Q6。\n6. 排序契约（2026-07-14裁决回写）：Q7完成率对比/下钻按 complete_rate ASC（异常最重的排前）；Q7高风险计数按 high_risk_rows DESC；Q4按 month_label ASC；Q5按指标列 ASC。\n7. 问题不属于Q1-Q7任何模式族时，family填OUT_OF_SCOPE，sql填null。\n输出列契约：Q1单值→指标同名列(plan_qty/actual_qty/complete_rate/deviation_rate)；Q2→plan_qty,actual_qty；Q3→complete_rate或deviation_rate；Q4→month_label+指标列；Q5→ship_no+指标列；Q6→process_code(+month_label)+指标列；Q7→workshop_code+指标列或high_risk_rows。\n\nJSON Schema：\n```json\n{\"type\": \"object\", \"required\": [\"sql\", \"family\", \"explanation\"], \"properties\": {\"sql\": {\"type\": [\"string\", \"null\"]}, \"family\": {\"enum\": [\"Q1\", \"Q2\", \"Q3\", \"Q4\", \"Q5\", \"Q6\", \"Q7\", \"OUT_OF_SCOPE\"]}, \"explanation\": {\"type\": \"string\"}}, \"additionalProperties\": false}\n```",
+  "router_prompt": "# 数据问题族路由器\n\n你只判断用户问题属于哪个模式族，只返回包含family字段的JSON对象。\n\n模式族定义（只供路由）：\nQ1只查询计划量或实际量（一个数量）：指定船号、单一工序和月份或区间，只要求其中一个；同时要求两者时不属于Q1。\nQ2只处理明确的计划与实际双量对比：题面必须明确要求计划量与实际量对比、同时给出两个量或计划vs实际；仅出现计划、实际、完成等词不足以判Q2。\nQ3只查询完成率或偏差率（一个比率）：指定船号、单一工序和单月或整个区间，只要求该比率；不要求返回计划量与实际量。\nQ4：同一船号、单一工序、两个及以上月份，按月形成时间序列。\nQ5：固定工序和时间范围，按多个船号横向分组比较或排名。\nQ6：同一船号同时对照两个及以上工序，或按工序×月份形成交叉对照。\nQ7：按责任单元或车间下钻、分组、比较完成率或高风险记录。\nOUT_OF_SCOPE：问题不属于以上七族。\n\n判别优先级：只看用户要求返回的维度和指标，忽略岗位、原因与分析目的。\n硬规则（按顺序命中即停止）：\n1. 要求按责任单元或车间分组/下钻 → Q7。责任单元 → 必须Q7，不能Q3。\n2. 固定工序和时间，要求按各船或船号分组比较/排名 → Q5。各船 → 必须Q5，不能Q3。\n3. 同一船号要求返回两个及以上工序、三道工序、各工序或工序×月份 → Q6；即使只查询完成率也归Q6。三道工序 → 必须Q6，不能Q3。\n4. 同一船号最终只返回一个工序的两个及以上月份 → Q4。背景提到YCL、实际只查询ZZTP跨月 → Q4，不是Q6。\n5. 单船、单工序、单月或整段区间，只返回完成率或偏差率 → Q3。\n6. 单船、单工序、单月或整段区间，只返回一个计划量或实际量 → Q1。\n7. 单船、单工序、单月或整段区间，只有题面明确要求同时返回计划量与实际量，或明确要求计划与实际对比/计划vs实际 → Q2。\nQ2排除规则：只有题面明确要求同时给出计划量与实际量两者，或明确要求计划与实际对比/计划vs实际，才判Q2；只要一个数量 → Q1；只要比率（完成率/偏差率） → Q3；不得因题面含“计划”“实际”“完成”等词就默认Q2。\n8. 以上都不匹配 → OUT_OF_SCOPE。\n\n区分性示例（每个输入只对应紧随其后的输出）：\n输入：按工序顺序查询H2601在2025-05三道工序完成率 → Q6\n输出：{\"family\":\"Q6\"}\n输入：从H2601在2025-07的异常出发，制作工序×月份对照表 → Q6\n输出：{\"family\":\"Q6\"}\n输入：H2601的ZZTP在2025-05与2025-06的完成率变化 → Q4\n输出：{\"family\":\"Q4\"}\n输入：H2601的YCL在2025-02至2025-07的完成率走势 → Q4\n输出：{\"family\":\"Q4\"}\n输入：2025-05各船YCL完成率排名 → Q5\n输出：{\"family\":\"Q5\"}\n输入：H2601在2025-05的YCL完成率 → Q3\n输出：{\"family\":\"Q3\"}\n输入：H2601在2025-05的YCL计划量与实际量 → Q2\n输出：{\"family\":\"Q2\"}\n输入：H2601在2025-05的YCL实际量 → Q1\n输出：{\"family\":\"Q1\"}\n易混反例：以下题目都不是Q2。\n输入：只查询H2601在2025-05的YCL实际量（只要一个数量，不是Q2）\n输出：{\"family\":\"Q1\"}\n输入：只查询H2601在2025-05的YCL完成率（只要比率，不是Q2）\n输出：{\"family\":\"Q3\"}\n输入：查询H2601在2025-05的YCL、ZZTP和AZTP完成率（三工序，不是Q2）\n输出：{\"family\":\"Q6\"}\n输入：查询H2601的ZZTP在2025-05与2025-06的完成率变化（单工序跨月，不是Q2）\n输出：{\"family\":\"Q4\"}\n\n术语说明：Q5→Q7是单向邻接，仅表示两者都做横向分组；实际分类必须按上面的硬规则区分船号与责任单元。",
+  "full_profile": "FULL_15",
+  "out_of_scope_profile": "OUT_OF_SCOPE_MINI_7",
+  "full_examples_heading": "15个实库验证 Few-shot",
+  "routed_examples_heading": "路由 Few-shot",
+  "few_shots": [
+    {
+      "example_id": "FS-01",
+      "family": "Q1",
+      "question": "H2601五月预处理的计划量是多少",
+      "sql": "SELECT SUM(plan_qty) AS plan_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+      "verified_result": "plan_qty=1855.06"
+    },
+    {
+      "example_id": "FS-02",
+      "family": "Q1",
+      "question": "H2603六月制作托盘的实际完成量",
+      "sql": "SELECT SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2603' AND process_code='ZZTP' AND period_date>='2025-06-01' AND period_date<'2025-07-01'",
+      "verified_result": "actual_qty=1299.69"
+    },
+    {
+      "example_id": "FS-03",
+      "family": "Q2",
+      "question": "H2601五月预处理计划和实际完成各多少",
+      "sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+      "verified_result": "plan_qty=1855.06, actual_qty=1156.87"
+    },
+    {
+      "example_id": "FS-04",
+      "family": "Q2",
+      "question": "H2601六月制作托盘计划与实际对比",
+      "sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='ZZTP' AND period_date>='2025-06-01' AND period_date<'2025-07-01'",
+      "verified_result": "plan_qty=1336.12, actual_qty=1008.15"
+    },
+    {
+      "example_id": "FS-05",
+      "family": "Q3",
+      "question": "H2601五月预处理完成率",
+      "sql": "SELECT ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+      "verified_result": "complete_rate=0.6236"
+    },
+    {
+      "example_id": "FS-06",
+      "family": "Q3",
+      "question": "H2601七月安装托盘的平均偏差率",
+      "sql": "SELECT ROUND((SUM(actual_qty)-SUM(plan_qty))/SUM(plan_qty),4) AS deviation_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='AZTP' AND period_date>='2025-07-01' AND period_date<'2025-08-01'",
+      "verified_result": "deviation_rate=-0.1499"
+    },
+    {
+      "example_id": "FS-07",
+      "family": "Q4",
+      "question": "H2601预处理各月完成率走势",
+      "sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' GROUP BY month_label ORDER BY month_label",
+      "verified_result": "6行月序列，2025-02=0.9435, 2025-05=0.6236, 2025-06=1.0067"
+    },
+    {
+      "example_id": "FS-08",
+      "family": "Q4",
+      "question": "H2601制作托盘每月实际完成量",
+      "sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='ZZTP' GROUP BY month_label ORDER BY month_label",
+      "verified_result": "6行月序列"
+    },
+    {
+      "example_id": "FS-09",
+      "family": "Q5",
+      "question": "五月各船预处理完成率排名",
+      "sql": "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+      "verified_result": "6行排名，H2601最低0.6236"
+    },
+    {
+      "example_id": "FS-10",
+      "family": "Q5",
+      "question": "六月各船制作托盘完成率排名",
+      "sql": "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='ZZTP' AND period_date>='2025-06-01' AND period_date<'2025-07-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+      "verified_result": "6行排名，H2601最低0.7545"
+    },
+    {
+      "example_id": "FS-11",
+      "family": "Q6",
+      "question": "H2601预处理异常后托盘制作是否受影响",
+      "sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "verified_result": "YCL 2025-05=0.6236, ZZTP 2025-06=0.7545, AZTP 2025-07=0.8501"
+    },
+    {
+      "example_id": "FS-12",
+      "family": "Q6",
+      "question": "H2601七月三道工序完成率对照",
+      "sql": "SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-07-01' AND period_date<'2025-08-01' GROUP BY process_code ORDER BY process_code",
+      "verified_result": "3行对照，AZTP=0.8501最低"
+    },
+    {
+      "example_id": "FS-13",
+      "family": "Q7",
+      "question": "五月预处理异常集中在哪个责任单元",
+      "sql": "SELECT workshop_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY complete_rate ASC",
+      "verified_result": "WSA=0.9044, WSB=0.9045"
+    },
+    {
+      "example_id": "FS-14",
+      "family": "Q7",
+      "question": "五月预处理高风险记录按责任单元统计",
+      "sql": "SELECT workshop_code, COUNT(*) AS high_risk_rows FROM fact_production_progress WHERE process_code='YCL' AND risk_level='高' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY high_risk_rows DESC",
+      "verified_result": "WSA=31, WSB=31"
+    },
+    {
+      "example_id": "FS-15",
+      "family": "Q4",
+      "question": "H2601预处理3月到5月的完成率走势",
+      "sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-03-01' AND period_date<'2025-06-01' GROUP BY month_label ORDER BY month_label",
+      "verified_result": "3行：2025-03=0.9534, 2025-04=0.9061, 2025-05=0.6236"
+    }
+  ],
+  "routing_profiles": {
+    "FULL_15": [
+      "FS-01",
+      "FS-02",
+      "FS-03",
+      "FS-04",
+      "FS-05",
+      "FS-06",
+      "FS-07",
+      "FS-08",
+      "FS-09",
+      "FS-10",
+      "FS-11",
+      "FS-12",
+      "FS-13",
+      "FS-14",
+      "FS-15"
+    ],
+    "Q1": [
+      "FS-01",
+      "FS-02",
+      "FS-03",
+      "FS-05"
+    ],
+    "Q2": [
+      "FS-03",
+      "FS-04",
+      "FS-01",
+      "FS-05"
+    ],
+    "Q3": [
+      "FS-05",
+      "FS-06",
+      "FS-01",
+      "FS-03"
+    ],
+    "Q4": [
+      "FS-07",
+      "FS-08",
+      "FS-15",
+      "FS-11"
+    ],
+    "Q5": [
+      "FS-09",
+      "FS-10",
+      "FS-13",
+      "FS-14"
+    ],
+    "Q6": [
+      "FS-11",
+      "FS-12",
+      "FS-07",
+      "FS-13"
+    ],
+    "Q7": [
+      "FS-13",
+      "FS-14",
+      "FS-11",
+      "FS-12"
+    ],
+    "OUT_OF_SCOPE_MINI_7": [
+      "FS-02",
+      "FS-03",
+      "FS-06",
+      "FS-07",
+      "FS-09",
+      "FS-11",
+      "FS-14"
+    ]
+  }
+}

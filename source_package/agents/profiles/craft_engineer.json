@@ -1,0 +1,9 @@
+{
+  "profile_id": "craft_engineer",
+  "title": "转岗数字化的工艺工程师",
+  "background": "船舶工艺背景转数字化岗，精通预处理/托盘工艺，不会数据工具",
+  "strengths": ["船舶工艺知识", "现场生产经验"],
+  "gaps_prior": ["完成率计算", "月度聚合方法", "跨工序归因方法"],
+  "difficulty_start": "applied",
+  "lecture_style": "重讲数据工具与图表解读、少讲工艺常识"
+}

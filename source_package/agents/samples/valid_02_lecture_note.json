@@ -1,0 +1,26 @@
+{
+  "msg_id": "trace-p1-002",
+  "trace_id": "trace-p1",
+  "step": 2,
+  "agent": "knowledge",
+  "role": "produce",
+  "payload": {
+    "type": "lecture_note",
+    "content": {"title": "计划量与实际量", "sections": ["口径", "示例"], "llm_latency_ms": 1320}
+  },
+  "evidence": [
+    {
+      "kind": "kb_chunk",
+      "ref": "metric-definition-actual-qty",
+      "quote": "actual_qty 表示统计期内实际完成数量。",
+      "supports_claim": "actual_qty 表示统计期内实际完成数量。"
+    }
+  ],
+  "claims": [
+    {"text": "actual_qty 表示统计期内实际完成数量。", "kind": "fact"}
+  ],
+  "model": "qwen3-235b-a22b",
+  "latency_ms": 1335,
+  "token_usage": {"prompt_tokens": 810, "completion_tokens": 245, "total_tokens": 1055},
+  "timestamp": "2026-07-14T09:01:00+08:00"
+}

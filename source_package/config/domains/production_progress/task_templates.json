@@ -1,0 +1,641 @@
+{
+  "demo_parameters": {
+    "ship": "H2601",
+    "month": "2025-05",
+    "month_down": "2025-06",
+    "month2": "2025-07",
+    "process": "YCL",
+    "process_down": "ZZTP",
+    "process_last": "AZTP"
+  },
+  "templates": [
+    {
+      "template_id": "T-01",
+      "knowledge_point": "计划量与实际量口径",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{month}{process}的计划量与实际量",
+      "family": "Q2",
+      "standard_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+      "expected_rows": [
+        {"plan_qty": "1855.06", "actual_qty": "1156.87"}
+      ],
+      "expected_points": ["计划量1855.06，实际量1156.87"]
+    },
+    {
+      "template_id": "T-02",
+      "knowledge_point": "完成率计算",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "计算{ship}{month}{process}的月完成率",
+      "family": "Q3",
+      "standard_sql": "SELECT ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+      "expected_rows": [
+        {"complete_rate": "0.6236"}
+      ],
+      "expected_points": ["完成率0.6236"]
+    },
+    {
+      "template_id": "T-03",
+      "knowledge_point": "三道工序与传导关系",
+      "difficulty": "basic",
+      "payload_type": "practice_guide",
+      "question_template": "按工序顺序查询{ship}{month}三道工序完成率",
+      "guide_steps": [
+        "确认{ship}{month}的查询对象与统计月份，按生产流程梳理三道工序。",
+        "使用同一完成率口径查询各工序，并保留工序与完成率的对应关系。",
+        "按工序顺序核对结果，只标记需要继续观察的差异，不直接判断传导。"
+      ],
+      "completion_criteria": [
+        "已得到{ship}{month}三道工序可相互对照的完成率结果。",
+        "结论区分了数据差异与传导判断，未把先后顺序当作因果证据。"
+      ],
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code",
+      "expected_rows": [
+        {"process_code": "AZTP", "complete_rate": "0.9149"},
+        {"process_code": "YCL", "complete_rate": "0.6236"},
+        {"process_code": "ZZTP", "complete_rate": "1.0249"}
+      ],
+      "expected_points": ["YCL最低"]
+    },
+    {
+      "template_id": "T-04",
+      "knowledge_point": "月度聚合方法",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{process}在2025-03至2025-05期间的月完成率走势",
+      "family": "Q4",
+      "standard_sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-03-01' AND period_date<'2025-06-01' GROUP BY month_label ORDER BY month_label",
+      "expected_rows": [
+        {"month_label": "2025-03", "complete_rate": "0.9534"},
+        {"month_label": "2025-04", "complete_rate": "0.9061"},
+        {"month_label": "2025-05", "complete_rate": "0.6236"}
+      ],
+      "expected_points": ["3行月序列"]
+    },
+    {
+      "template_id": "T-05",
+      "knowledge_point": "异常识别标准",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{month}各船{process}完成率排名并指出异常船",
+      "family": "Q5",
+      "standard_sql": "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+      "expected_rows": [
+        {"ship_no": "H2601", "complete_rate": "0.6236"},
+        {"ship_no": "H2604", "complete_rate": "0.8924"},
+        {"ship_no": "H2605", "complete_rate": "0.9472"},
+        {"ship_no": "H2606", "complete_rate": "0.9727"},
+        {"ship_no": "H2602", "complete_rate": "0.9776"},
+        {"ship_no": "H2603", "complete_rate": "0.9779"}
+      ],
+      "expected_points": ["H2601唯一低于0.88"]
+    },
+    {
+      "template_id": "T-06",
+      "knowledge_point": "责任单元定位",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{month}{process}各责任单元完成率",
+      "family": "Q7",
+      "standard_sql": "SELECT workshop_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY complete_rate ASC",
+      "expected_rows": [
+        {"workshop_code": "WSA", "complete_rate": "0.9044"},
+        {"workshop_code": "WSB", "complete_rate": "0.9045"}
+      ],
+      "expected_points": ["WSA与WSB完成率约0.904"]
+    },
+    {
+      "template_id": "T-07",
+      "knowledge_point": "传导时滞分析",
+      "difficulty": "basic",
+      "payload_type": "practice_guide",
+      "question_template": "查询{ship}{process_down}在{month}至{month_down}的按月完成率，只返回月份和完成率，标出候选响应期",
+      "guide_steps": [
+        "确认{ship}{process_down}以及{month}至{month_down}的观察窗口。",
+        "按月份汇总完成率，逐月核对月份标签和统计口径。",
+        "依据时间先后标记候选响应期，并记录仍需补充的交接或齐套证据。"
+      ],
+      "completion_criteria": [
+        "已形成{process_down}在观察窗口内口径一致的按月完成率序列。",
+        "候选响应期与传导结论明确分开，未用时间相邻替代业务证据。"
+      ],
+      "family": "Q4",
+      "standard_sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='ZZTP' AND period_date>='2025-05-01' AND period_date<'2025-07-01' GROUP BY month_label ORDER BY month_label",
+      "expected_rows": [
+        {"month_label": "2025-05", "complete_rate": "1.0249"},
+        {"month_label": "2025-06", "complete_rate": "0.7545"}
+      ],
+      "expected_points": ["YCL 2025-05异常仅作为候选窗口的教学背景，不进入本题查询输出；2025-05 ZZTP=1.0249、2025-06=0.7545；2025-06是候选响应期，仅说明时序相容，不确认传导"]
+    },
+    {
+      "template_id": "T-08",
+      "knowledge_point": "跨工序归因方法",
+      "difficulty": "applied",
+      "payload_type": "practice_guide",
+      "question_template": "从{ship}{month2}{process_last}完成率偏低出发，核验2025-04至{month2}三道工序×月份表并构造候选归因证据链",
+      "guide_steps": [
+        "从{ship}{month2}{process_last}偏低这一现象界定待核验问题，不预设原因。",
+        "核对2025-04至{month2}三道工序按月份可比的完成率，并排查对象、期间与口径是否一致。",
+        "按时间顺序串联候选节点，同时列出支持与反驳每个连接的业务证据。",
+        "将数据可见现象、候选解释和仍缺少的验证材料分栏记录。"
+      ],
+      "completion_criteria": [
+        "已形成可复核的候选证据链，且每个连接都有支持项或待补项。",
+        "结论停留在候选归因层面，未把完成率先后直接写成传导、根因或责任。"
+      ],
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": [
+        "数据可见范围内，YCL 2025-05=0.6236是最早的时序候选，ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501构成后续候选节点；只到候选链，不确认传导",
+        "须补同一工作包/托盘/物量依赖路径、下游齐套暴露、源头与落点执行单元、共同因素及下游本地异常证据，才能收窄候选"
+      ]
+    },
+    {
+      "template_id": "T-09",
+      "knowledge_point": "跨工序归因方法",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "核验{ship}2025-04至{month2}三道工序×月份表，处理多候选与混合情形并输出传导证据×本地叠加两轴结论",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": [
+        "月度序列显示YCL 2025-05、ZZTP 2025-06、AZTP 2025-07时序相容，但缺少对象依赖、齐套暴露、交接及独立本地异常证据，候选源头不能唯一锁定",
+        "两轴结论：传导证据=证据不足；本地叠加=待核；不得把表观收窄当成传导成立或无本地问题的证明"
+      ]
+    },
+    {
+      "template_id": "T-10",
+      "knowledge_point": "偏差率与风险等级",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "计算{ship}{month2}{process_last}的月偏差率，并判断欠产或超产",
+      "family": "Q3",
+      "standard_sql": "SELECT ROUND((SUM(actual_qty)-SUM(plan_qty))/SUM(plan_qty),4) AS deviation_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='AZTP' AND period_date>='2025-07-01' AND period_date<'2025-08-01'",
+      "expected_rows": [
+        {"deviation_rate": "-0.1499"}
+      ],
+      "expected_points": ["偏差率-0.1499，负值表示欠产约14.99%"]
+    },
+    {
+      "template_id": "T-02-A",
+      "knowledge_point": "完成率计算",
+      "difficulty": "applied",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{month}三道工序的完成率",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY process_code ORDER BY process_code",
+      "expected_rows": [
+        {"process_code": "AZTP", "complete_rate": "0.9149"},
+        {"process_code": "YCL", "complete_rate": "0.6236"},
+        {"process_code": "ZZTP", "complete_rate": "1.0249"}
+      ],
+      "expected_points": ["YCL=0.6236，ZZTP=1.0249，AZTP=0.9149；YCL完成率最低"]
+    },
+    {
+      "template_id": "T-02-B",
+      "knowledge_point": "完成率计算",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "{ship}{month}{process}完成率异常，按责任单元下钻定位短板",
+      "family": "Q7",
+      "standard_sql": "SELECT workshop_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY complete_rate ASC",
+      "expected_rows": [
+        {"workshop_code": "WSB", "complete_rate": "0.6218"},
+        {"workshop_code": "WSA", "complete_rate": "0.6253"}
+      ],
+      "expected_points": ["WSB=0.6218，WSA=0.6253；WSB完成率最低"]
+    },
+    {
+      "template_id": "T-01-A",
+      "knowledge_point": "计划量与实际量口径",
+      "difficulty": "applied",
+      "payload_type": "quiz_set",
+      "question_template": "查询{month}各船{process}完成率，按船号比较计划兑现情况",
+      "family": "Q5",
+      "standard_sql": "SELECT ship_no, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY ship_no ORDER BY complete_rate ASC",
+      "expected_rows": [
+        {"ship_no": "H2601", "complete_rate": "0.6236"},
+        {"ship_no": "H2604", "complete_rate": "0.8924"},
+        {"ship_no": "H2605", "complete_rate": "0.9472"},
+        {"ship_no": "H2606", "complete_rate": "0.9727"},
+        {"ship_no": "H2602", "complete_rate": "0.9776"},
+        {"ship_no": "H2603", "complete_rate": "0.9779"}
+      ],
+      "expected_points": ["H2601完成率最低（0.6236）；各船仅在同月、同工序、同计量口径下可比较计划兑现情况"]
+    },
+    {
+      "template_id": "T-01-B",
+      "knowledge_point": "计划量与实际量口径",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "核验{ship}{month}{process}各责任单元完成率差异，并判断能否仅凭差异直接归因",
+      "family": "Q7",
+      "standard_sql": "SELECT workshop_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY complete_rate ASC",
+      "expected_rows": [
+        {"workshop_code": "WSB", "complete_rate": "0.6218"},
+        {"workshop_code": "WSA", "complete_rate": "0.6253"}
+      ],
+      "expected_points": ["WSB计划兑现率略低于WSA；仅凭计划-实际差异不能直接归因于产能、物资或责任"]
+    },
+    {
+      "template_id": "T-03-A",
+      "knowledge_point": "三道工序与传导关系",
+      "difficulty": "applied",
+      "payload_type": "practice_guide",
+      "question_template": "查询{ship}{month}至{month2}三道工序×月份完成率，筛查疑似传导",
+      "guide_steps": [
+        "确认{ship}以及{month}至{month2}的观察范围，统一三道工序的统计口径。",
+        "按工序和月份整理完成率，先检查缺失、重复与不可比记录。",
+        "依据时间顺序筛查候选节点，并为每个疑似连接记录需要补充的齐套或交接证据。"
+      ],
+      "completion_criteria": [
+        "已形成三道工序在观察范围内可对照的按月结果。",
+        "疑似传导仅作为待验证线索，未预设固定时滞或因果方向。"
+      ],
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": ["YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501呈上游领先的时间对应；仅支持疑似传导，不预设固定时滞，需结合齐套与交接证据核验"]
+    },
+    {
+      "template_id": "T-03-B",
+      "knowledge_point": "三道工序与传导关系",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "从{ship}{month2}{process_last}异常出发，回看2025-04至{month2}三道工序序列，定位候选源头并列出核查项",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": ["候选源头为YCL 2025-05（0.6236）；后续ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501呈时序对应；当前仅支持疑似传导，需排查共同原因、齐套/交接证据及下游本地异常，强度不预设衰减"]
+    },
+    {
+      "template_id": "T-10-A",
+      "knowledge_point": "偏差率与风险等级",
+      "difficulty": "applied",
+      "payload_type": "quiz_set",
+      "question_template": "按项目高风险偏差阈值（deviation_rate < -0.15）筛选{month}{process}记录，并比较各责任单元的风险分布",
+      "family": "Q7",
+      "standard_sql": "SELECT workshop_code, COUNT(*) AS high_risk_rows FROM fact_production_progress WHERE process_code='YCL' AND deviation_rate < -0.15 AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY high_risk_rows DESC, workshop_code ASC",
+      "expected_rows": [
+        {"workshop_code": "WSA", "high_risk_rows": "31"},
+        {"workshop_code": "WSB", "high_risk_rows": "31"}
+      ],
+      "expected_points": ["WSA与WSB各31条高风险记录；风险等级用于初筛，数量分布不能直接替代偏差排序或根因判断"]
+    },
+    {
+      "template_id": "T-10-B",
+      "knowledge_point": "偏差率与风险等级",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "回看{ship}2025-03至{month2}{process}月完成率序列，判断多期偏差趋势并列出风险复核项",
+      "family": "Q4",
+      "standard_sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-03-01' AND period_date<'2025-08-01' GROUP BY month_label ORDER BY month_label",
+      "expected_rows": [
+        {"month_label": "2025-03", "complete_rate": "0.9534"},
+        {"month_label": "2025-04", "complete_rate": "0.9061"},
+        {"month_label": "2025-05", "complete_rate": "0.6236"},
+        {"month_label": "2025-06", "complete_rate": "1.0067"},
+        {"month_label": "2025-07", "complete_rate": "0.9698"}
+      ],
+      "expected_points": ["2025-03至07完成率0.9534→0.9061→0.6236→1.0067→0.9698，对应偏差率-0.0466→-0.0939→-0.3764→0.0067→-0.0302；5月恶化、6月恢复、7月轻微回落，需结合延误、节点/浮时与齐套复核，不自行改写风险标签"]
+    },
+    {
+      "template_id": "T-04-A",
+      "knowledge_point": "月度聚合方法",
+      "difficulty": "applied",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{month}至{month2}三道工序×月份完成率，并核对比率聚合方法",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": ["形成9行工序×月份结果；每个完成率均先按工序、月份汇总actual_qty与plan_qty再相除，不对明细完成率求算术平均"]
+    },
+    {
+      "template_id": "T-04-B",
+      "knowledge_point": "月度聚合方法",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "核验{ship}2025-04至{month2}三道工序×月份完成率表的聚合口径，并判断能否把各工序原始数量直接上卷为整船总体进度",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": ["12行结果按工序×月份同口径聚合，期间使用period_date半开区间，比率先汇总分子分母再相除；跨工序原始数量需先核量纲与重复计量，整船总体进度应采用项目规定的标准工时、挣值或中间产品权重，当前结果不能直接上卷"]
+    },
+    {
+      "template_id": "T-05-A",
+      "knowledge_point": "异常识别标准",
+      "difficulty": "applied",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{process}在2025-02至{month2}期间的月完成率序列，综合判断异常信号并列出非生产性差异核查项",
+      "family": "Q4",
+      "standard_sql": "SELECT DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY month_label ORDER BY month_label",
+      "expected_rows": [
+        {"month_label": "2025-02", "complete_rate": "0.9435"},
+        {"month_label": "2025-03", "complete_rate": "0.9534"},
+        {"month_label": "2025-04", "complete_rate": "0.9061"},
+        {"month_label": "2025-05", "complete_rate": "0.6236"},
+        {"month_label": "2025-06", "complete_rate": "1.0067"},
+        {"month_label": "2025-07", "complete_rate": "0.9698"}
+      ],
+      "expected_points": ["2025-05=0.6236且相邻月份均在正常区间，说明它是显著单期偏低信号而非持续趋势；持续性不是异常成立的必要条件；定性前须排除口径、计划、报工、认定时点差异并补独立佐证，risk_level与完成率同源，不算独立佐证"]
+    },
+    {
+      "template_id": "T-05-B",
+      "knowledge_point": "异常识别标准",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "核验{ship}2025-04至{month2}三道工序×月份完成率，对各偏低信号分类处置状态并按顺序列出核查项",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": [
+        "YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501均是偏低信号；仅凭完成率序列证据不足，处置状态均为待核实信号",
+        "依次核验口径→计划→报工→独立佐证：前三项任一命中则归为非生产性差异，全部通过且偏差显著或持续才可上报；不得据时序直接推断原因、传导或责任"
+      ]
+    },
+    {
+      "template_id": "T-07-A",
+      "knowledge_point": "传导时滞分析",
+      "difficulty": "applied",
+      "payload_type": "practice_guide",
+      "question_template": "查询{ship}{month}至{month2}三道工序×月份完成率，在给定候选窗口内对齐上下游并输出候选响应期",
+      "guide_steps": [
+        "确认{ship}在{month}至{month2}的候选窗口，并统一上下游工序的比较口径。",
+        "按月份对齐三道工序结果，标出数据缺失、统计期间错位或对象不一致的节点。",
+        "在可比节点中识别候选响应期，并列出计划衔接、在制缓冲或历史交接的补证需求。"
+      ],
+      "completion_criteria": [
+        "已输出可追溯到对应月份和工序的候选响应期。",
+        "结果明确说明时序相容不等于传导成立，并保留待补证据清单。"
+      ],
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": ["YCL 2025-05=0.6236为候选源头期，ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501为候选响应期；相邻统计期只作候选查找起点，窗口须有计划衔接、在制缓冲或历史交接依据；仅说明时序相容，不确认传导"]
+    },
+    {
+      "template_id": "T-07-B",
+      "knowledge_point": "传导时滞分析",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "核验{ship}2025-04至{month2}三道工序×月份完成率，先排查伪时滞，再输出四态候选交由传导关系知识点核验",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": [
+        "YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501在给定窗口内时序相容；先核对同批工作包/托盘/物料，排除对象链错配，再核对完工、报工、质检、工作包关闭时点，排除统计时点错位",
+        "月度表未提供上述对象链与时点证据，当前四态候选为证据不足；若补证排除两类伪时滞，也只能列为疑似传导候选，最终由三道工序与传导关系结合依赖链、齐套、交接、共同因素及下游本地异常核验"
+      ]
+    },
+    {
+      "template_id": "T-06-A",
+      "knowledge_point": "责任单元定位",
+      "difficulty": "applied",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{month}{process}各责任单元完成率，定位候选落点并说明能否据此判断缺口集中或定责",
+      "family": "Q7",
+      "standard_sql": "SELECT workshop_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01' GROUP BY workshop_code ORDER BY complete_rate ASC, workshop_code",
+      "expected_rows": [
+        {"workshop_code": "WSB", "complete_rate": "0.6218"},
+        {"workshop_code": "WSA", "complete_rate": "0.6253"}
+      ],
+      "expected_points": [
+        "WSB=0.6218、WSA=0.6253，WSB完成率略低，只能定位候选异常落点",
+        "结果缺少各单元计划量与正向欠量，不能据此计算缺口贡献率、判断集中或分散，更不能认定责任"
+      ]
+    },
+    {
+      "template_id": "T-06-B",
+      "knowledge_point": "责任单元定位",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{month2}{process_last}各责任单元完成率，区分五类候选成因并列出补证项",
+      "family": "Q7",
+      "standard_sql": "SELECT workshop_code, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND process_code='AZTP' AND period_date>='2025-07-01' AND period_date<'2025-08-01' GROUP BY workshop_code ORDER BY complete_rate ASC, workshop_code",
+      "expected_rows": [
+        {"workshop_code": "WSF", "complete_rate": "0.8500"},
+        {"workshop_code": "WSE", "complete_rate": "0.8502"}
+      ],
+      "expected_points": [
+        "WSF=0.8500、WSE=0.8502，当前只能定位两个偏低执行单元，不能由细微差异判断源头或责任",
+        "本地执行约束、上游缺口暴露、共性条件、报工口径和混合情形均待核；须补同一对象依赖路径与齐套暴露、共同因素、报工时点及本地设备/质量/物资证据"
+      ]
+    },
+    {
+      "template_id": "T-08-DECAY",
+      "knowledge_point": "异常衰减规律",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}{month}{process}、{month_down}{process_down}、{month2}{process_last}的对齐完成率，说明观察到的强度形态且不预设方向",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND ((process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01') OR (process_code='ZZTP' AND period_date>='2025-06-01' AND period_date<'2025-07-01') OR (process_code='AZTP' AND period_date>='2025-07-01' AND period_date<'2025-08-01')) GROUP BY process_code, month_label ORDER BY month_label, process_code",
+      "expected_rows": [
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"}
+      ],
+      "expected_points": [
+        "对齐节点为YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501，对应欠产缺口为0.3764、0.2455、0.1499；本样本呈表观收窄，只描述数值形态，不推断传导或机制"
+      ]
+    },
+    {
+      "template_id": "T-08-DECAY-A",
+      "knowledge_point": "异常衰减规律",
+      "difficulty": "applied",
+      "payload_type": "practice_guide",
+      "question_template": "查询{ship}{month}至{month2}三道工序×月份完成率，对齐候选链并判定表观收窄、近似保持、扩大或不可比",
+      "guide_steps": [
+        "确认{ship}在{month}至{month2}的候选链范围，检查各节点是否属于可比对象和统计口径。",
+        "按候选顺序比较完成率缺口的变化方向，并把不可比节点单独标记。",
+        "在表观收窄、近似保持、扩大或不可比中选择描述，同时列出可能造成假形态的口径因素。"
+      ],
+      "completion_criteria": [
+        "已给出每个候选节点的可比性判断和对应的表观变化描述。",
+        "结论只描述数值形态，未把形态直接解释为缓冲、补偿、放大或传导机制。"
+      ],
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-05-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": [
+        "候选对齐链YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501的欠产缺口依次为0.3764、0.2455、0.1499，数值形态为表观收窄；其他同期节点仅作对照",
+        "月度表不能核实同一对象链、统计时点与计划版本；这些条件未对齐时应判不可比，不能由表观收窄直接解释缓冲吸收"
+      ]
+    },
+    {
+      "template_id": "T-08-DECAY-B",
+      "knowledge_point": "异常衰减规律",
+      "difficulty": "advanced",
+      "payload_type": "quiz_set",
+      "question_template": "核验{ship}2025-04至{month2}三道工序×月份完成率，排除假形态并输出强度形态与机制证据两轴结论",
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
+        {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
+        {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
+        {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
+        {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
+      ],
+      "expected_points": [
+        "候选对齐链的强度形态为表观收窄，但须先排除对象链错配、统计期间错位、聚合/单位/计划版本不一致和计划基数效应",
+        "两轴结论：强度形态=表观收窄（待排除假形态）；机制证据=证据不足；月度表不能判缓冲、补偿、放大、本地叠加或传导成立"
+      ]
+    },
+    {
+      "template_id": "T-08-ATTR",
+      "knowledge_point": "跨工序归因方法",
+      "difficulty": "basic",
+      "payload_type": "practice_guide",
+      "question_template": "从{ship}{month2}{process_last}偏低出发，查询{month}{process}、{month_down}{process_down}、{month2}{process_last}候选链并编排归因证据与缺口",
+      "guide_steps": [
+        "从{ship}{month2}{process_last}偏低这一现象出发，明确本次只编排候选证据，不预设根因。",
+        "依次核对{month}{process}、{month_down}{process_down}和{month2}{process_last}的可比口径与时间关系。",
+        "为候选链的每个连接分别记录数据现象、支持证据、反驳证据和缺失材料。",
+        "将业务机制判断与责任判断分开，列出下一步需要核实的依赖、齐套和交接信息。"
+      ],
+      "completion_criteria": [
+        "已形成覆盖三个候选节点的证据与缺口清单。",
+        "结论未把时序对应直接写成根因、传导或责任，并明确了后续核验方向。"
+      ],
+      "family": "Q6",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND ((process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01') OR (process_code='ZZTP' AND period_date>='2025-06-01' AND period_date<'2025-07-01') OR (process_code='AZTP' AND period_date>='2025-07-01' AND period_date<'2025-08-01')) GROUP BY process_code, month_label ORDER BY month_label, process_code",
+      "expected_rows": [
+        {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
+        {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
+        {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"}
+      ],
+      "expected_points": [
+        "数据可见的时序候选链为YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501；尚未核实同一对象依赖路径、齐套暴露与交接，不能锁定根因或责任"
+      ]
+    }
+  ]
+}

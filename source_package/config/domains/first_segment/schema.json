@@ -1,0 +1,55 @@
+{
+  "tables": {
+    "dwr_mps_ppdatalast_wide": [
+      "OID",
+      "SHIPNO",
+      "M_YJTYPE",
+      "QG_NUM",
+      "XZL_NUM",
+      "DZLST_NUM",
+      "DZLXT_NUM",
+      "JGBY_NUM",
+      "WZX_NUM",
+      "TZKG_NUM",
+      "TZWG_NUM",
+      "TARGET",
+      "PREVIEW",
+      "RECORDDATE"
+    ],
+    "dwr_mps_ppdataprocess_wide": [
+      "oid",
+      "TARGETTYPE",
+      "STATISTICSITEM",
+      "DEPT",
+      "PROCESS",
+      "ndjhs",
+      "JHYLJ",
+      "NDSJS",
+      "TRENDMONTH",
+      "PLANNUM",
+      "ACTUALNUM",
+      "TRENDYEAR",
+      "RECORDDATE"
+    ],
+    "dwr_mps_ttyear_wide": [
+      "OID",
+      "TARTYPE",
+      "SHIPNO",
+      "PROCESS",
+      "YEARNUM",
+      "MONTHNUM",
+      "ACTUALNUM",
+      "FINISHRATE",
+      "ONTIMERATE",
+      "SERWARNNUM",
+      "WARNNUM",
+      "CURYEAR",
+      "RECORDDATE",
+      "FINISHNUM",
+      "ONTIMENUM",
+      "PLANNUM"
+    ]
+  },
+  "prompt_ddl": "CREATE TABLE dwr_mps_ppdatalast_wide (\n  OID VARCHAR(64), SHIPNO VARCHAR(16), M_YJTYPE VARCHAR(16),\n  QG_NUM DECIMAL(18,4), XZL_NUM DECIMAL(18,4), DZLST_NUM DECIMAL(18,4), DZLXT_NUM DECIMAL(18,4),\n  JGBY_NUM DECIMAL(18,4), WZX_NUM DECIMAL(18,4), TZKG_NUM DECIMAL(18,4), TZWG_NUM DECIMAL(18,4),\n  TARGET DECIMAL(18,4), PREVIEW DECIMAL(18,4), RECORDDATE DATE\n);\n\nCREATE TABLE dwr_mps_ppdataprocess_wide (\n  oid VARCHAR(128), TARGETTYPE VARCHAR(16), STATISTICSITEM VARCHAR(32), DEPT VARCHAR(32), PROCESS VARCHAR(32),\n  ndjhs DECIMAL(18,4), JHYLJ DECIMAL(18,4), NDSJS DECIMAL(18,4), TRENDMONTH INT,\n  PLANNUM DECIMAL(18,4), ACTUALNUM DECIMAL(18,4), TRENDYEAR INT, RECORDDATE DATE\n);\n\nCREATE TABLE dwr_mps_ttyear_wide (\n  OID VARCHAR(64), TARTYPE VARCHAR(16), SHIPNO VARCHAR(16), PROCESS VARCHAR(32),\n  YEARNUM DECIMAL(18,4), MONTHNUM DECIMAL(18,4), ACTUALNUM DECIMAL(18,4),\n  FINISHRATE DECIMAL(18,8), ONTIMERATE DECIMAL(18,8), SERWARNNUM DECIMAL(18,4), WARNNUM DECIMAL(18,4),\n  CURYEAR INT, RECORDDATE DATE, FINISHNUM DECIMAL(18,4), ONTIMENUM DECIMAL(18,4), PLANNUM DECIMAL(18,4)\n);",
+  "dictionary_rows": "## dwr_mps_ttyear_wide（preprocess_status.md）\n| 字段 | 已声明含义 | 必需筛选 |\n| PROCESS | 工序 | RECORDDATE、TARTYPE='物量态势' |\n| YEARNUM | 年总量 | PROCESS |\n| MONTHNUM | 月计划数 | PROCESS |\n| ACTUALNUM | 当日实际数 | PROCESS |\n| FINISHRATE | 完成率（存储字段，未声明计算式） | PROCESS |\n| ONTIMERATE | 准时率（存储字段，未声明计算式） | PROCESS |\n| SERWARNNUM | 严重预警数 | PROCESS |\n| WARNNUM | 预警数 | PROCESS |\n| FINISHNUM | 完成数 | PROCESS |\n| ONTIMENUM | 准时数 | PROCESS |\n| PLANNUM | 计划数 | PROCESS |\n## dwr_mps_ppdataprocess_wide（preprocess_process.md）\n| 字段 | 已声明含义 | 必需筛选 |\n| ndjhs | 年度计划数 | RECORDDATE、TARGETTYPE='年度统计'、DEPT、PROCESS |\n| JHYLJ | 年计划累计数 | 同上 |\n| NDSJS | 年度实际数 | 同上 |\n| TRENDYEAR | 年份 | RECORDDATE、TARGETTYPE='每月情况'、DEPT、PROCESS |\n| TRENDMONTH | 月份 | 同上 |\n| PLANNUM | 月计划数 | 同上 |\n| ACTUALNUM | 月实际数 | 同上 |\n## dwr_mps_ppdatalast_wide（比赛脱敏数据口径）\n| 字段 | 已核含义 | 必需筛选 |\n| QG_NUM | 切割实际值 | RECORDDATE、SHIPNO、M_YJTYPE='实际' |\n| XZL_NUM | 小组立实际值 | RECORDDATE、SHIPNO、M_YJTYPE='实际' |"
+}

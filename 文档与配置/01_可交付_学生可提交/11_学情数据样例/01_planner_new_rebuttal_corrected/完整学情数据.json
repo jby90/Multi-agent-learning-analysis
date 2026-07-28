@@ -1,0 +1,1824 @@
+{
+  "collaboration_intermediate_data": {
+    "messages": [
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-001",
+        "payload": {
+          "content": {
+            "action": "session_start",
+            "state": "S0_INIT",
+            "student_profile_ref": "planner_new"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 1,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:27.390818+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-002",
+        "payload": {
+          "content": {
+            "action": "profile_loaded",
+            "assessment_label": "岗前测评",
+            "knowledge_dimensions": [
+              "三道工序与传导关系",
+              "计划量与实际量口径",
+              "完成率计算",
+              "偏差率与风险等级",
+              "月度聚合方法",
+              "异常识别标准",
+              "传导时滞分析",
+              "异常衰减规律",
+              "责任单元定位",
+              "跨工序归因方法",
+              "工序枚举与命名边界",
+              "年总量、月计划数与当日实际数",
+              "完成率字段口径",
+              "准时率字段口径",
+              "预警数与严重预警数",
+              "物量态势总览及工序分布",
+              "部门与工序适用关系",
+              "年度计划、计划应累计与年度实际",
+              "年度统计总览及计划实际分布",
+              "每月计划、实际、对比与情况总览"
+            ],
+            "profile": {
+              "background": "计算机/信息类背景校招生，会SQL和数据分析工具，不懂船舶工序与口径",
+              "difficulty_start": "basic",
+              "gaps_prior": [
+                "三道工序与传导关系",
+                "计划量与实际量口径",
+                "传导时滞分析"
+              ],
+              "lecture_style": "重讲工序与口径、少讲SQL",
+              "profile_id": "planner_new",
+              "strengths": [
+                "SQL基础",
+                "数据分析工具"
+              ],
+              "title": "新入职生产计划员"
+            },
+            "training_scene": "船厂数字化岗位培训"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 2,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:27.393818+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-003",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-002",
+            "from_state": "S0_INIT",
+            "to_state": "S1_DIAGNOSIS",
+            "transition_id": "T01",
+            "trigger": "画像载入成功"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 3,
+        "timestamp": "2026-07-26T05:00:27.395818+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "diagnosis",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-004",
+        "payload": {
+          "content": {
+            "blind_spots": [
+              "三道工序与传导关系",
+              "计划量与实际量口径",
+              "传导时滞分析",
+              "完成率计算",
+              "异常识别标准"
+            ],
+            "diagnosis_narrative": "",
+            "difficulty": "basic",
+            "event": "diagnosis_ready",
+            "hit_misconceptions": [
+              "M-01",
+              "M-04",
+              "M-03"
+            ],
+            "llm_latency_ms": 0,
+            "narrative_fallback": true,
+            "narrative_fallback_reason": "llm_disabled",
+            "pretest_score": {
+              "correct": 3,
+              "rate": 0.6,
+              "total": 5
+            },
+            "profile_id": "planner_new",
+            "suggestions": []
+          },
+          "type": "profile_assessment"
+        },
+        "role": "produce",
+        "step": 4,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:27.397818+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-005",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-004",
+            "from_state": "S1_DIAGNOSIS",
+            "to_state": "S2_KNOWLEDGE",
+            "transition_id": "T02",
+            "trigger": "学情报告过总线校验"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 5,
+        "timestamp": "2026-07-26T05:00:27.400819+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "knowledge",
+        "claims": [
+          {
+            "kind": "fact",
+            "text": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+          },
+          {
+            "kind": "fact",
+            "text": "实际量（actual_qty）是车间实际报工的完成量。"
+          },
+          {
+            "kind": "fact",
+            "text": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+          },
+          {
+            "kind": "fact",
+            "text": "判别方法：问\"应该做多少\"看计划量；"
+          },
+          {
+            "kind": "fact",
+            "text": "问\"实际做了多少\"看实际量；"
+          },
+          {
+            "kind": "fact",
+            "text": "问\"做得怎么样\"要两者相除看完成率。"
+          },
+          {
+            "kind": "fact",
+            "text": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+          },
+          {
+            "kind": "fact",
+            "text": "数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "kb_chunk",
+            "quote": "生产进度表中每条日级记录同时携带两个数量字段：**计划量（plan_qty）**是排产系统下达的当日应完成量；",
+            "ref": "KB-002",
+            "supports_claim": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "**实际量（actual_qty）**是车间实际报工的完成量。",
+            "ref": "KB-002",
+            "supports_claim": "实际量（actual_qty）是车间实际报工的完成量。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "两者是完全不同的口径，混用是本领域最高频的分析错误。",
+            "ref": "KB-002",
+            "supports_claim": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "判别方法：问\"应该做多少\"看计划量；",
+            "ref": "KB-002",
+            "supports_claim": "判别方法：问\"应该做多少\"看计划量；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "问\"实际做了多少\"看实际量；",
+            "ref": "KB-002",
+            "supports_claim": "问\"实际做了多少\"看实际量；"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "问\"做得怎么样\"要两者相除看完成率。",
+            "ref": "KB-002",
+            "supports_claim": "问\"做得怎么样\"要两者相除看完成率。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。",
+            "ref": "KB-002",
+            "supports_claim": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+          },
+          {
+            "kind": "kb_chunk",
+            "quote": "数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。",
+            "ref": "KB-002",
+            "supports_claim": "数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。"
+          }
+        ],
+        "latency_ms": 18807,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-008-a01-006",
+        "payload": {
+          "content": {
+            "coverage": [
+              "计划量与实际量口径"
+            ],
+            "difficulty": "basic",
+            "event": "product_ready",
+            "knowledge_point": "计划量与实际量口径",
+            "knowledge_point_match": true,
+            "knowledge_point_match_basis": {
+              "matched_knowledge_points": [
+                "计划量与实际量口径"
+              ],
+              "unmatched_knowledge_points": []
+            },
+            "lecture_md": "## 计划量与实际量口径\n\n### 本节目标\n- 理解计划量（plan_qty）与实际量（actual_qty）的定义与区别\n- 掌握在不同场景下应使用哪个字段\n- 避免常见分析错误\n\n### 核心概念\n- **计划量（plan_qty）**：是排产系统下达的当日应完成量。\n- **实际量（actual_qty）**：是车间实际报工的完成量。\n- 两者是完全不同的口径，混用会导致分析错误。\n\n### 使用方法\n1. **问\"应该做多少\"**：使用计划量。\n2. **问\"实际做了多少\"**：使用实际量。\n3. **问\"做得怎么样\"**：通过计划量与实际量相除计算完成率。\n\n### 常见错误提醒\n- 最常见的错误是将计划量与实际量混淆，导致对生产状态的误判。\n- 例如：若把计划量当成实际量，可能误判生产状态正常，而实际完成情况不佳。\n\n### 小结\n- 计划量与实际量是生产分析中两个基础但关键的字段。\n- 在分析时务必明确提问内容，并选择正确的字段。\n- 指标口径库中计划类与完成类字段成对定义，正是为了强制区分这两个口径。\n\n## 依据要点\n\n生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；\n\n实际量（actual_qty）是车间实际报工的完成量。\n\n两者是完全不同的口径，混用是本领域最高频的分析错误。\n\n判别方法：问\"应该做多少\"看计划量；\n\n问\"实际做了多少\"看实际量；\n\n问\"做得怎么样\"要两者相除看完成率。\n\n生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。\n\n数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。",
+            "llm_latency_ms": 18805,
+            "quote_validation": {
+              "checked": 8,
+              "failed": 0,
+              "failures": [],
+              "m_id_leaks": 0,
+              "passed": 8,
+              "scaffold_leaks": 0
+            },
+            "responsibility_scope": [
+              "计划量与实际量口径"
+            ],
+            "retrieved_chunk_ids": [
+              "KB-002"
+            ]
+          },
+          "type": "lecture_note"
+        },
+        "role": "produce",
+        "step": 6,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:46.210270+00:00",
+        "token_usage": {
+          "completion_tokens": 902,
+          "prompt_tokens": 1023,
+          "total_tokens": 1925
+        },
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-007",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-006",
+            "from_state": "S2_KNOWLEDGE",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T03",
+            "trigger": "讲义产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 7,
+        "timestamp": "2026-07-26T05:00:48.362146+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "latency_ms": 2146,
+        "model": "qwen3-32b",
+        "msg_id": "p7-e2e-008-a01-008",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "llm_latency_ms": 2146,
+            "r02_checks": 10,
+            "r03_checked": false,
+            "reviewed_msg_id": "p7-e2e-008-a01-006",
+            "reviewed_payload_type": "lecture_note"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 8,
+        "timestamp": "2026-07-26T05:00:48.365145+00:00",
+        "token_usage": {
+          "completion_tokens": 78,
+          "prompt_tokens": 670,
+          "total_tokens": 748
+        },
+        "trace_id": "p7-e2e-008-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-009",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-008",
+            "from_state": "S5_REVIEW",
+            "to_state": "S3_TASK",
+            "transition_id": "T04",
+            "trigger": "verdict=approve ∧ 被审对象=讲义"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 9,
+        "timestamp": "2026-07-26T05:00:48.366146+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"计划量1855.06，实际量1156.87\"],\"expected_rows\":[{\"actual_qty\":\"1156.87\",\"plan_qty\":\"1855.06\"}],\"standard_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+            "ref": "T-01"
+          }
+        ],
+        "latency_ms": 2462,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-008-a01-010",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+            "difficulty": "basic",
+            "event": "product_ready",
+            "family": "Q2",
+            "guide_intro": "请结合生产计划与实际完成情况的统计口径，理解数据背后的工序关系，再进行查询操作。",
+            "knowledge_point": "计划量与实际量口径",
+            "llm_latency_ms": 2461,
+            "query_authority": {
+              "dimension_columns": [],
+              "family": "Q2",
+              "filter_columns": [
+                "period_date",
+                "process_code",
+                "ship_no"
+              ],
+              "group_by_columns": [],
+              "metric_columns": [
+                "plan_qty",
+                "actual_qty"
+              ],
+              "output_columns": [
+                "plan_qty",
+                "actual_qty"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+              "template_id": "T-01",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+            "questions": [
+              {
+                "id": "T-01",
+                "prompt": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。"
+              }
+            ],
+            "responsibility_scope": [
+              "计划量与实际量口径"
+            ],
+            "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+            "template_id": "T-01"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 10,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:50.829850+00:00",
+        "token_usage": {
+          "completion_tokens": 85,
+          "prompt_tokens": 342,
+          "total_tokens": 427
+        },
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-011",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-010",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 11,
+        "timestamp": "2026-07-26T05:00:50.831855+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-012",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-008-a01-010",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 12,
+        "timestamp": "2026-07-26T05:00:50.832855+00:00",
+        "trace_id": "p7-e2e-008-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-013",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-012",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 13,
+        "timestamp": "2026-07-26T05:00:50.833855+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-014",
+        "payload": {
+          "content": {
+            "event": "student_sql_submitted",
+            "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 14,
+        "timestamp": "2026-07-26T05:00:50.835854+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-015",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-014",
+            "from_state": "S7_STUDENT",
+            "to_state": "S4_VERIFY",
+            "transition_id": "T11",
+            "trigger": "学生提交SQL类操作"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 15,
+        "timestamp": "2026-07-26T05:00:50.836856+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "verification",
+        "claims": [
+          {
+            "kind": "data_conclusion",
+            "text": "查询“作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。”的结果：计划量为1855.06，实际量为1156.87。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\",\"executed_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200\",\"status\":\"completed\",\"row_count\":1,\"rows\":[{\"plan_qty\":\"1855.06\",\"actual_qty\":\"1156.87\"}]}",
+            "ref": "p7-e2e-008-a01-sql-01",
+            "supports_claim": "查询“作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。”的结果：计划量为1855.06，实际量为1156.87。"
+          }
+        ],
+        "latency_ms": 2603,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-008-a01-016",
+        "payload": {
+          "content": {
+            "columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "event": "query_completed",
+            "executed_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200",
+            "family": "Q2",
+            "generated_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+            "generation_cached_tokens": 0,
+            "generation_completion_tokens": 115,
+            "generation_llm_latency_ms": 2182,
+            "generation_model": "qwen3-235b-a22b",
+            "generation_prompt_tokens": 2538,
+            "generation_total_tokens": 2653,
+            "llm_latency_ms": 2546,
+            "query_authority": {
+              "dimension_columns": [],
+              "family": "Q2",
+              "filter_columns": [
+                "period_date",
+                "process_code",
+                "ship_no"
+              ],
+              "group_by_columns": [],
+              "metric_columns": [
+                "plan_qty",
+                "actual_qty"
+              ],
+              "output_columns": [
+                "plan_qty",
+                "actual_qty"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+              "template_id": "T-01",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "query_elapsed_ms": 55,
+            "query_id": "p7-e2e-008-a01-sql-01",
+            "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+            "raw_llm_family": "Q2",
+            "routing_cached_tokens": 0,
+            "routing_completion_tokens": 6,
+            "routing_fallback": false,
+            "routing_fallback_reason": "none",
+            "routing_family_mismatch": false,
+            "routing_few_shot_ids": [
+              "FS-03",
+              "FS-04",
+              "FS-01",
+              "FS-05"
+            ],
+            "routing_final_family": "Q2",
+            "routing_llm_latency_ms": 364,
+            "routing_model": "qwen3-32b",
+            "routing_predicted_family": "Q2",
+            "routing_prompt_profile": "Q2",
+            "routing_prompt_tokens": 1194,
+            "routing_total_tokens": 1200,
+            "row_count": 1,
+            "rows": [
+              {
+                "actual_qty": "1156.87",
+                "plan_qty": "1855.06"
+              }
+            ]
+          },
+          "type": "sql_result"
+        },
+        "role": "produce",
+        "step": 16,
+        "timestamp": "2026-07-26T05:00:53.440921+00:00",
+        "token_usage": {
+          "completion_tokens": 121,
+          "prompt_tokens": 3732,
+          "total_tokens": 3853
+        },
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-017",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-016",
+            "from_state": "S4_VERIFY",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T12",
+            "trigger": "查询执行完毕"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 17,
+        "timestamp": "2026-07-26T05:00:53.442921+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-018",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-008-a01-016",
+            "reviewed_payload_type": "sql_result"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 18,
+        "timestamp": "2026-07-26T05:00:53.445929+00:00",
+        "trace_id": "p7-e2e-008-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "none",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-019",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-018",
+            "from_state": "S5_REVIEW",
+            "to_state": "S9_PATH_UPDATE",
+            "transition_id": "T13",
+            "trigger": "approve ∧ 被审对象=数据结论"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 19,
+        "timestamp": "2026-07-26T05:00:53.446921+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-020",
+        "payload": {
+          "content": {
+            "case_id": "E2E-008",
+            "completed_nodes": [
+              "岗前测评",
+              "岗位微课",
+              "数据实操"
+            ],
+            "current_node": "结论判断",
+            "difficulty_action": "keep",
+            "event": "path_updated",
+            "has_next": true,
+            "learning_goal_achieved": false
+          },
+          "type": "learning_path_update"
+        },
+        "role": "system",
+        "step": 20,
+        "timestamp": "2026-07-26T05:00:53.448425+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-021",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-020",
+            "from_state": "S9_PATH_UPDATE",
+            "to_state": "S3_TASK",
+            "transition_id": "T19",
+            "trigger": "路径更新完毕 ∧ 还有下一环节"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 21,
+        "timestamp": "2026-07-26T05:00:53.450428+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"计划量1855.06，实际量1156.87\"],\"expected_rows\":[{\"actual_qty\":\"1156.87\",\"plan_qty\":\"1855.06\"}],\"standard_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+            "ref": "T-01"
+          }
+        ],
+        "latency_ms": 3093,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-008-a01-022",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，对应YCL阶段的计划量与实际量数据，请根据系统口径提取相关信息。",
+            "difficulty": "basic",
+            "event": "product_ready",
+            "family": "Q2",
+            "guide_intro": "请结合生产计划与实际口径的理解，利用数据分析工具完成本次查询任务，注意保持参数的原始格式。",
+            "knowledge_point": "计划量与实际量口径",
+            "llm_latency_ms": 3092,
+            "query_authority": {
+              "dimension_columns": [],
+              "family": "Q2",
+              "filter_columns": [
+                "period_date",
+                "process_code",
+                "ship_no"
+              ],
+              "group_by_columns": [],
+              "metric_columns": [
+                "plan_qty",
+                "actual_qty"
+              ],
+              "output_columns": [
+                "plan_qty",
+                "actual_qty"
+              ],
+              "source": "task_template",
+              "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+              "template_id": "T-01",
+              "time_column": "period_date",
+              "time_values": [
+                "2025-05"
+              ]
+            },
+            "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，对应YCL阶段的计划量与实际量数据，请根据系统口径提取相关信息。",
+            "questions": [
+              {
+                "id": "T-01",
+                "prompt": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，对应YCL阶段的计划量与实际量数据，请根据系统口径提取相关信息。"
+              }
+            ],
+            "responsibility_scope": [
+              "计划量与实际量口径"
+            ],
+            "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+            "template_id": "T-01"
+          },
+          "type": "quiz_set"
+        },
+        "role": "produce",
+        "step": 22,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:56.543854+00:00",
+        "token_usage": {
+          "completion_tokens": 88,
+          "prompt_tokens": 342,
+          "total_tokens": 430
+        },
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-023",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-022",
+            "from_state": "S3_TASK",
+            "to_state": "S5_REVIEW",
+            "transition_id": "T09",
+            "trigger": "任务产出"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 23,
+        "timestamp": "2026-07-26T05:00:56.545857+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-024",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-008-a01-022",
+            "reviewed_payload_type": "quiz_set"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 24,
+        "timestamp": "2026-07-26T05:00:56.546865+00:00",
+        "trace_id": "p7-e2e-008-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "keep",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-025",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-024",
+            "from_state": "S5_REVIEW",
+            "to_state": "S7_STUDENT",
+            "transition_id": "T10",
+            "trigger": "approve ∧ 被审对象=任务"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 25,
+        "timestamp": "2026-07-26T05:00:56.547857+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-026",
+        "payload": {
+          "content": {
+            "answer_result": "wrong",
+            "event": "student_answer",
+            "requested_action": "probe",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 26,
+        "timestamp": "2026-07-26T05:00:56.549857+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-027",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-026",
+            "from_state": "S7_STUDENT",
+            "to_state": "S8_PROBE",
+            "transition_id": "T15",
+            "trigger": "学生答题：首次错误"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 27,
+        "timestamp": "2026-07-26T05:00:56.550695+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "task",
+        "claims": [],
+        "evidence": [
+          {
+            "kind": "quiz_answer_key",
+            "quote": "{\"expected_points\":[\"计划1855.06≠实际1156.87，混用即结论反转\"],\"expected_rows\":[{\"actual_qty\":\"1156.87\",\"plan_qty\":\"1855.06\"}],\"standard_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+            "ref": "M-01:1"
+          }
+        ],
+        "latency_ms": 2633,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-008-a01-028",
+        "payload": {
+          "content": {
+            "contextualize_fallback": false,
+            "contextualize_fallback_reason": null,
+            "contextualized_stem": "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论",
+            "event": "counter_evidence_ready",
+            "family": "Q2",
+            "guide_intro": "请先回顾三道工序之间的传导关系和计划、实际量的统计口径，再结合数据差异思考可能的业务影响点",
+            "llm_latency_ms": 2632,
+            "misconception": "M-01",
+            "question": "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论",
+            "standard_stem": "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论"
+          },
+          "type": "quiz_set"
+        },
+        "probe": {
+          "questions": [
+            "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论"
+          ],
+          "target_misconception": "M-01",
+          "wrong_attempts": 1
+        },
+        "role": "probe",
+        "step": 28,
+        "student_profile_ref": "planner_new",
+        "timestamp": "2026-07-26T05:00:59.184507+00:00",
+        "token_usage": {
+          "completion_tokens": 98,
+          "prompt_tokens": 348,
+          "total_tokens": 446
+        },
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-029",
+        "payload": {
+          "content": {
+            "event": "student_sql_submitted",
+            "question": "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论",
+            "source": "student"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 29,
+        "timestamp": "2026-07-26T05:00:59.186510+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "verification",
+        "claims": [
+          {
+            "kind": "data_conclusion",
+            "text": "查询“分别查H26012025-05YCL的计划量与实际完成量，对照你的结论”的结果：计划量为1855.06，实际量为1156.87。"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "sql_query",
+            "quote": "{\"generated_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\",\"executed_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200\",\"status\":\"completed\",\"row_count\":1,\"rows\":[{\"plan_qty\":\"1855.06\",\"actual_qty\":\"1156.87\"}]}",
+            "ref": "p7-e2e-008-a01-sql-02",
+            "supports_claim": "查询“分别查H26012025-05YCL的计划量与实际完成量，对照你的结论”的结果：计划量为1855.06，实际量为1156.87。"
+          }
+        ],
+        "latency_ms": 3841,
+        "model": "qwen3-235b-a22b",
+        "msg_id": "p7-e2e-008-a01-030",
+        "payload": {
+          "content": {
+            "columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "event": "query_completed",
+            "executed_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200",
+            "family": "Q2",
+            "generated_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+            "generation_cached_tokens": 0,
+            "generation_completion_tokens": 114,
+            "generation_llm_latency_ms": 3452,
+            "generation_model": "qwen3-235b-a22b",
+            "generation_prompt_tokens": 2544,
+            "generation_total_tokens": 2658,
+            "llm_latency_ms": 3824,
+            "query_elapsed_ms": 14,
+            "query_id": "p7-e2e-008-a01-sql-02",
+            "question": "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论",
+            "raw_llm_family": "Q2",
+            "routing_cached_tokens": 0,
+            "routing_completion_tokens": 6,
+            "routing_fallback": false,
+            "routing_fallback_reason": "none",
+            "routing_family_mismatch": false,
+            "routing_few_shot_ids": [
+              "FS-03",
+              "FS-04",
+              "FS-01",
+              "FS-05"
+            ],
+            "routing_final_family": "Q2",
+            "routing_llm_latency_ms": 372,
+            "routing_model": "qwen3-32b",
+            "routing_predicted_family": "Q2",
+            "routing_prompt_profile": "Q2",
+            "routing_prompt_tokens": 1200,
+            "routing_total_tokens": 1206,
+            "row_count": 1,
+            "rows": [
+              {
+                "actual_qty": "1156.87",
+                "plan_qty": "1855.06"
+              }
+            ]
+          },
+          "type": "sql_result"
+        },
+        "role": "produce",
+        "step": 30,
+        "timestamp": "2026-07-26T05:01:03.028374+00:00",
+        "token_usage": {
+          "completion_tokens": 120,
+          "prompt_tokens": 3744,
+          "total_tokens": 3864
+        },
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "review",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-031",
+        "payload": {
+          "content": {
+            "event": "review_complete",
+            "reviewed_msg_id": "p7-e2e-008-a01-030",
+            "reviewed_payload_type": "sql_result"
+          },
+          "type": "review_verdict"
+        },
+        "role": "verdict",
+        "step": 31,
+        "timestamp": "2026-07-26T05:01:03.030373+00:00",
+        "trace_id": "p7-e2e-008-a01",
+        "verdict": {
+          "decision": "approve",
+          "difficulty_action": "none",
+          "rule_hits": []
+        }
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-032",
+        "payload": {
+          "content": {
+            "answer_result": "correct",
+            "event": "probe_outcome",
+            "source": "student",
+            "target_misconception": "M-01"
+          },
+          "type": "control"
+        },
+        "probe": {
+          "target_misconception": "M-01",
+          "wrong_attempts": 1
+        },
+        "role": "system",
+        "step": 32,
+        "timestamp": "2026-07-26T05:01:03.031373+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-033",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-032",
+            "from_state": "S8_PROBE",
+            "to_state": "S9_PATH_UPDATE",
+            "transition_id": "T16",
+            "trigger": "反证任务生成→学生执行→修正后答对"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 33,
+        "timestamp": "2026-07-26T05:01:03.032375+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "claims": [],
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-034",
+        "payload": {
+          "content": {
+            "case_id": "E2E-008",
+            "completed_nodes": [
+              "岗前测评",
+              "岗位微课",
+              "数据实操",
+              "反证追问",
+              "修正结论"
+            ],
+            "current_node": "培养目标达成",
+            "difficulty_action": "keep",
+            "event": "path_updated",
+            "has_next": false,
+            "knowledge_point": "计划量与实际量口径",
+            "learning_goal_achieved": true,
+            "summary": "新入职生产计划员完成计划量与实际量口径的真实评测链路，路径为rebuttal_corrected。"
+          },
+          "type": "learning_path_update"
+        },
+        "role": "system",
+        "step": 34,
+        "timestamp": "2026-07-26T05:01:03.033375+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      },
+      {
+        "agent": "system",
+        "evidence": [],
+        "msg_id": "p7-e2e-008-a01-035",
+        "payload": {
+          "content": {
+            "action": "state_transition",
+            "based_on_msg_id": "p7-e2e-008-a01-034",
+            "from_state": "S9_PATH_UPDATE",
+            "to_state": "S10_DONE",
+            "transition_id": "T20",
+            "trigger": "学习目标达成"
+          },
+          "type": "control"
+        },
+        "role": "system",
+        "step": 35,
+        "timestamp": "2026-07-26T05:01:03.034374+00:00",
+        "trace_id": "p7-e2e-008-a01"
+      }
+    ],
+    "stage_message_ids": {
+      "counter_evidence": [
+        "p7-e2e-008-a01-028"
+      ],
+      "diagnosis": [
+        "p7-e2e-008-a01-004"
+      ],
+      "learning_path": [
+        "p7-e2e-008-a01-020",
+        "p7-e2e-008-a01-034"
+      ],
+      "lecture": [
+        "p7-e2e-008-a01-006"
+      ],
+      "lecture_evidence": [
+        "p7-e2e-008-a01-006"
+      ],
+      "probe_outcome": [
+        "p7-e2e-008-a01-032"
+      ],
+      "rebuttal": [
+        "p7-e2e-008-a01-028",
+        "p7-e2e-008-a01-032"
+      ],
+      "review": [
+        "p7-e2e-008-a01-008",
+        "p7-e2e-008-a01-012",
+        "p7-e2e-008-a01-018",
+        "p7-e2e-008-a01-024",
+        "p7-e2e-008-a01-031"
+      ],
+      "sql_execution": [
+        "p7-e2e-008-a01-016",
+        "p7-e2e-008-a01-030"
+      ],
+      "sql_submission": [
+        "p7-e2e-008-a01-014",
+        "p7-e2e-008-a01-029"
+      ],
+      "task": [
+        "p7-e2e-008-a01-010",
+        "p7-e2e-008-a01-022"
+      ]
+    }
+  },
+  "completeness_check": {
+    "accepted_final_resource_categories": {
+      "lecture": true,
+      "sql_result": true,
+      "task": true
+    },
+    "all_required_stages_present": true,
+    "raw_trace_verbatim": true,
+    "required_stages": [
+      "diagnosis",
+      "lecture",
+      "lecture_evidence",
+      "task",
+      "sql_submission",
+      "sql_execution",
+      "review",
+      "learning_path",
+      "counter_evidence",
+      "probe_outcome"
+    ],
+    "stage_presence": {
+      "counter_evidence": true,
+      "diagnosis": true,
+      "learning_path": true,
+      "lecture": true,
+      "lecture_evidence": true,
+      "probe_outcome": true,
+      "rebuttal": true,
+      "review": true,
+      "sql_execution": true,
+      "sql_submission": true,
+      "task": true
+    },
+    "terminal_s10": true
+  },
+  "final_learning_path": {
+    "agent": "system",
+    "claims": [],
+    "evidence": [],
+    "msg_id": "p7-e2e-008-a01-034",
+    "payload": {
+      "content": {
+        "case_id": "E2E-008",
+        "completed_nodes": [
+          "岗前测评",
+          "岗位微课",
+          "数据实操",
+          "反证追问",
+          "修正结论"
+        ],
+        "current_node": "培养目标达成",
+        "difficulty_action": "keep",
+        "event": "path_updated",
+        "has_next": false,
+        "knowledge_point": "计划量与实际量口径",
+        "learning_goal_achieved": true,
+        "summary": "新入职生产计划员完成计划量与实际量口径的真实评测链路，路径为rebuttal_corrected。"
+      },
+      "type": "learning_path_update"
+    },
+    "role": "system",
+    "step": 34,
+    "timestamp": "2026-07-26T05:01:03.033375+00:00",
+    "trace_id": "p7-e2e-008-a01"
+  },
+  "final_resources": [
+    {
+      "agent": "knowledge",
+      "claims": [
+        {
+          "kind": "fact",
+          "text": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+        },
+        {
+          "kind": "fact",
+          "text": "实际量（actual_qty）是车间实际报工的完成量。"
+        },
+        {
+          "kind": "fact",
+          "text": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+        },
+        {
+          "kind": "fact",
+          "text": "判别方法：问\"应该做多少\"看计划量；"
+        },
+        {
+          "kind": "fact",
+          "text": "问\"实际做了多少\"看实际量；"
+        },
+        {
+          "kind": "fact",
+          "text": "问\"做得怎么样\"要两者相除看完成率。"
+        },
+        {
+          "kind": "fact",
+          "text": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+        },
+        {
+          "kind": "fact",
+          "text": "数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "kb_chunk",
+          "quote": "生产进度表中每条日级记录同时携带两个数量字段：**计划量（plan_qty）**是排产系统下达的当日应完成量；",
+          "ref": "KB-002",
+          "supports_claim": "生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "**实际量（actual_qty）**是车间实际报工的完成量。",
+          "ref": "KB-002",
+          "supports_claim": "实际量（actual_qty）是车间实际报工的完成量。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "两者是完全不同的口径，混用是本领域最高频的分析错误。",
+          "ref": "KB-002",
+          "supports_claim": "两者是完全不同的口径，混用是本领域最高频的分析错误。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "判别方法：问\"应该做多少\"看计划量；",
+          "ref": "KB-002",
+          "supports_claim": "判别方法：问\"应该做多少\"看计划量；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "问\"实际做了多少\"看实际量；",
+          "ref": "KB-002",
+          "supports_claim": "问\"实际做了多少\"看实际量；"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "问\"做得怎么样\"要两者相除看完成率。",
+          "ref": "KB-002",
+          "supports_claim": "问\"做得怎么样\"要两者相除看完成率。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。",
+          "ref": "KB-002",
+          "supports_claim": "生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。"
+        },
+        {
+          "kind": "kb_chunk",
+          "quote": "数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。",
+          "ref": "KB-002",
+          "supports_claim": "数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。"
+        }
+      ],
+      "latency_ms": 18807,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-008-a01-006",
+      "payload": {
+        "content": {
+          "coverage": [
+            "计划量与实际量口径"
+          ],
+          "difficulty": "basic",
+          "event": "product_ready",
+          "knowledge_point": "计划量与实际量口径",
+          "knowledge_point_match": true,
+          "knowledge_point_match_basis": {
+            "matched_knowledge_points": [
+              "计划量与实际量口径"
+            ],
+            "unmatched_knowledge_points": []
+          },
+          "lecture_md": "## 计划量与实际量口径\n\n### 本节目标\n- 理解计划量（plan_qty）与实际量（actual_qty）的定义与区别\n- 掌握在不同场景下应使用哪个字段\n- 避免常见分析错误\n\n### 核心概念\n- **计划量（plan_qty）**：是排产系统下达的当日应完成量。\n- **实际量（actual_qty）**：是车间实际报工的完成量。\n- 两者是完全不同的口径，混用会导致分析错误。\n\n### 使用方法\n1. **问\"应该做多少\"**：使用计划量。\n2. **问\"实际做了多少\"**：使用实际量。\n3. **问\"做得怎么样\"**：通过计划量与实际量相除计算完成率。\n\n### 常见错误提醒\n- 最常见的错误是将计划量与实际量混淆，导致对生产状态的误判。\n- 例如：若把计划量当成实际量，可能误判生产状态正常，而实际完成情况不佳。\n\n### 小结\n- 计划量与实际量是生产分析中两个基础但关键的字段。\n- 在分析时务必明确提问内容，并选择正确的字段。\n- 指标口径库中计划类与完成类字段成对定义，正是为了强制区分这两个口径。\n\n## 依据要点\n\n生产进度表中每条日级记录同时携带两个数量字段：计划量（plan_qty）是排产系统下达的当日应完成量；\n\n实际量（actual_qty）是车间实际报工的完成量。\n\n两者是完全不同的口径，混用是本领域最高频的分析错误。\n\n判别方法：问\"应该做多少\"看计划量；\n\n问\"实际做了多少\"看实际量；\n\n问\"做得怎么样\"要两者相除看完成率。\n\n生产系统的指标口径库中，计划类字段（如BLOCKPLANNUM分段月计划数）与完成类字段（如BLOCKACTUALNUM分段月完成数）永远成对定义，正是为了强制区分这两个口径。\n\n数据示例（比赛库）：H2601船2025年5月YCL工序，月计划量合计1855.06，月实际量合计1156.87——若把计划量当成实际量，会误判该月生产正常。",
+          "llm_latency_ms": 18805,
+          "quote_validation": {
+            "checked": 8,
+            "failed": 0,
+            "failures": [],
+            "m_id_leaks": 0,
+            "passed": 8,
+            "scaffold_leaks": 0
+          },
+          "responsibility_scope": [
+            "计划量与实际量口径"
+          ],
+          "retrieved_chunk_ids": [
+            "KB-002"
+          ]
+        },
+        "type": "lecture_note"
+      },
+      "role": "produce",
+      "step": 6,
+      "student_profile_ref": "planner_new",
+      "timestamp": "2026-07-26T05:00:46.210270+00:00",
+      "token_usage": {
+        "completion_tokens": 902,
+        "prompt_tokens": 1023,
+        "total_tokens": 1925
+      },
+      "trace_id": "p7-e2e-008-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"计划量1855.06，实际量1156.87\"],\"expected_rows\":[{\"actual_qty\":\"1156.87\",\"plan_qty\":\"1855.06\"}],\"standard_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+          "ref": "T-01"
+        }
+      ],
+      "latency_ms": 2462,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-008-a01-010",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+          "difficulty": "basic",
+          "event": "product_ready",
+          "family": "Q2",
+          "guide_intro": "请结合生产计划与实际完成情况的统计口径，理解数据背后的工序关系，再进行查询操作。",
+          "knowledge_point": "计划量与实际量口径",
+          "llm_latency_ms": 2461,
+          "query_authority": {
+            "dimension_columns": [],
+            "family": "Q2",
+            "filter_columns": [
+              "period_date",
+              "process_code",
+              "ship_no"
+            ],
+            "group_by_columns": [],
+            "metric_columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "output_columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+            "template_id": "T-01",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+          "questions": [
+            {
+              "id": "T-01",
+              "prompt": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。"
+            }
+          ],
+          "responsibility_scope": [
+            "计划量与实际量口径"
+          ],
+          "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+          "template_id": "T-01"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 10,
+      "student_profile_ref": "planner_new",
+      "timestamp": "2026-07-26T05:00:50.829850+00:00",
+      "token_usage": {
+        "completion_tokens": 85,
+        "prompt_tokens": 342,
+        "total_tokens": 427
+      },
+      "trace_id": "p7-e2e-008-a01"
+    },
+    {
+      "agent": "verification",
+      "claims": [
+        {
+          "kind": "data_conclusion",
+          "text": "查询“作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。”的结果：计划量为1855.06，实际量为1156.87。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\",\"executed_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200\",\"status\":\"completed\",\"row_count\":1,\"rows\":[{\"plan_qty\":\"1855.06\",\"actual_qty\":\"1156.87\"}]}",
+          "ref": "p7-e2e-008-a01-sql-01",
+          "supports_claim": "查询“作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。”的结果：计划量为1855.06，实际量为1156.87。"
+        }
+      ],
+      "latency_ms": 2603,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-008-a01-016",
+      "payload": {
+        "content": {
+          "columns": [
+            "plan_qty",
+            "actual_qty"
+          ],
+          "event": "query_completed",
+          "executed_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200",
+          "family": "Q2",
+          "generated_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+          "generation_cached_tokens": 0,
+          "generation_completion_tokens": 115,
+          "generation_llm_latency_ms": 2182,
+          "generation_model": "qwen3-235b-a22b",
+          "generation_prompt_tokens": 2538,
+          "generation_total_tokens": 2653,
+          "llm_latency_ms": 2546,
+          "query_authority": {
+            "dimension_columns": [],
+            "family": "Q2",
+            "filter_columns": [
+              "period_date",
+              "process_code",
+              "ship_no"
+            ],
+            "group_by_columns": [],
+            "metric_columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "output_columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+            "template_id": "T-01",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "query_elapsed_ms": 55,
+          "query_id": "p7-e2e-008-a01-sql-01",
+          "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，YCL阶段的计划量与实际量，以便后续分析偏差原因。",
+          "raw_llm_family": "Q2",
+          "routing_cached_tokens": 0,
+          "routing_completion_tokens": 6,
+          "routing_fallback": false,
+          "routing_fallback_reason": "none",
+          "routing_family_mismatch": false,
+          "routing_few_shot_ids": [
+            "FS-03",
+            "FS-04",
+            "FS-01",
+            "FS-05"
+          ],
+          "routing_final_family": "Q2",
+          "routing_llm_latency_ms": 364,
+          "routing_model": "qwen3-32b",
+          "routing_predicted_family": "Q2",
+          "routing_prompt_profile": "Q2",
+          "routing_prompt_tokens": 1194,
+          "routing_total_tokens": 1200,
+          "row_count": 1,
+          "rows": [
+            {
+              "actual_qty": "1156.87",
+              "plan_qty": "1855.06"
+            }
+          ]
+        },
+        "type": "sql_result"
+      },
+      "role": "produce",
+      "step": 16,
+      "timestamp": "2026-07-26T05:00:53.440921+00:00",
+      "token_usage": {
+        "completion_tokens": 121,
+        "prompt_tokens": 3732,
+        "total_tokens": 3853
+      },
+      "trace_id": "p7-e2e-008-a01"
+    },
+    {
+      "agent": "task",
+      "claims": [],
+      "evidence": [
+        {
+          "kind": "quiz_answer_key",
+          "quote": "{\"expected_points\":[\"计划量1855.06，实际量1156.87\"],\"expected_rows\":[{\"actual_qty\":\"1156.87\",\"plan_qty\":\"1855.06\"}],\"standard_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\"}",
+          "ref": "T-01"
+        }
+      ],
+      "latency_ms": 3093,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-008-a01-022",
+      "payload": {
+        "content": {
+          "contextualize_fallback": false,
+          "contextualize_fallback_reason": null,
+          "contextualized_stem": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，对应YCL阶段的计划量与实际量数据，请根据系统口径提取相关信息。",
+          "difficulty": "basic",
+          "event": "product_ready",
+          "family": "Q2",
+          "guide_intro": "请结合生产计划与实际口径的理解，利用数据分析工具完成本次查询任务，注意保持参数的原始格式。",
+          "knowledge_point": "计划量与实际量口径",
+          "llm_latency_ms": 3092,
+          "query_authority": {
+            "dimension_columns": [],
+            "family": "Q2",
+            "filter_columns": [
+              "period_date",
+              "process_code",
+              "ship_no"
+            ],
+            "group_by_columns": [],
+            "metric_columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "output_columns": [
+              "plan_qty",
+              "actual_qty"
+            ],
+            "source": "task_template",
+            "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+            "template_id": "T-01",
+            "time_column": "period_date",
+            "time_values": [
+              "2025-05"
+            ]
+          },
+          "question": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，对应YCL阶段的计划量与实际量数据，请根据系统口径提取相关信息。",
+          "questions": [
+            {
+              "id": "T-01",
+              "prompt": "作为新入职的生产计划员，你需要查询船型H2601在2025-05周期内，对应YCL阶段的计划量与实际量数据，请根据系统口径提取相关信息。"
+            }
+          ],
+          "responsibility_scope": [
+            "计划量与实际量口径"
+          ],
+          "standard_stem": "查询H26012025-05YCL的计划量与实际量",
+          "template_id": "T-01"
+        },
+        "type": "quiz_set"
+      },
+      "role": "produce",
+      "step": 22,
+      "student_profile_ref": "planner_new",
+      "timestamp": "2026-07-26T05:00:56.543854+00:00",
+      "token_usage": {
+        "completion_tokens": 88,
+        "prompt_tokens": 342,
+        "total_tokens": 430
+      },
+      "trace_id": "p7-e2e-008-a01"
+    },
+    {
+      "agent": "verification",
+      "claims": [
+        {
+          "kind": "data_conclusion",
+          "text": "查询“分别查H26012025-05YCL的计划量与实际完成量，对照你的结论”的结果：计划量为1855.06，实际量为1156.87。"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "sql_query",
+          "quote": "{\"generated_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'\",\"executed_sql\":\"SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200\",\"status\":\"completed\",\"row_count\":1,\"rows\":[{\"plan_qty\":\"1855.06\",\"actual_qty\":\"1156.87\"}]}",
+          "ref": "p7-e2e-008-a01-sql-02",
+          "supports_claim": "查询“分别查H26012025-05YCL的计划量与实际完成量，对照你的结论”的结果：计划量为1855.06，实际量为1156.87。"
+        }
+      ],
+      "latency_ms": 3841,
+      "model": "qwen3-235b-a22b",
+      "msg_id": "p7-e2e-008-a01-030",
+      "payload": {
+        "content": {
+          "columns": [
+            "plan_qty",
+            "actual_qty"
+          ],
+          "event": "query_completed",
+          "executed_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no = 'H2601' AND process_code = 'YCL' AND period_date >= '2025-05-01' AND period_date < '2025-06-01' LIMIT 200",
+          "family": "Q2",
+          "generated_sql": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty FROM fact_production_progress WHERE ship_no='H2601' AND process_code='YCL' AND period_date>='2025-05-01' AND period_date<'2025-06-01'",
+          "generation_cached_tokens": 0,
+          "generation_completion_tokens": 114,
+          "generation_llm_latency_ms": 3452,
+          "generation_model": "qwen3-235b-a22b",
+          "generation_prompt_tokens": 2544,
+          "generation_total_tokens": 2658,
+          "llm_latency_ms": 3824,
+          "query_elapsed_ms": 14,
+          "query_id": "p7-e2e-008-a01-sql-02",
+          "question": "分别查H26012025-05YCL的计划量与实际完成量，对照你的结论",
+          "raw_llm_family": "Q2",
+          "routing_cached_tokens": 0,
+          "routing_completion_tokens": 6,
+          "routing_fallback": false,
+          "routing_fallback_reason": "none",
+          "routing_family_mismatch": false,
+          "routing_few_shot_ids": [
+            "FS-03",
+            "FS-04",
+            "FS-01",
+            "FS-05"
+          ],
+          "routing_final_family": "Q2",
+          "routing_llm_latency_ms": 372,
+          "routing_model": "qwen3-32b",
+          "routing_predicted_family": "Q2",
+          "routing_prompt_profile": "Q2",
+          "routing_prompt_tokens": 1200,
+          "routing_total_tokens": 1206,
+          "row_count": 1,
+          "rows": [
+            {
+              "actual_qty": "1156.87",
+              "plan_qty": "1855.06"
+            }
+          ]
+        },
+        "type": "sql_result"
+      },
+      "role": "produce",
+      "step": 30,
+      "timestamp": "2026-07-26T05:01:03.028374+00:00",
+      "token_usage": {
+        "completion_tokens": 120,
+        "prompt_tokens": 3744,
+        "total_tokens": 3864
+      },
+      "trace_id": "p7-e2e-008-a01"
+    }
+  ],
+  "format_version": "p7-learning-data-v1",
+  "input_profile": {
+    "case_parameters": {
+      "answers": {
+        "PT-1": "B",
+        "PT-2": "A",
+        "PT-3": "C",
+        "PT-4": "A",
+        "PT-5": "C"
+      },
+      "case_id": "E2E-008",
+      "expected_difficulty": "basic",
+      "knowledge_point": "计划量与实际量口径",
+      "learning_path": "rebuttal_corrected",
+      "manual_review": false,
+      "misconception_id": "M-01",
+      "pretest_pattern": "A3",
+      "profile_id": "planner_new",
+      "task_template_id": "T-01"
+    },
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "A",
+      "PT-3": "C",
+      "PT-4": "A",
+      "PT-5": "C"
+    },
+    "profile_definition": {
+      "background": "计算机/信息类背景校招生，会SQL和数据分析工具，不懂船舶工序与口径",
+      "difficulty_start": "basic",
+      "gaps_prior": [
+        "三道工序与传导关系",
+        "计划量与实际量口径",
+        "传导时滞分析"
+      ],
+      "lecture_style": "重讲工序与口径、少讲SQL",
+      "profile_id": "planner_new",
+      "strengths": [
+        "SQL基础",
+        "数据分析工具"
+      ],
+      "title": "新入职生产计划员"
+    }
+  },
+  "official_view": "输入画像特征 + 多智能体协同决策中间数据 + 最终生成资源",
+  "provenance": {
+    "attempt": 1,
+    "case_id": "E2E-008",
+    "dataset_label": "当前正式 50×2 终验 Round 2",
+    "export_policy": "messages are copied from the frozen successful trace without editing",
+    "message_count": 35,
+    "terminal_state": "S10_DONE",
+    "trace_id": "p7-e2e-008-a01",
+    "trace_source": "当前正式 50×2 终验 Round 2"
+  },
+  "selection_rationale": "新入职生产计划员首次答错，经数据反证后改正的完整高光链路"
+}

@@ -1,0 +1,27 @@
+{
+  "msg_id": "trace-p1-008",
+  "trace_id": "trace-p1",
+  "step": 8,
+  "agent": "diagnosis",
+  "role": "probe",
+  "payload": {
+    "type": "probe_questions",
+    "content": {"strategy": "data_counterexample", "llm_latency_ms": 760}
+  },
+  "evidence": [
+    {
+      "kind": "quiz_answer_key",
+      "ref": "answer-key-q1",
+      "quote": "正确字段为 actual_qty。"
+    }
+  ],
+  "probe": {
+    "wrong_attempts": 1,
+    "questions": ["问题询问的是计划量还是实际量？", "你的 SQL 选择了哪个字段？"],
+    "target_misconception": "把计划量当实际量"
+  },
+  "model": "qwen3-32b",
+  "latency_ms": 771,
+  "token_usage": {"prompt_tokens": 460, "completion_tokens": 108, "total_tokens": 568},
+  "timestamp": "2026-07-14T09:07:00+08:00"
+}

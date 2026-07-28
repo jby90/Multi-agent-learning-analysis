@@ -1,0 +1,26 @@
+{
+  "msg_id": "trace-p1-003",
+  "trace_id": "trace-p1",
+  "step": 3,
+  "agent": "task",
+  "role": "produce",
+  "payload": {
+    "type": "practice_guide",
+    "content": {"instruction": "按月比较计划量与实际量。", "difficulty": "basic", "llm_latency_ms": 1180}
+  },
+  "evidence": [
+    {
+      "kind": "kb_chunk",
+      "ref": "metric-definition-plan-qty",
+      "quote": "plan_qty 表示统计期内计划完成数量。",
+      "supports_claim": "plan_qty 是计划完成数量字段。"
+    }
+  ],
+  "claims": [
+    {"text": "plan_qty 是计划完成数量字段。", "kind": "fact"}
+  ],
+  "model": "qwen3-235b-a22b",
+  "latency_ms": 1194,
+  "token_usage": {"prompt_tokens": 690, "completion_tokens": 174, "total_tokens": 864},
+  "timestamp": "2026-07-14T09:02:00+08:00"
+}

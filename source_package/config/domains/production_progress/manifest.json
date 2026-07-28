@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "domain_id": "production_progress",
+  "database": "ref_contest_db",
+  "assets": {
+    "schema": "schema.json",
+    "intents": "intents.json",
+    "task_manifest": "task_manifest.json",
+    "task_templates": "task_templates.json",
+    "counter_evidence": "counter_evidence_map.json",
+    "gateway_scope": "gateway_scope.json"
+  }
+}

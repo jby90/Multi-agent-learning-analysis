@@ -1,0 +1,132 @@
+{
+  "parameter_order": [
+    "ship",
+    "month",
+    "month_down",
+    "month2",
+    "process",
+    "process_down",
+    "process_last"
+  ],
+  "template_ids": [
+    "T-01",
+    "T-02",
+    "T-03",
+    "T-04",
+    "T-05",
+    "T-06",
+    "T-07",
+    "T-08",
+    "T-09",
+    "T-10",
+    "T-02-A",
+    "T-02-B",
+    "T-01-A",
+    "T-01-B",
+    "T-03-A",
+    "T-03-B",
+    "T-10-A",
+    "T-10-B",
+    "T-04-A",
+    "T-04-B",
+    "T-05-A",
+    "T-05-B",
+    "T-07-A",
+    "T-07-B",
+    "T-06-A",
+    "T-06-B",
+    "T-08-DECAY",
+    "T-08-DECAY-A",
+    "T-08-DECAY-B",
+    "T-08-ATTR"
+  ],
+  "misconception_ids": [
+    "M-01",
+    "M-02",
+    "M-03",
+    "M-04",
+    "M-05"
+  ],
+  "difficulties": [
+    "basic",
+    "applied",
+    "advanced"
+  ],
+  "metric_text_terms": {
+    "plan_qty": [
+      "计划量",
+      "计划数",
+      "plan_qty"
+    ],
+    "actual_qty": [
+      "实际量",
+      "实际数",
+      "实际完成量",
+      "actual_qty"
+    ],
+    "complete_rate": [
+      "完成率",
+      "complete_rate"
+    ],
+    "deviation_rate": [
+      "偏差率",
+      "deviation_rate"
+    ],
+    "high_risk_rows": [
+      "高风险记录数",
+      "high_risk_rows"
+    ]
+  },
+  "diagnostic_template_ids": {
+    "月度聚合方法": {
+      "basic": "T-04",
+      "applied": "T-04-A",
+      "advanced": "T-04-B"
+    },
+    "异常识别标准": {
+      "basic": "T-05",
+      "applied": "T-05-A",
+      "advanced": "T-05-B"
+    },
+    "传导时滞分析": {
+      "basic": "T-07",
+      "applied": "T-07-A",
+      "advanced": "T-07-B"
+    },
+    "异常衰减规律": {
+      "basic": "T-08-DECAY",
+      "applied": "T-08-DECAY-A",
+      "advanced": "T-08-DECAY-B"
+    },
+    "责任单元定位": {
+      "basic": "T-06",
+      "applied": "T-06-A",
+      "advanced": "T-06-B"
+    },
+    "跨工序归因方法": {
+      "basic": "T-08-ATTR",
+      "applied": "T-08",
+      "advanced": "T-09"
+    },
+    "偏差率与风险等级": {
+      "basic": "T-10",
+      "applied": "T-10-A",
+      "advanced": "T-10-B"
+    },
+    "三道工序与传导关系": {
+      "basic": "T-03",
+      "applied": "T-03-A",
+      "advanced": "T-03-B"
+    },
+    "计划量与实际量口径": {
+      "basic": "T-01",
+      "applied": "T-01-A",
+      "advanced": "T-01-B"
+    },
+    "完成率计算": {
+      "basic": "T-02",
+      "applied": "T-02-A",
+      "advanced": "T-02-B"
+    }
+  }
+}

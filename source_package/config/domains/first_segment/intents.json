@@ -1,0 +1,222 @@
+{
+  "text2sql_output_schema": {
+    "type": "object",
+    "required": ["sql", "family", "explanation"],
+    "properties": {
+      "sql": {"type": ["string", "null"]},
+      "family": {
+        "enum": [
+          "SEC001_ENUM",
+          "SEC002_STATUS_VOLUME",
+          "SEC003_STATUS_FINISH",
+          "SEC004_STATUS_ONTIME",
+          "SEC005_STATUS_WARNING",
+          "SEC006_STATUS_OVERVIEW",
+          "SEC007_PROCESS_SCOPE",
+          "SEC008_PROCESS_ANNUAL",
+          "SEC009_PROCESS_MONTHLY",
+          "SEC010_SHIP_STAGE",
+          "OUT_OF_SCOPE"
+        ]
+      },
+      "explanation": {"type": "string"}
+    },
+    "additionalProperties": false
+  },
+  "router_output_schema": {
+    "type": "object",
+    "required": ["family"],
+    "properties": {
+      "family": {
+        "enum": [
+          "SEC001_ENUM",
+          "SEC002_STATUS_VOLUME",
+          "SEC003_STATUS_FINISH",
+          "SEC004_STATUS_ONTIME",
+          "SEC005_STATUS_WARNING",
+          "SEC006_STATUS_OVERVIEW",
+          "SEC007_PROCESS_SCOPE",
+          "SEC008_PROCESS_ANNUAL",
+          "SEC009_PROCESS_MONTHLY",
+          "SEC010_SHIP_STAGE",
+          "OUT_OF_SCOPE"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "generation_preamble": "# 先行分段 Text2SQL 组件\n\n只输出 JSON：{\"sql\":\"单条SELECT或null\",\"family\":\"配置中的意图ID\",\"explanation\":\"一句话中文\"}。\n\n意图：\nSEC001_ENUM：枚举物量态势工序，或枚举过程统计中的部门/工序。\nSEC002_STATUS_VOLUME：物量态势表的年总量、月计划数、当日实际数。\nSEC003_STATUS_FINISH：物量态势表的完成率，或当日实际数与完成率组合。\nSEC004_STATUS_ONTIME：物量态势表的准时率。\nSEC005_STATUS_WARNING：物量态势表的预警数或严重预警数。\nSEC006_STATUS_OVERVIEW：物量态势总览，或跨工序完成/准时/预警分布。\nSEC007_PROCESS_SCOPE：过程统计的部门-工序适用组合或三项年度总览；无记录时也只生成真实筛选 SQL。\nSEC008_PROCESS_ANNUAL：某部门某工序的年度计划数、年计划累计数或年度实际数。\nSEC009_PROCESS_MONTHLY：某部门某工序的月计划/月实际单月查询、趋势或对比。\nSEC010_SHIP_STAGE：按船号查询先行分段实际值；切割=QG_NUM，小组立=XZL_NUM。\nOUT_OF_SCOPE：以上范围外。\n\n硬规则：\n1. 只允许一条 SELECT；禁止写操作、多语句和注释。\n2. 只用 schema 中的表/字段，不联表，不创造字段。\n3. ttyear 查询必须按 RECORDDATE 和 TARTYPE='物量态势'；单工序问题还要按 PROCESS。\n4. ppdataprocess 年度查询用 TARGETTYPE='年度统计'；月度查询用 TARGETTYPE='每月情况'；二者都按 RECORDDATE、DEPT、PROCESS。月度趋势按 TRENDMONTH ASC。\n5. ppdatalast 按 RECORDDATE、SHIPNO、M_YJTYPE='实际'。\n6. FINISHRATE、ONTIMERATE 均直接读取存储字段；raw 未声明计算式，禁止自行推导。\n7. 用户要求的字段逐项返回；枚举用 DISTINCT；没有真实行也不得编造答案。\n8. 超出范围时 family=OUT_OF_SCOPE 且 sql=null。",
+  "router_prompt": "# 先行分段意图路由器\n\n只返回 JSON 对象 {\"family\":\"意图ID\"}。按用户明确要求的表述判定：\n- 要工序/部门有哪些、枚举清单：SEC001_ENUM。\n- 年总量、月计划数、当日实际数（物量态势）：SEC002_STATUS_VOLUME。\n- 完成率，或实际数和完成率：SEC003_STATUS_FINISH。\n- 准时率、按期率：SEC004_STATUS_ONTIME。\n- 预警数、严重预警数、风险分布：SEC005_STATUS_WARNING；若明确要求各工序分布则 SEC006_STATUS_OVERVIEW。\n- 物量态势总览，或各工序完成率/准时率/预警分布：SEC006_STATUS_OVERVIEW。\n- 哪些部门适用哪些工序、部门工序组合、某组合年度三项总览或查无记录验证：SEC007_PROCESS_SCOPE。\n- 部门+工序的年度计划数、年计划累计数、年度实际数：SEC008_PROCESS_ANNUAL。\n- 部门+工序的月计划、月实际、逐月趋势或计划实际对比：SEC009_PROCESS_MONTHLY。\n- 船号+切割/小组立实际值：SEC010_SHIP_STAGE。\n- 其余：OUT_OF_SCOPE。\n\n按顺序执行边界硬规则：\n1. 问实际有哪些部门、工序或组合清单，即使出现“年度统计”，仍归 SEC001_ENUM。\n2. 出现“年度三项记录”“年度三项原始值”“年度三项总览”，或同时要求年度计划、年计划累计、年度实际三项，归 SEC007_PROCESS_SCOPE。\n3. 只要求年度三项中的一个，含“年计划累计数”，归 SEC008_PROCESS_ANNUAL。\n4. 只有出现月计划 PLANNUM、月实际 ACTUALNUM、月份或逐月趋势时才归 SEC009_PROCESS_MONTHLY；不得把“年计划累计数”判成月度。\n5. SEC010_SHIP_STAGE 必须显式出现 H 加四位数字的船号；无船号的切割完成率属于 SEC003_STATUS_FINISH，不得判成按船实际值。\n\n边界：物量态势的 MONTHNUM 叫月计划数，归 SEC002；过程统计的 PLANNUM/ACTUALNUM 带部门条件，归 SEC009。物量态势的 FINISHRATE/ONTIMERATE 是存储字段，不归年度或月度过程统计。",
+  "full_profile": "FULL_FIRST_SEGMENT",
+  "out_of_scope_profile": "OUT_OF_SCOPE_MINI",
+  "full_examples_heading": "先行分段实库核验 Few-shot",
+  "routed_examples_heading": "先行分段路由 Few-shot",
+  "few_shots": [
+    {
+      "example_id": "FS-S01-A",
+      "family": "SEC001_ENUM",
+      "question": "列出2025-07-10物量态势中的全部工序",
+      "sql": "SELECT PROCESS FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' ORDER BY PROCESS ASC",
+      "verified_result": "8行工序"
+    },
+    {
+      "example_id": "FS-S01-B",
+      "family": "SEC001_ENUM",
+      "question": "年度过程统计实际有哪些部门",
+      "sql": "SELECT DISTINCT DEPT FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' ORDER BY DEPT ASC",
+      "verified_result": "4行：部门01、部门02、外协、部门03"
+    },
+    {
+      "example_id": "FS-S02-A",
+      "family": "SEC002_STATUS_VOLUME",
+      "question": "2025-07-10切割工序的年总量",
+      "sql": "SELECT YEARNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "verified_result": "YEARNUM=3300"
+    },
+    {
+      "example_id": "FS-S02-B",
+      "family": "SEC002_STATUS_VOLUME",
+      "question": "7月10日上胎的当日实际数是多少",
+      "sql": "SELECT ACTUALNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='上胎'",
+      "verified_result": "ACTUALNUM=1253"
+    },
+    {
+      "example_id": "FS-S03-A",
+      "family": "SEC003_STATUS_FINISH",
+      "question": "2025-07-10切割工序完成率",
+      "sql": "SELECT FINISHRATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "verified_result": "FINISHRATE=0.4231"
+    },
+    {
+      "example_id": "FS-S03-B",
+      "family": "SEC003_STATUS_FINISH",
+      "question": "上胎7月10日的实际数和完成率",
+      "sql": "SELECT ACTUALNUM, FINISHRATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='上胎'",
+      "verified_result": "ACTUALNUM=1253, FINISHRATE=0.2569"
+    },
+    {
+      "example_id": "FS-S04-A",
+      "family": "SEC004_STATUS_ONTIME",
+      "question": "2025-07-10出涂工序的准时率",
+      "sql": "SELECT ONTIMERATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='出涂'",
+      "verified_result": "ONTIMERATE=0.9877"
+    },
+    {
+      "example_id": "FS-S04-B",
+      "family": "SEC004_STATUS_ONTIME",
+      "question": "下胎7月10日按期率是多少",
+      "sql": "SELECT ONTIMERATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='下胎'",
+      "verified_result": "ONTIMERATE=0.7143"
+    },
+    {
+      "example_id": "FS-S05-A",
+      "family": "SEC005_STATUS_WARNING",
+      "question": "2025-07-10结构完的预警数和严重预警数",
+      "sql": "SELECT WARNNUM, SERWARNNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='结构完'",
+      "verified_result": "WARNNUM=34, SERWARNNUM=46"
+    },
+    {
+      "example_id": "FS-S05-B",
+      "family": "SEC005_STATUS_WARNING",
+      "question": "小组立7月10日的两类预警值",
+      "sql": "SELECT SERWARNNUM, WARNNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='小组立'",
+      "verified_result": "SERWARNNUM=NULL, WARNNUM=NULL"
+    },
+    {
+      "example_id": "FS-S06-A",
+      "family": "SEC006_STATUS_OVERVIEW",
+      "question": "2025-07-10各工序完成率和准时率分布",
+      "sql": "SELECT PROCESS, FINISHRATE, ONTIMERATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' ORDER BY PROCESS ASC",
+      "verified_result": "8行分布"
+    },
+    {
+      "example_id": "FS-S06-B",
+      "family": "SEC006_STATUS_OVERVIEW",
+      "question": "切割7月10日物量态势总览",
+      "sql": "SELECT YEARNUM, MONTHNUM, ACTUALNUM, FINISHRATE, ONTIMERATE, SERWARNNUM, WARNNUM, FINISHNUM, ONTIMENUM, PLANNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "verified_result": "3300,1673,1369,0.4231,0.5584,13,19,77,43,182"
+    },
+    {
+      "example_id": "FS-S07-A",
+      "family": "SEC007_PROCESS_SCOPE",
+      "question": "部门01切割工序年度三项总览",
+      "sql": "SELECT ndjhs, JHYLJ, NDSJS FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' AND DEPT='部门01' AND PROCESS='切割'",
+      "verified_result": "1717,850,686"
+    },
+    {
+      "example_id": "FS-S07-B",
+      "family": "SEC007_PROCESS_SCOPE",
+      "question": "验证外协单位01小组立是否有年度统计记录",
+      "sql": "SELECT DEPT, PROCESS, ndjhs, JHYLJ, NDSJS FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' AND DEPT='外协单位01' AND PROCESS='小组立'",
+      "verified_result": "0行，不补造数据"
+    },
+    {
+      "example_id": "FS-S08-A",
+      "family": "SEC008_PROCESS_ANNUAL",
+      "question": "部门01上胎的年度计划数",
+      "sql": "SELECT ndjhs FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' AND DEPT='部门01' AND PROCESS='上胎'",
+      "verified_result": "ndjhs=1692"
+    },
+    {
+      "example_id": "FS-S08-B",
+      "family": "SEC008_PROCESS_ANNUAL",
+      "question": "部门03进涂的年度实际数",
+      "sql": "SELECT NDSJS FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' AND DEPT='部门03' AND PROCESS='进涂'",
+      "verified_result": "NDSJS=1240"
+    },
+    {
+      "example_id": "FS-S09-A",
+      "family": "SEC009_PROCESS_MONTHLY",
+      "question": "部门01上胎7月计划与实际对比",
+      "sql": "SELECT TRENDYEAR, TRENDMONTH, PLANNUM, ACTUALNUM FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='每月情况' AND DEPT='部门01' AND PROCESS='上胎' AND TRENDMONTH=7",
+      "verified_result": "2025,7,151,42"
+    },
+    {
+      "example_id": "FS-S09-B",
+      "family": "SEC009_PROCESS_MONTHLY",
+      "question": "部门01切割逐月计划数趋势",
+      "sql": "SELECT TRENDYEAR, TRENDMONTH, PLANNUM FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='每月情况' AND DEPT='部门01' AND PROCESS='切割' ORDER BY TRENDMONTH ASC",
+      "verified_result": "12行月序列"
+    },
+    {
+      "example_id": "FS-S10-A",
+      "family": "SEC010_SHIP_STAGE",
+      "question": "先行分段表H2705号船2025-07-09切割实际值",
+      "sql": "SELECT QG_NUM FROM dwr_mps_ppdatalast_wide WHERE RECORDDATE='2025-07-09' AND SHIPNO='H2705' AND M_YJTYPE='实际'",
+      "verified_result": "QG_NUM=210"
+    },
+    {
+      "example_id": "FS-S10-B",
+      "family": "SEC010_SHIP_STAGE",
+      "question": "H2717在7月9日的小组立实际值",
+      "sql": "SELECT XZL_NUM FROM dwr_mps_ppdatalast_wide WHERE RECORDDATE='2025-07-09' AND SHIPNO='H2717' AND M_YJTYPE='实际'",
+      "verified_result": "XZL_NUM=207"
+    },
+    {
+      "example_id": "FS-OOS",
+      "family": "OUT_OF_SCOPE",
+      "question": "查询先行分段的能源成本",
+      "sql": "null",
+      "verified_result": "OUT_OF_SCOPE"
+    }
+  ],
+  "routing_profiles": {
+    "FULL_FIRST_SEGMENT": [
+      "FS-S01-A", "FS-S01-B", "FS-S02-A", "FS-S02-B", "FS-S03-A", "FS-S03-B",
+      "FS-S04-A", "FS-S04-B", "FS-S05-A", "FS-S05-B", "FS-S06-A", "FS-S06-B",
+      "FS-S07-A", "FS-S07-B", "FS-S08-A", "FS-S08-B", "FS-S09-A", "FS-S09-B",
+      "FS-S10-A", "FS-S10-B", "FS-OOS"
+    ],
+    "SEC001_ENUM": ["FS-S01-A", "FS-S01-B", "FS-S06-A"],
+    "SEC002_STATUS_VOLUME": ["FS-S02-A", "FS-S02-B", "FS-S03-A"],
+    "SEC003_STATUS_FINISH": ["FS-S03-A", "FS-S03-B", "FS-S02-B"],
+    "SEC004_STATUS_ONTIME": ["FS-S04-A", "FS-S04-B", "FS-S06-A"],
+    "SEC005_STATUS_WARNING": ["FS-S05-A", "FS-S05-B", "FS-S06-B"],
+    "SEC006_STATUS_OVERVIEW": ["FS-S06-A", "FS-S06-B", "FS-S05-A"],
+    "SEC007_PROCESS_SCOPE": ["FS-S07-A", "FS-S07-B", "FS-S01-B"],
+    "SEC008_PROCESS_ANNUAL": ["FS-S08-A", "FS-S08-B", "FS-S07-A"],
+    "SEC009_PROCESS_MONTHLY": ["FS-S09-A", "FS-S09-B", "FS-S08-A"],
+    "SEC010_SHIP_STAGE": ["FS-S10-A", "FS-S10-B", "FS-OOS"],
+    "OUT_OF_SCOPE_MINI": ["FS-OOS", "FS-S10-A"]
+  }
+}

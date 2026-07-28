@@ -1,0 +1,7 @@
+workshop_code,workshop_name,process_code,responsibility
+WSA,车间A,YCL,预处理责任单元一
+WSB,车间B,YCL,预处理责任单元二
+WSC,车间C,ZZTP,制作托盘责任单元一
+WSD,车间D,ZZTP,制作托盘责任单元二
+WSE,车间E,AZTP,安装托盘责任单元一
+WSF,车间F,AZTP,安装托盘责任单元二

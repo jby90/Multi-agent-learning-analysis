@@ -1,0 +1,34 @@
+{
+  "dataset_label": "当前正式 50×2 终验 Round 2",
+  "format_version": "learning-data-manifest-v1",
+  "sample_count": 3,
+  "samples": [
+    {
+      "case_id": "E2E-008",
+      "learning_path": "rebuttal_corrected",
+      "message_count": 35,
+      "profile_id": "planner_new",
+      "rationale": "新入职生产计划员首次答错，经数据反证后改正的完整高光链路",
+      "slug": "01_planner_new_rebuttal_corrected",
+      "trace_id": "p7-e2e-008-a01"
+    },
+    {
+      "case_id": "E2E-012",
+      "learning_path": "direct_correct",
+      "message_count": 29,
+      "profile_id": "craft_engineer",
+      "rationale": "工艺工程师首次答对并正常进阶的完整对照链路",
+      "slug": "02_craft_engineer_direct_correct",
+      "trace_id": "p7-e2e-012-a01"
+    },
+    {
+      "case_id": "E2E-030",
+      "learning_path": "second_wrong_step_down",
+      "message_count": 45,
+      "profile_id": "line_leader",
+      "rationale": "班组长连续答错后降维重学的完整链路",
+      "slug": "03_line_leader_second_wrong_step_down",
+      "trace_id": "p7-e2e-030-a01"
+    }
+  ]
+}

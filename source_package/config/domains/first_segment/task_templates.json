@@ -1,0 +1,134 @@
+{
+  "demo_parameters": {
+    "date": "2025-07-10",
+    "process": "切割",
+    "dept": "制造一部",
+    "ship": "H2705",
+    "month": "7"
+  },
+  "templates": [
+    {
+      "template_id": "T-FS01",
+      "knowledge_point": "工序与部门枚举",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "列出{date}物量态势中的工序",
+      "family": "SEC001_ENUM",
+      "standard_sql": "SELECT PROCESS FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' ORDER BY PROCESS ASC",
+      "expected_rows": [
+        {"PROCESS": "上胎"}, {"PROCESS": "下胎"}, {"PROCESS": "出涂"}, {"PROCESS": "切割"},
+        {"PROCESS": "完整性"}, {"PROCESS": "小组立"}, {"PROCESS": "结构完"}, {"PROCESS": "进涂"}
+      ],
+      "expected_points": ["按真实表返回8个工序，不推断工序顺序"]
+    },
+    {
+      "template_id": "T-FS02",
+      "knowledge_point": "物量数量口径",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{date}{process}工序的年总量、月计划数和当日实际数",
+      "family": "SEC002_STATUS_VOLUME",
+      "standard_sql": "SELECT YEARNUM, MONTHNUM, ACTUALNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "expected_rows": [{"YEARNUM": "3300", "MONTHNUM": "1673", "ACTUALNUM": "1369"}],
+      "expected_points": ["三个数量均直接读取对应存储字段"]
+    },
+    {
+      "template_id": "T-FS03",
+      "knowledge_point": "完成率存储字段",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{date}{process}工序完成率",
+      "family": "SEC003_STATUS_FINISH",
+      "standard_sql": "SELECT FINISHRATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "expected_rows": [{"FINISHRATE": "0.4231"}],
+      "expected_points": ["读取FINISHRATE，不补写计算式"]
+    },
+    {
+      "template_id": "T-FS04",
+      "knowledge_point": "准时率存储字段",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{date}{process}工序准时率",
+      "family": "SEC004_STATUS_ONTIME",
+      "standard_sql": "SELECT ONTIMERATE FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "expected_rows": [{"ONTIMERATE": "0.5584"}],
+      "expected_points": ["读取ONTIMERATE，不补写时间基准"]
+    },
+    {
+      "template_id": "T-FS05",
+      "knowledge_point": "预警字段与空值",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{date}{process}工序的预警数与严重预警数",
+      "family": "SEC005_STATUS_WARNING",
+      "standard_sql": "SELECT WARNNUM, SERWARNNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "expected_rows": [{"WARNNUM": "19", "SERWARNNUM": "13"}],
+      "expected_points": ["两类预警字段独立读取，不推断包含关系"]
+    },
+    {
+      "template_id": "T-FS06",
+      "knowledge_point": "物量态势总览",
+      "difficulty": "basic",
+      "payload_type": "practice_guide",
+      "question_template": "查看{date}{process}工序物量态势总览",
+      "guide_steps": [
+        "确认查看日期为{date}、工序为{process}，避免混入其他日期或工序记录。",
+        "按物量、进度、准时和预警四类业务信息整理总览内容。",
+        "逐项检查数值是否缺失、单位是否一致，并保留原始业务含义。",
+        "用简短业务语言概括总览，不对尚未给出定义的指标补写计算或因果解释。"
+      ],
+      "completion_criteria": [
+        "已形成{date}{process}工序的完整物量态势检查记录。",
+        "各类信息边界清楚，未把空值、预警或比率扩展为未经验证的业务结论。"
+      ],
+      "family": "SEC006_STATUS_OVERVIEW",
+      "standard_sql": "SELECT YEARNUM, MONTHNUM, ACTUALNUM, FINISHRATE, ONTIMERATE, SERWARNNUM, WARNNUM, FINISHNUM, ONTIMENUM, PLANNUM FROM dwr_mps_ttyear_wide WHERE RECORDDATE='2025-07-10' AND TARTYPE='物量态势' AND PROCESS='切割'",
+      "expected_rows": [{"YEARNUM": "3300", "MONTHNUM": "1673", "ACTUALNUM": "1369", "FINISHRATE": "0.4231", "ONTIMERATE": "0.5584", "SERWARNNUM": "13", "WARNNUM": "19", "FINISHNUM": "77", "ONTIMENUM": "43", "PLANNUM": "182"}],
+      "expected_points": ["总览返回raw声明的十个字段"]
+    },
+    {
+      "template_id": "T-FS07",
+      "knowledge_point": "部门工序适用记录",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "核对{dept}{process}的年度三项记录",
+      "family": "SEC007_PROCESS_SCOPE",
+      "standard_sql": "SELECT ndjhs, JHYLJ, NDSJS FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' AND DEPT='制造一部' AND PROCESS='切割'",
+      "expected_rows": [{"ndjhs": "1717", "JHYLJ": "850", "NDSJS": "686"}],
+      "expected_points": ["以真实CSV记录为准，未出现的组合不补造"]
+    },
+    {
+      "template_id": "T-FS08",
+      "knowledge_point": "年度过程统计",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{dept}{process}的年度计划数",
+      "family": "SEC008_PROCESS_ANNUAL",
+      "standard_sql": "SELECT ndjhs FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='年度统计' AND DEPT='制造一部' AND PROCESS='切割'",
+      "expected_rows": [{"ndjhs": "1717"}],
+      "expected_points": ["年度计划数字段为ndjhs"]
+    },
+    {
+      "template_id": "T-FS09",
+      "knowledge_point": "月度过程统计",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{dept}{process}{month}月计划与实际",
+      "family": "SEC009_PROCESS_MONTHLY",
+      "standard_sql": "SELECT TRENDYEAR, TRENDMONTH, PLANNUM, ACTUALNUM FROM dwr_mps_ppdataprocess_wide WHERE RECORDDATE='2025-07-10' AND TARGETTYPE='每月情况' AND DEPT='制造一部' AND PROCESS='切割' AND TRENDMONTH=7",
+      "expected_rows": [{"TRENDYEAR": "2025", "TRENDMONTH": "7", "PLANNUM": "158", "ACTUALNUM": "35"}],
+      "expected_points": ["月度值使用PLANNUM与ACTUALNUM"]
+    },
+    {
+      "template_id": "T-FS10",
+      "knowledge_point": "按船实际值",
+      "difficulty": "basic",
+      "payload_type": "quiz_set",
+      "question_template": "查询{ship}在2025-07-09的切割实际值",
+      "family": "SEC010_SHIP_STAGE",
+      "standard_sql": "SELECT QG_NUM FROM dwr_mps_ppdatalast_wide WHERE RECORDDATE='2025-07-09' AND SHIPNO='H2705' AND M_YJTYPE='实际'",
+      "expected_rows": [{"QG_NUM": "210"}],
+      "expected_points": ["切割实际值对应QG_NUM"]
+    }
+  ]
+}

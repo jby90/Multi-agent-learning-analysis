@@ -1,0 +1,29 @@
+{
+  "msg_id": "trace-p1-006",
+  "trace_id": "trace-p1",
+  "step": 6,
+  "agent": "review",
+  "role": "verdict",
+  "payload": {
+    "type": "review_verdict",
+    "content": {"reviewed_msg_id": "trace-p1-005", "llm_latency_ms": 840}
+  },
+  "evidence": [
+    {"kind": "review_rule", "ref": "R-01", "quote": "数据口径必须一致。"},
+    {"kind": "review_rule", "ref": "R-02", "quote": "引用必须支持结论。"},
+    {"kind": "review_rule", "ref": "R-03", "quote": "难度必须匹配画像。"}
+  ],
+  "verdict": {
+    "decision": "reject",
+    "rule_hits": [
+      {"rule_id": "R-01", "reason": "实际量口径误用了计划量。", "evidence_ref": "sql-run-005"},
+      {"rule_id": "R-02", "reason": "引文范围不足。", "evidence_ref": "kb-chunk-022"},
+      {"rule_id": "R-03", "reason": "题目难度高于画像。", "evidence_ref": "trace-p1-001"}
+    ],
+    "difficulty_action": "step_down"
+  },
+  "model": "qwen3-32b",
+  "latency_ms": 852,
+  "token_usage": {"prompt_tokens": 730, "completion_tokens": 160, "total_tokens": 890},
+  "timestamp": "2026-07-14T09:05:00+08:00"
+}

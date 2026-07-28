@@ -1,0 +1,42 @@
+[
+  {
+    "question_id": "PT-1",
+    "knowledge_point": "计划量与实际量口径",
+    "misconceptions": ["M-01"],
+    "stem": "H2601船5月预处理plan_qty合计1855.06、actual_qty合计1156.87。该月'实际完成了多少'应看哪个数？",
+    "options": {"A": "1855.06", "B": "1156.87", "C": "两者之和", "D": "两者平均"},
+    "answer": "B"
+  },
+  {
+    "question_id": "PT-2",
+    "knowledge_point": "完成率计算",
+    "misconceptions": ["M-01", "M-04"],
+    "stem": "计算某船某月某工序的月完成率，正确算法是？",
+    "options": {"A": "当月每日完成率的平均值", "B": "SUM(actual_qty)/SUM(plan_qty)", "C": "月末最后一天的complete_rate", "D": "actual_qty最大日的完成率"},
+    "answer": "B"
+  },
+  {
+    "question_id": "PT-3",
+    "knowledge_point": "传导时滞分析",
+    "misconceptions": ["M-02"],
+    "stem": "5月预处理出现严重异常，检查制作托盘是否受影响应重点看哪个月？",
+    "options": {"A": "5月", "B": "4月", "C": "6月", "D": "任意月"},
+    "answer": "C"
+  },
+  {
+    "question_id": "PT-4",
+    "knowledge_point": "异常识别标准",
+    "misconceptions": ["M-03"],
+    "stem": "某船某工序月完成率为86%（正常区间88%—103%），下列判断最恰当的是？",
+    "options": {"A": "重大异常需立即上报", "B": "轻微偏低，观察是否持续或伴随高风险记录", "C": "完全正常", "D": "数据错误"},
+    "answer": "B"
+  },
+  {
+    "question_id": "PT-5",
+    "knowledge_point": "月度聚合方法",
+    "misconceptions": ["M-04"],
+    "stem": "问'H2601五月预处理完成率'，SQL过滤时哪组维度必须同时锁定？",
+    "options": {"A": "仅船号", "B": "仅月份", "C": "船号+月份+工序", "D": "船号+月份+工序+责任单元"},
+    "answer": "C"
+  }
+]

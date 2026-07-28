@@ -1,0 +1,15 @@
+{
+  "msg_id": "trace-p1-009",
+  "trace_id": "trace-p1",
+  "step": 9,
+  "agent": "system",
+  "role": "system",
+  "payload": {
+    "type": "learning_path_update",
+    "content": {"action": "step_down", "next_topic": "字段口径"}
+  },
+  "evidence": [],
+  "student_profile_ref": "marine_student",
+  "timestamp": "2026-07-14T09:08:00+08:00"
+}
+

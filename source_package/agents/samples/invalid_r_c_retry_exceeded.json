@@ -1,0 +1,20 @@
+{
+  "msg_id": "trace-invalid-c-001",
+  "trace_id": "trace-invalid-c",
+  "step": 1,
+  "agent": "system",
+  "role": "system",
+  "payload": {
+    "type": "control",
+    "content": {"action": "retry"}
+  },
+  "evidence": [],
+  "retry": {
+    "retry_count": 3,
+    "max_retries": 2,
+    "in_reply_to": "trace-invalid-c-source",
+    "fallback": "human_review"
+  },
+  "timestamp": "2026-07-14T10:02:00+08:00"
+}
+

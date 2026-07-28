@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ref-multiagent/message-v1",
+  "title": "REF五智能体统一消息协议 v1",
+  "description": "所有智能体间传递的消息必须符合本schema。Dify每个节点的输出先经代码节点校验，不合规即拦截重试。设计目标：①辩论回路与启发式追问的字段从第一天就存在；②每条确定性结论强制挂证据；③全链消息可落盘回放（官方交付格式的中间数据直接由此导出）。",
+  "type": "object",
+  "required": ["msg_id", "trace_id", "step", "agent", "role", "payload", "evidence", "timestamp"],
+  "properties": {
+    "msg_id": { "type": "string", "description": "消息唯一ID，格式 {trace_id}-{step:03d}" },
+    "trace_id": { "type": "string", "description": "一次完整学习会话的ID，贯穿五智能体与所有重试" },
+    "step": { "type": "integer", "minimum": 1, "description": "会话内全局递增步号，回放按此排序" },
+    "agent": {
+      "type": "string",
+      "enum": ["diagnosis", "knowledge", "task", "verification", "review", "system"],
+      "description": "发出方：学情诊断/领域知识/实操任务/数据验证/审核决策/系统编排"
+    },
+    "role": {
+      "type": "string",
+      "enum": ["produce", "verdict", "rebuttal", "re_verdict", "probe", "system"],
+      "description": "produce=生成产物；verdict=审核裁决；rebuttal=被驳回方辩护（辩论回路）；re_verdict=二次裁决；probe=启发式追问；system=编排控制"
+    },
+    "payload": {
+      "type": "object",
+      "description": "按 agent+role 取不同子结构，见 payload_schemas/ 目录",
+      "required": ["type", "content"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["profile_assessment", "lecture_note", "practice_guide", "quiz_set", "sql_result", "review_verdict", "rebuttal_case", "probe_questions", "learning_path_update", "control"]
+        },
+        "content": { "type": "object" }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "description": "证据链。凡 payload 中含确定性结论（claims）的消息，本数组不得为空；无证据时结论必须改为 speculation 或拒答。",
+      "items": {
+        "type": "object",
+        "required": ["kind", "ref"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["kb_chunk", "sql_query", "quiz_answer_key", "review_rule"], "description": "知识库切片 / SQL查询及结果 / 标准答案 / 审核规则条目" },
+          "ref": { "type": "string", "description": "kb_chunk→切片ID；sql_query→执行记录ID；review_rule→规则编号如R-03" },
+          "quote": { "type": "string", "description": "被引用的原文片段或SQL结果摘要，用于幻觉率自动比对" },
+          "supports_claim": { "type": "string", "description": "该证据支撑的具体结论文本，评测脚本按此做结论-引用比对" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "description": "本消息中的确定性结论清单（评测脚本的比对入口）。每条 claim 必须能在 evidence[].supports_claim 中找到支撑，否则计一次幻觉。",
+      "items": {
+        "type": "object",
+        "required": ["text", "kind"],
+        "properties": {
+          "text": { "type": "string" },
+          "kind": { "type": "string", "enum": ["fact", "data_conclusion", "speculation"], "description": "fact须挂kb_chunk；data_conclusion须挂sql_query；speculation免证据但前端必须标注'推断'" }
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "description": "仅 role=verdict/re_verdict 时必填",
+      "required": ["decision", "rule_hits"],
+      "properties": {
+        "decision": { "type": "string", "enum": ["approve", "reject", "approve_with_fix"] },
+        "rule_hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "reason"],
+            "properties": {
+              "rule_id": { "type": "string", "description": "审核规则表编号，如 R-01口径混淆 / R-02引用不支持结论 / R-03难度错配" },
+              "reason": { "type": "string" },
+              "evidence_ref": { "type": "string", "description": "指认问题所依据的证据msg_id或切片ID" }
+            }
+          }
+        },
+        "difficulty_action": { "type": "string", "enum": ["keep", "step_down", "step_up", "none"], "description": "难度调整决策，驱动学习路径更新" }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "description": "辩论回路控制。reject后被驳回方发rebuttal，审核方发re_verdict；retry_count>=max_retries时强制走fallback，防死循环。",
+      "properties": {
+        "retry_count": { "type": "integer", "minimum": 0, "default": 0 },
+        "max_retries": { "type": "integer", "default": 2 },
+        "in_reply_to": { "type": "string", "description": "被驳回/被辩护的那条消息的msg_id" },
+        "fallback": { "type": "string", "enum": ["human_review", "degrade_to_template", "refuse"], "description": "超限后的兜底动作" }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "description": "启发式追问状态机。学生首错→probe(1-2问)→再错→step_down降维讲解；直接给答案是禁止路径。",
+      "properties": {
+        "wrong_attempts": { "type": "integer", "minimum": 1 },
+        "questions": { "type": "array", "maxItems": 2, "items": { "type": "string" } },
+        "target_misconception": { "type": "string", "description": "追问针对的错误认知，如'把计划量当实际量'" }
+      }
+    },
+    "student_profile_ref": { "type": "string", "description": "画像ID：cs_student / marine_student / vocational_student" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "latency_ms": { "type": "integer", "description": "本节点耗时，性能分析用" },
+    "model": { "type": "string", "description": "本消息由哪个模型生成，消融实验分组用" },
+    "token_usage": {
+      "type": "object",
+      "description": "本条LLM消息的token用量；total_tokens必须等于输入与输出之和。",
+      "required": ["prompt_tokens", "completion_tokens", "total_tokens"],
+      "properties": {
+        "prompt_tokens": { "type": "integer", "minimum": 0 },
+        "completion_tokens": { "type": "integer", "minimum": 0 },
+        "total_tokens": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
