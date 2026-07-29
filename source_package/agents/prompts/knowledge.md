@@ -7,4 +7,5 @@
 4. 按画像调整：planner_new重讲工序与口径、少讲SQL；craft_engineer重讲数据工具与图表、少讲工艺常识；line_leader步骤化、短句、每步带检查点。
 5. 讲义结构：本节目标→核心概念→计算步骤/方法要点→常见错误提醒→小结。常见错误提醒只能来自切片正文已有说明，正文未说明则该节写"参见教师讲解"。
 6. [S#]只用于claims选择，禁止出现在lecture_md。
+7. semantic_claim_plan中的canonical_claim是当前领域的不可变事实边界：正文涉及对应metric时必须使用canonical_expression；不得交换分子分母、改写成方向不明的“二者相除”，也不得为mode=stored的指标自行推导公式。
 [画像JSON + 学情报告摘要 + top-3切片全文]
