@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from time import perf_counter
@@ -41,6 +42,15 @@ REBUTTAL_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 _OUTPUT_VALIDATOR = Draft202012Validator(REBUTTAL_OUTPUT_SCHEMA)
+
+
+@dataclass(frozen=True, slots=True)
+class _RejectionContext:
+    product_msg_id: str
+    verdict_msg_id: str
+    producer_agent: str
+    hits: tuple[Mapping[str, Any], ...]
+    rule_ids: frozenset[str]
 
 
 def _items(message: Mapping[str, Any], field: str) -> tuple[Mapping[str, Any], ...]:
@@ -89,6 +99,53 @@ def _system_prompt(hits: tuple[Mapping[str, Any], ...]) -> str:
     )
 
 
+def _validate_rejection_context(
+    product: Mapping[str, Any],
+    verdict: Mapping[str, Any],
+    *,
+    trace_id: str,
+) -> _RejectionContext:
+    """Validate the full product/verdict association before any rebuttal path."""
+
+    if not isinstance(product, Mapping) or not isinstance(verdict, Mapping):
+        raise ValueError("product and verdict must be mappings")
+    product_msg_id = _required_string(product, "msg_id")
+    verdict_msg_id = _required_string(verdict, "msg_id")
+    producer_agent = _required_string(product, "agent")
+    product_trace_id = _required_string(product, "trace_id")
+    verdict_trace_id = _required_string(verdict, "trace_id")
+    product_type = _payload(product).get("type")
+    verdict_content = _content(verdict)
+    verdict_data = verdict.get("verdict")
+    if (
+        product_trace_id != trace_id
+        or verdict_trace_id != trace_id
+        or product.get("role") not in {"produce", "probe"}
+        or not isinstance(product_type, str)
+        or verdict.get("agent") != "review"
+        or verdict.get("role") != "verdict"
+        or _payload(verdict).get("type") != "review_verdict"
+        or verdict_content.get("reviewed_msg_id") != product_msg_id
+        or verdict_content.get("reviewed_payload_type") != product_type
+        or not isinstance(verdict_data, Mapping)
+        or verdict_data.get("decision") != "reject"
+    ):
+        raise ValueError("verdict association is invalid")
+    hits = _rule_hits(verdict)
+    rule_ids = frozenset(
+        str(hit.get("rule_id"))
+        for hit in hits
+        if hit.get("rule_id") is not None
+    )
+    return _RejectionContext(
+        product_msg_id=product_msg_id,
+        verdict_msg_id=verdict_msg_id,
+        producer_agent=producer_agent,
+        hits=hits,
+        rule_ids=rule_ids,
+    )
+
+
 class RebuttalGenerator:
     """Call 235B only when every original hit is an approved soft rule."""
 
@@ -107,41 +164,20 @@ class RebuttalGenerator:
     def generate(
         self, product: Mapping[str, Any], verdict: Mapping[str, Any]
     ) -> dict[str, Any]:
-        if not isinstance(product, Mapping) or not isinstance(verdict, Mapping):
-            raise ValueError("product and verdict must be mappings")
-        product_msg_id = _required_string(product, "msg_id")
-        verdict_msg_id = _required_string(verdict, "msg_id")
-        producer_agent = _required_string(product, "agent")
-        product_trace_id = _required_string(product, "trace_id")
-        verdict_trace_id = _required_string(verdict, "trace_id")
-        product_type = _payload(product).get("type")
-        verdict_content = _content(verdict)
-        verdict_data = verdict.get("verdict")
-        if (
-            product_trace_id != self._trace_id
-            or verdict_trace_id != self._trace_id
-            or product.get("role") not in {"produce", "probe"}
-            or not isinstance(product_type, str)
-            or verdict.get("agent") != "review"
-            or verdict.get("role") != "verdict"
-            or _payload(verdict).get("type") != "review_verdict"
-            or verdict_content.get("reviewed_msg_id") != product_msg_id
-            or verdict_content.get("reviewed_payload_type") != product_type
-            or not isinstance(verdict_data, Mapping)
-            or verdict_data.get("decision") != "reject"
-        ):
-            raise ValueError("verdict association is invalid")
-        hits = _rule_hits(verdict)
-        rule_ids = frozenset(
-            str(hit.get("rule_id")) for hit in hits if hit.get("rule_id") is not None
+        context = _validate_rejection_context(
+            product,
+            verdict,
+            trace_id=self._trace_id,
         )
-        defensible = bool(hits) and rule_ids.issubset(DEFENSIBLE_RULES)
+        defensible = bool(context.hits) and context.rule_ids.issubset(
+            DEFENSIBLE_RULES
+        )
         if not defensible:
             return self._draft(
                 product=product,
-                product_msg_id=product_msg_id,
-                verdict_msg_id=verdict_msg_id,
-                producer_agent=producer_agent,
+                product_msg_id=context.product_msg_id,
+                verdict_msg_id=context.verdict_msg_id,
+                producer_agent=context.producer_agent,
                 concede=True,
                 rebuttal="",
                 evidence_refs=(),
@@ -151,7 +187,7 @@ class RebuttalGenerator:
         started = perf_counter()
         result = self._llm_call(
             model=GENERATOR_MODEL,
-            system=_system_prompt(hits),
+            system=_system_prompt(context.hits),
             user=json.dumps(
                 {"product": dict(product), "verdict": dict(verdict)},
                 ensure_ascii=False,
@@ -184,15 +220,40 @@ class RebuttalGenerator:
         elapsed_ms = round(max(0.0, perf_counter() - started) * 1000)
         return self._draft(
             product=product,
-            product_msg_id=product_msg_id,
-            verdict_msg_id=verdict_msg_id,
-            producer_agent=producer_agent,
+            product_msg_id=context.product_msg_id,
+            verdict_msg_id=context.verdict_msg_id,
+            producer_agent=context.producer_agent,
             concede=concede,
             rebuttal=rebuttal_text,
             evidence_refs=tuple(approved_refs),
             evidence=evidence,
             result=result,
             latency_ms=max(elapsed_ms, result.latency_ms),
+        )
+
+    def deterministic_concede(
+        self,
+        product: Mapping[str, Any],
+        verdict: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Concede without a model call after the same association validation."""
+
+        context = _validate_rejection_context(
+            product,
+            verdict,
+            trace_id=self._trace_id,
+        )
+        if not context.hits:
+            raise ValueError("reject verdict must contain rule_hits")
+        return self._draft(
+            product=product,
+            product_msg_id=context.product_msg_id,
+            verdict_msg_id=context.verdict_msg_id,
+            producer_agent=context.producer_agent,
+            concede=True,
+            rebuttal="",
+            evidence_refs=(),
+            evidence=(),
         )
 
     def _draft(

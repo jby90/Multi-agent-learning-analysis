@@ -1,0 +1,856 @@
+{
+  "schema_version": "innovation-a-ablation-v1",
+  "fixed_stub": {
+    "history_prefix": "same-free-follow-up-transaction",
+    "review_rules": [
+      "R-02",
+      "R-03"
+    ],
+    "candidate_count": 3,
+    "post_divergence_llm_output_used": false
+  },
+  "groups": {
+    "A0": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 2,
+      "deterministic_concessions": 0,
+      "generation_feedback": [
+        [],
+        [
+          "上一版问题未通过专业审核，请重新组织。"
+        ],
+        [
+          "上一版问题未通过专业审核，请重新组织。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    },
+    "A1-B": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 1,
+      "deterministic_concessions": 1,
+      "generation_feedback": [
+        [],
+        [
+          "上一版问题未通过专业审核，请重新组织。"
+        ],
+        [
+          "上一版问题未通过专业审核，请重新组织。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    },
+    "A1-F": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 2,
+      "deterministic_concessions": 0,
+      "generation_feedback": [
+        [],
+        [
+          "让问题与所给专业材料之间的支持关系更明确。"
+        ],
+        [
+          "保持学习目标和既定难度档不变，调整问题的表达、铺垫和认知负荷。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    },
+    "A1-BF": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 1,
+      "deterministic_concessions": 1,
+      "generation_feedback": [
+        [],
+        [
+          "让问题与所给专业材料之间的支持关系更明确。"
+        ],
+        [
+          "保持学习目标和既定难度档不变，调整问题的表达、铺垫和认知负荷。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    }
+  },
+  "a0_baseline_equivalent": true,
+  "budget_sensitivity": {
+    "0": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 0,
+      "deterministic_concessions": 2,
+      "generation_feedback": [
+        [],
+        [
+          "让问题与所给专业材料之间的支持关系更明确。"
+        ],
+        [
+          "保持学习目标和既定难度档不变，调整问题的表达、铺垫和认知负荷。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    },
+    "1": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 1,
+      "deterministic_concessions": 1,
+      "generation_feedback": [
+        [],
+        [
+          "让问题与所给专业材料之间的支持关系更明确。"
+        ],
+        [
+          "保持学习目标和既定难度档不变，调整问题的表达、铺垫和认知负荷。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    },
+    "4": {
+      "approved_question": "固定桩追问-3？",
+      "message_sequence": [
+        {
+          "msg_id": "innovation-a-fixed-stub-001",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-1？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-002",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-003",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-004",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-02"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-005",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-2？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-006",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-007",
+          "role": "rebuttal",
+          "payload_type": "rebuttal_case",
+          "question": null,
+          "concede": true,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-008",
+          "role": "re_verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "reject",
+          "rule_ids": [
+            "R-03"
+          ]
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-009",
+          "role": "probe",
+          "payload_type": "quiz_set",
+          "question": "固定桩追问-3？",
+          "concede": null,
+          "decision": null,
+          "rule_ids": []
+        },
+        {
+          "msg_id": "innovation-a-fixed-stub-010",
+          "role": "verdict",
+          "payload_type": "review_verdict",
+          "question": null,
+          "concede": null,
+          "decision": "approve",
+          "rule_ids": []
+        }
+      ],
+      "review_calls": 3,
+      "re_review_calls": 2,
+      "model_rebuttal_attempts": 2,
+      "deterministic_concessions": 0,
+      "generation_feedback": [
+        [],
+        [
+          "让问题与所给专业材料之间的支持关系更明确。"
+        ],
+        [
+          "保持学习目标和既定难度档不变，调整问题的表达、铺垫和认知负荷。"
+        ]
+      ],
+      "failed_products_published": 0,
+      "terminal_action": "approved"
+    }
+  },
+  "claims_boundary": {
+    "proves": [
+      "transaction_model_rebuttal_call_bound",
+      "complete_re_review_after_valid_rebuttal",
+      "mapped_feedback_without_raw_review_text",
+      "failed_product_isolation"
+    ],
+    "does_not_prove": [
+      "real_token_reduction",
+      "real_question_quality_improvement",
+      "learning_outcome_improvement"
+    ]
+  }
+}

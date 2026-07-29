@@ -72,12 +72,92 @@ class InteractiveSessionError(RuntimeError):
     """Raised when an interactive action is not valid for the current session."""
 
 
+@dataclass(frozen=True, slots=True)
+class FollowUpReviewPolicy:
+    """Internal-only switches for deterministic innovation A ablations."""
+
+    rebuttal_budget: int = 1
+    feedback_mode: str = "mapped"
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.rebuttal_budget, bool)
+            or not isinstance(self.rebuttal_budget, int)
+            or self.rebuttal_budget not in {0, 1, 4}
+        ):
+            raise ValueError("rebuttal_budget must be one of 0, 1, or 4")
+        if self.feedback_mode not in {"generic", "mapped"}:
+            raise ValueError("feedback_mode must be generic or mapped")
+
+
 _REVIEW_STOP_COPY = {
     "degrade_to_template": "这份内容多次未通过专业审核，本次学习已安全结束。",
     "human_review": "这份内容需要进一步确认，本次学习已暂停。",
     "refuse": "这份内容未通过专业审核，本次学习已安全结束。",
     "system_error": "内容生成服务暂时不可用，本次学习已安全结束，请稍后重新开始。",
 }
+
+_GENERIC_FOLLOW_UP_REVIEW_FEEDBACK = (
+    "上一版问题未通过专业审核，请重新组织。",
+)
+_MAPPED_FOLLOW_UP_REVIEW_FEEDBACK = {
+    "R-01": "让题目中的数据口径与当前学习任务保持一致。",
+    "R-02": "让问题与所给专业材料之间的支持关系更明确。",
+    "R-03": "保持学习目标和既定难度档不变，调整问题的表达、铺垫和认知负荷。",
+    "R-04": "只使用已经提供且能够核验的材料重新组织问题。",
+    "R-05": "只围绕已经确认有效的学习结果重新组织问题。",
+}
+
+
+def _feedback_for_re_verdict(
+    audited_message: Mapping[str, Any],
+    product: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Map only a matching, audited reject re-verdict to safe teaching text."""
+
+    if (
+        not isinstance(audited_message, Mapping)
+        or not isinstance(product, Mapping)
+    ):
+        return ()
+    payload = audited_message.get("payload")
+    content = payload.get("content") if isinstance(payload, Mapping) else None
+    product_payload = product.get("payload")
+    product_type = (
+        product_payload.get("type")
+        if isinstance(product_payload, Mapping)
+        else None
+    )
+    verdict = audited_message.get("verdict")
+    if (
+        audited_message.get("agent") != "review"
+        or audited_message.get("role") != "re_verdict"
+        or audited_message.get("trace_id") != product.get("trace_id")
+        or not isinstance(product.get("msg_id"), str)
+        or not isinstance(product_type, str)
+        or not isinstance(payload, Mapping)
+        or payload.get("type") != "review_verdict"
+        or not isinstance(content, Mapping)
+        or content.get("reviewed_msg_id") != product.get("msg_id")
+        or content.get("reviewed_payload_type") != product_type
+        or not isinstance(verdict, Mapping)
+        or verdict.get("decision") != "reject"
+    ):
+        return ()
+    raw_hits = verdict.get("rule_hits")
+    if not isinstance(raw_hits, list) or not raw_hits:
+        return ()
+    mapped: list[str] = []
+    for hit in raw_hits:
+        if not isinstance(hit, Mapping):
+            return ()
+        rule_id = hit.get("rule_id")
+        feedback = _MAPPED_FOLLOW_UP_REVIEW_FEEDBACK.get(rule_id)
+        if feedback is None:
+            return _GENERIC_FOLLOW_UP_REVIEW_FEEDBACK
+        if feedback not in mapped:
+            mapped.append(feedback)
+    return tuple(mapped)
 
 
 def _required_task_draft(
@@ -160,6 +240,7 @@ class InteractiveSessionManager:
         follow_up_llm_call: Callable[..., LLMResult] | None = None,
         executor_factory: Callable[[], Any] = _default_executor_factory,
         mode: str | None = None,
+        follow_up_review_policy: FollowUpReviewPolicy | None = None,
     ) -> None:
         self._trace_dir = Path(trace_dir)
         self._cache_dir = Path(cache_dir)
@@ -167,6 +248,16 @@ class InteractiveSessionManager:
         self._follow_up_llm_call = follow_up_llm_call
         self._executor_factory = executor_factory
         self._mode = mode or os.environ.get("REF_DEMO_MODE", "live")
+        if follow_up_review_policy is not None and not isinstance(
+            follow_up_review_policy,
+            FollowUpReviewPolicy,
+        ):
+            raise ValueError(
+                "follow_up_review_policy must be a FollowUpReviewPolicy"
+            )
+        self._follow_up_review_policy = (
+            follow_up_review_policy or FollowUpReviewPolicy()
+        )
         self._evidence_stage_executor = ParallelStageExecutor(max_concurrency=3)
         self._resource_stage_executor = ParallelStageExecutor(max_concurrency=3)
         self._sessions: dict[str, _InteractiveSession] = {}
@@ -1388,6 +1479,10 @@ class InteractiveSessionManager:
         runtime = session.runtime
         candidate = initial
         first = True
+        policy = self._follow_up_review_policy
+        rebuttal_attempts = 0
+        last_feedback = _GENERIC_FOLLOW_UP_REVIEW_FEEDBACK
+        active_product: Mapping[str, Any] | None = None
 
         def produce() -> dict[str, Any]:
             nonlocal candidate, first
@@ -1403,9 +1498,7 @@ class InteractiveSessionManager:
                     probed_misconceptions=tuple(
                         sorted(session.probed_misconceptions)
                     ),
-                    review_feedback=(
-                        "上一版问题未通过专业审核，请重新组织。",
-                    ),
+                    review_feedback=last_feedback,
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
                 )
@@ -1424,6 +1517,17 @@ class InteractiveSessionManager:
                     raise FollowUpGenerationError(
                         "regeneration changed the learner assessment"
                     )
+                initial_content = _payload_content(initial.product or {})
+                candidate_content = _payload_content(candidate.product or {})
+                for field in (
+                    "responsibility_scope",
+                    "difficulty",
+                    "evidence_refs",
+                ):
+                    if candidate_content.get(field) != initial_content.get(field):
+                        raise FollowUpGenerationError(
+                            "regeneration changed the learner evidence boundary"
+                        )
             if candidate.product is None:
                 raise FollowUpGenerationError(
                     "review regeneration produced no question"
@@ -1431,6 +1535,9 @@ class InteractiveSessionManager:
             return candidate.product
 
         def observe(event: str, details: Mapping[str, Any]) -> None:
+            nonlocal last_feedback
+            if event == "regeneration_started":
+                last_feedback = _GENERIC_FOLLOW_UP_REVIEW_FEEDBACK
             if self._publish_specialist_review_activity(
                 session,
                 event,
@@ -1542,9 +1649,43 @@ class InteractiveSessionManager:
                         details=details,
                     )
 
+        def audit_with_feedback_capture(
+            draft: Mapping[str, Any],
+        ) -> dict[str, Any]:
+            nonlocal active_product, last_feedback
+            audited = runtime.audit(draft)
+            if (
+                audited.get("role") == "probe"
+                and _payload_content(audited).get("event")
+                == "follow_up_question_ready"
+            ):
+                active_product = audited
+            elif (
+                audited.get("role") == "re_verdict"
+                and active_product is not None
+            ):
+                mapped = _feedback_for_re_verdict(audited, active_product)
+                if mapped:
+                    last_feedback = (
+                        mapped
+                        if policy.feedback_mode == "mapped"
+                        else _GENERIC_FOLLOW_UP_REVIEW_FEEDBACK
+                    )
+            return audited
+
+        def generate_selective_rebuttal(
+            product: Mapping[str, Any],
+            verdict: Mapping[str, Any],
+        ) -> dict[str, Any]:
+            nonlocal rebuttal_attempts
+            if rebuttal_attempts < policy.rebuttal_budget:
+                rebuttal_attempts += 1
+                return runtime.rebuttal.generate(product, verdict)
+            return runtime.rebuttal.deterministic_concede(product, verdict)
+
         product = audit_and_review(
             produce,
-            audit=runtime.audit,
+            audit=audit_with_feedback_capture,
             review=lambda value: runtime.review.review(
                 value,
                 learning_report=session.diagnosis,
@@ -1553,7 +1694,7 @@ class InteractiveSessionManager:
                 activity_observer=observe,
                 learning_contract=session.learning_contract,
             ),
-            generate_rebuttal=runtime.rebuttal.generate,
+            generate_rebuttal=generate_selective_rebuttal,
             re_review=lambda value, verdict, rebuttal: runtime.review.re_review(
                 value,
                 verdict,
