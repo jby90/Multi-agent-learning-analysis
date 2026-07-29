@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "invariants": [
+    {
+      "invariant_id": "PP-COMPLETE-RATE-001",
+      "metric": "complete_rate",
+      "mode": "ratio",
+      "knowledge_points": [
+        "计划量与实际量口径",
+        "完成率计算",
+        "月度聚合方法"
+      ],
+      "trigger_terms": [
+        "完成率",
+        "complete_rate"
+      ],
+      "canonical_expression": "actual_qty/plan_qty",
+      "display_expression": "实际量÷计划量",
+      "canonical_claim": "问\"做得怎么样\"看完成率，完成率 = 实际量 ÷ 计划量。",
+      "evidence_ref": "KB-002",
+      "evidence_quote": "问\"做得怎么样\"看完成率，完成率 = 实际量 ÷ 计划量。",
+      "numerator_terms": [
+        "实际量",
+        "实际数",
+        "实际完成量",
+        "actual_qty",
+        "actual"
+      ],
+      "denominator_terms": [
+        "计划量",
+        "计划数",
+        "plan_qty",
+        "plan"
+      ]
+    }
+  ]
+}

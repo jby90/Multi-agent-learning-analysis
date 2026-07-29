@@ -93,11 +93,13 @@ export type InteractiveFailureOutcome = Exclude<InteractiveOutcome, 'completed'>
 
 export class InteractiveApiError extends Error {
   readonly outcome?: InteractiveFailureOutcome
+  readonly status?: number
 
-  constructor(message: string, outcome?: InteractiveFailureOutcome) {
+  constructor(message: string, outcome?: InteractiveFailureOutcome, status?: number) {
     super(message)
     this.name = 'InteractiveApiError'
     this.outcome = outcome
+    this.status = status
   }
 }
 
@@ -218,24 +220,25 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
 
-function publicApiError(value: unknown): InteractiveApiError {
+function publicApiError(value: unknown, status: number): InteractiveApiError {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return new InteractiveApiError('实操通道暂时不可用，请稍后再试。')
+    return new InteractiveApiError('实操通道暂时不可用，请稍后再试。', undefined, status)
   }
   const outcome = (value as { outcome?: unknown }).outcome
   if (outcome === 'safe_rejected') {
     return new InteractiveApiError(
       '本题的查询未通过数据安全检查，请调整后重试。',
       outcome,
+      status,
     )
   }
   if (outcome === 'external_unavailable') {
-    return new InteractiveApiError('服务暂时不可用，请稍后再试。', outcome)
+    return new InteractiveApiError('服务暂时不可用，请稍后再试。', outcome, status)
   }
   if (outcome === 'system_error') {
-    return new InteractiveApiError('当前步骤暂时无法继续，请稍后再试。', outcome)
+    return new InteractiveApiError('当前步骤暂时无法继续，请稍后再试。', outcome, status)
   }
-  return new InteractiveApiError('实操通道暂时不可用，请稍后再试。')
+  return new InteractiveApiError('实操通道暂时不可用，请稍后再试。', undefined, status)
 }
 
 export function createInteractiveApi(
@@ -271,7 +274,7 @@ export function createInteractiveApi(
       )
     }
     if (!response.ok) {
-      throw publicApiError(value)
+      throw publicApiError(value, response.status)
     }
     return value as T
   }

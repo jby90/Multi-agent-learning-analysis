@@ -8,6 +8,7 @@
     "task_manifest": "task_manifest.json",
     "task_templates": "task_templates.json",
     "counter_evidence": "counter_evidence_map.json",
+    "semantic_invariants": "semantic_invariants.json",
     "gateway_scope": "gateway_scope.json"
   }
 }

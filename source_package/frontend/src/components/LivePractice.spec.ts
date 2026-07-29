@@ -472,6 +472,52 @@ describe('LivePractice', () => {
     wrapper.unmount()
   })
 
+  it('keeps and retries a stored session after a transient polling failure', async () => {
+    vi.useFakeTimers()
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState)
+      .mockRejectedValueOnce(new InteractiveApiError(
+        '服务暂时不可用，请稍后再试。',
+        'external_unavailable',
+      ))
+      .mockResolvedValueOnce(sessionState({ state: 'S7_STUDENT', awaiting: 'sql' }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 1000 },
+    })
+    await flushPromises()
+
+    expect(sessionStorage.getItem('ref-interactive-session')).toBe('session-live')
+    expect(wrapper.get('[role="alert"]').text()).toBe('服务暂时不可用，请稍后再试。')
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+
+    expect(api.getState).toHaveBeenCalledTimes(2)
+    expect(sessionStorage.getItem('ref-interactive-session')).toBe('session-live')
+    expect(wrapper.find('textarea[aria-label="输入查询语句"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('clears a stored session only when polling confirms it no longer exists', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockRejectedValue(new InteractiveApiError(
+      '实操通道暂时不可用，请稍后再试。',
+      undefined,
+      404,
+    ))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    expect(sessionStorage.getItem('ref-interactive-session')).toBeNull()
+    expect(wrapper.find('button[aria-label="选择新入职生产计划员"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('lets the learner restart a restored session from the profile picker', async () => {
     sessionStorage.setItem('ref-interactive-session', 'session-live')
     const api = fakeApi()

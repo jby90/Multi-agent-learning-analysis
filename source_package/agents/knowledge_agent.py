@@ -10,9 +10,11 @@ import re
 from time import perf_counter
 from typing import Any
 
+from agents.domain_config import DomainConfig, active_domain_config
 from agents.kb_loader import DIFFICULTIES, KnowledgeChunk
 from agents.knowledge_scope import responsibility_scope
 from agents.retriever import Retriever
+from agents.semantic_claims import ClaimPlanItem, build_claim_plan, enforce_claim_plan
 from orchestrator.llm import LLMResult, call_llm
 
 
@@ -93,6 +95,7 @@ class KnowledgeAgent:
         retriever: Retriever,
         llm_call: Callable[..., LLMResult] = call_llm,
         clock: Callable[[], datetime] | None = None,
+        domain_config: DomainConfig | None = None,
     ) -> None:
         if not isinstance(trace_id, str) or not trace_id.strip():
             raise ValueError("trace_id must be a non-empty string")
@@ -100,6 +103,7 @@ class KnowledgeAgent:
         self._retriever = retriever
         self._llm_call = llm_call
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._domain_config = domain_config or active_domain_config()
         self._system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
 
     def generate(
@@ -130,12 +134,18 @@ class KnowledgeAgent:
         knowledge_point_match, knowledge_point_match_basis = self._match_audit(
             knowledge_point, chunks
         )
+        claim_plan = build_claim_plan(
+            self._domain_config,
+            knowledge_point,
+            chunks,
+        )
         user_message = self._user_message(
             knowledge_point,
             student_profile,
             learning_report_summary,
             chunks,
             knowledge_point_match,
+            claim_plan,
         )
         llm_result = self._llm_call(
             model=MODEL,
@@ -164,6 +174,7 @@ class KnowledgeAgent:
             chunks=chunks,
             knowledge_point_match=knowledge_point_match,
             knowledge_point_match_basis=knowledge_point_match_basis,
+            claim_plan=claim_plan,
             llm_result=llm_result,
             started=started,
         )
@@ -224,6 +235,7 @@ class KnowledgeAgent:
         learning_report_summary: str,
         chunks: Sequence[KnowledgeChunk],
         knowledge_point_match: bool,
+        claim_plan: Sequence[ClaimPlanItem],
     ) -> str:
         protect_card_numbers = any(
             chunk.teaching_fact_card is not None for chunk in chunks
@@ -233,6 +245,17 @@ class KnowledgeAgent:
             "knowledge_point_match": knowledge_point_match,
             "student_profile": dict(student_profile),
             "learning_report_summary": learning_report_summary,
+            "semantic_claim_plan": [
+                {
+                    "invariant_id": item.invariant.invariant_id,
+                    "metric": item.invariant.metric,
+                    "mode": item.invariant.mode,
+                    "canonical_expression": item.invariant.canonical_expression,
+                    "canonical_claim": item.invariant.canonical_claim,
+                    "evidence_ref": item.invariant.evidence_ref,
+                }
+                for item in claim_plan
+            ],
             "chunks": [
                 {
                     "chunk_id": chunk.chunk_id,
@@ -381,6 +404,7 @@ class KnowledgeAgent:
         chunks: Sequence[KnowledgeChunk],
         knowledge_point_match: bool,
         knowledge_point_match_basis: Mapping[str, list[str]],
+        claim_plan: Sequence[ClaimPlanItem],
         llm_result: LLMResult,
         started: float,
     ) -> dict[str, Any]:
@@ -503,12 +527,30 @@ class KnowledgeAgent:
                     }
                 )
 
+        # Keep model-grounded atoms in their historical order.  Semantic
+        # invariants are additional, domain-owned evidence and must not steal
+        # the first-claim position from an already approved atomic contract.
+        for item in claim_plan:
+            source_chunk = chunks_by_id[item.invariant.evidence_ref]
+            add_grounded_text(
+                source_chunk,
+                item.invariant.canonical_claim,
+                (item.evidence_quote,),
+            )
+
         lecture_md, scaffold_leaks = _SCAFFOLD_RE.subn(
             "", llm_result.data["lecture_md"]
         )
         lecture_md, m_id_leaks = _M_ID_RE.subn("", lecture_md)
         for source_text, replacement in replacements:
             lecture_md = lecture_md.replace(source_text, replacement)
+        semantic_validation = enforce_claim_plan(lecture_md, claim_plan)
+        if semantic_validation.failures:
+            raise ValueError(
+                "semantic claim preflight failed: "
+                + ", ".join(semantic_validation.failures)
+            )
+        lecture_md = semantic_validation.text
 
         for chunk in grounding_chunks:
             if grounded_claims_by_chunk.get(chunk.chunk_id):
@@ -611,6 +653,14 @@ class KnowledgeAgent:
                 "failures": failures,
                 "scaffold_leaks": scaffold_leaks,
                 "m_id_leaks": m_id_leaks,
+            },
+            "semantic_validation": {
+                "checked": semantic_validation.checked,
+                "repaired": semantic_validation.repaired,
+                "failures": list(semantic_validation.failures),
+                "invariant_ids": [
+                    item.invariant.invariant_id for item in claim_plan
+                ],
             },
             "llm_latency_ms": llm_result.latency_ms,
         }

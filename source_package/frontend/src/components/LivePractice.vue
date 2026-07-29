@@ -35,6 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const api = props.api ?? createInteractiveApi()
+const sessionStorageKey = 'ref-interactive-session'
 const session = ref<InteractiveState>()
 const questions = ref<InteractivePretestQuestion[]>([])
 const answers = ref<Record<string, string>>({})
@@ -45,6 +46,7 @@ const followUpSubmittedText = ref('')
 const busy = ref(false)
 const errorMessage = ref('')
 let pollTimer: number | undefined
+let pollingSessionId = ''
 let closeEventStream: (() => void) | undefined
 let eventSessionId = ''
 
@@ -179,7 +181,7 @@ async function selectProfile(profileId: string): Promise<void> {
   errorMessage.value = ''
   try {
     const created = await api.createSession(profileId)
-    sessionStorage.setItem('ref-interactive-session', created.session_id)
+    sessionStorage.setItem(sessionStorageKey, created.session_id)
     connectAgentEvents(created.session_id)
     applyState(created)
     questions.value = await api.getPretest(created.session_id)
@@ -247,7 +249,7 @@ async function continueLearning(): Promise<void> {
   errorMessage.value = ''
   try {
     const continued = await api.continueLearning(value.session_id)
-    sessionStorage.setItem('ref-interactive-session', continued.session_id)
+    sessionStorage.setItem(sessionStorageKey, continued.session_id)
     connectAgentEvents(continued.session_id)
     applyState(continued)
   } catch (error) {
@@ -295,16 +297,30 @@ async function submitFollowUp(): Promise<void> {
 }
 
 async function pollState(sessionId: string): Promise<void> {
+  if (pollingSessionId) return
+  pollingSessionId = sessionId
   try {
     const value = await api.getState(sessionId)
+    if (sessionStorage.getItem(sessionStorageKey) !== sessionId) return
     applyState(value)
     if (value.awaiting === 'pretest' && !questions.value.length) {
       questions.value = await api.getPretest(sessionId)
     }
+    errorMessage.value = ''
   } catch (error) {
-    sessionStorage.removeItem('ref-interactive-session')
-    session.value = undefined
-    errorMessage.value = publicRequestError(error, '未能恢复上次训练。')
+    if (sessionStorage.getItem(sessionStorageKey) !== sessionId) return
+    if (error instanceof InteractiveApiError && error.status === 404) {
+      closeEventStream?.()
+      closeEventStream = undefined
+      eventSessionId = ''
+      sessionStorage.removeItem(sessionStorageKey)
+      session.value = undefined
+      errorMessage.value = '上次训练已失效，请重新开始。'
+      return
+    }
+    errorMessage.value = publicRequestError(error, '未能恢复上次训练，请稍后重试。')
+  } finally {
+    if (pollingSessionId === sessionId) pollingSessionId = ''
   }
 }
 
@@ -312,7 +328,7 @@ function resetSession(): void {
   closeEventStream?.()
   closeEventStream = undefined
   eventSessionId = ''
-  sessionStorage.removeItem('ref-interactive-session')
+  sessionStorage.removeItem(sessionStorageKey)
   session.value = undefined
   questions.value = []
   answers.value = {}
@@ -326,7 +342,7 @@ function resetSession(): void {
 }
 
 onMounted(async () => {
-  const storedSession = sessionStorage.getItem('ref-interactive-session')
+  const storedSession = sessionStorage.getItem(sessionStorageKey)
   if (storedSession) {
     connectAgentEvents(storedSession)
     await pollState(storedSession)
@@ -334,8 +350,9 @@ onMounted(async () => {
   if (props.pollIntervalMs > 0) {
     pollTimer = window.setInterval(() => {
       const value = session.value
-      if (!busy.value && value && value.awaiting !== 'done') {
-        void pollState(value.session_id)
+      const sessionId = value?.session_id ?? sessionStorage.getItem(sessionStorageKey)
+      if (!busy.value && sessionId && value?.awaiting !== 'done') {
+        void pollState(sessionId)
       }
     }, props.pollIntervalMs)
   }

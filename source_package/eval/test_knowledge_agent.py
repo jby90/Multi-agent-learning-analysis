@@ -11,6 +11,7 @@ from typing import Any, Sequence
 from jsonschema import Draft202012Validator
 import pytest
 
+from agents.domain_config import active_domain_config
 from agents.kb_loader import (
     EvidenceContextGroup,
     KnowledgeChunk,
@@ -46,6 +47,7 @@ EXPECTED_PROMPT = """你是船舶制造岗位培训讲师。根据学员画像�
 4. 按画像调整：planner_new重讲工序与口径、少讲SQL；craft_engineer重讲数据工具与图表、少讲工艺常识；line_leader步骤化、短句、每步带检查点。
 5. 讲义结构：本节目标→核心概念→计算步骤/方法要点→常见错误提醒→小结。常见错误提醒只能来自切片正文已有说明，正文未说明则该节写"参见教师讲解"。
 6. [S#]只用于claims选择，禁止出现在lecture_md。
+7. semantic_claim_plan中的canonical_claim是当前领域的不可变事实边界：正文涉及对应metric时必须使用canonical_expression；不得交换分子分母、改写成方向不明的“二者相除”，也不得为mode=stored的指标自行推导公式。
 [画像JSON + 学情报告摘要 + top-3切片全文]
 """
 SUCCESS = {
@@ -62,10 +64,10 @@ SUCCESS = {
 }
 REFUSAL = {"lecture_md": None, "refuse_reason": "切片不足"}
 BASELINE_REQUEST_SHA256 = (
-    "e0c3580cf6c560ef3a811ec1f6b7cfac8e1ee3cff62feee7531215912cd738fc"
+    "c01a67fa62ae924d149673bc20e397a7e0990fc5ae63124fb53700b655f0d0ac"
 )
 BASELINE_MESSAGE_WITHOUT_WALL_LATENCY_SHA256 = (
-    "f3f985c3c955d094c9f696e6ab0c430bb03a7948f6413803773bf788fba5423a"
+    "e831f560f6e45607024950edd430f780f2d44fff84d7f8078cc634328fbe364a"
 )
 TEACHING_FACT_1 = "本项目岗位培训与评测采用的月完成率正常波动区间为88%—103%。"
 TEACHING_FACT_2 = (
@@ -730,6 +732,7 @@ def test_metadata_and_stable_llm_request_are_filled_exactly() -> None:
         "knowledge_point": "完成率计算",
         "knowledge_point_match": True,
         "learning_report_summary": "混淆计划量与实际量",
+        "semantic_claim_plan": [],
         "student_profile": PLANNER_PROFILE,
     }
     assert llm.calls[0]["user"] == json.dumps(
@@ -1246,6 +1249,17 @@ def test_canonical_sentence_anchor_uses_current_loader_sentence(chunk_id: str) -
             "supports_claim": atom_text,
         }
     ]
+    expected_evidence.extend(
+        {
+            "kind": "kb_chunk",
+            "ref": invariant.evidence_ref,
+            "quote": invariant.evidence_quote,
+            "supports_claim": invariant.canonical_claim,
+        }
+        for invariant in active_domain_config().semantic_invariants
+        if invariant.evidence_ref == chunk_id
+        and current_chunk.knowledge_point in invariant.knowledge_points
+    )
     if current_chunk.teaching_fact_card is not None:
         expected_evidence.extend(
             {

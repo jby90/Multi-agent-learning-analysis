@@ -9,6 +9,22 @@
 - 当前入口：`http://127.0.0.1:18082/`
 - 完整项目说明：[18_当前项目完整说明](文档与配置/01_可交付_学生可提交/18_当前项目完整说明.md)
 - 最终评测摘要：[17_创新AB版本说明与最终评测](文档与配置/01_可交付_学生可提交/17_创新AB版本说明与最终评测.md)
+- 学生探索测试：[19_学生全流程探索测试清单](文档与配置/01_可交付_学生可提交/19_学生全流程探索测试清单.md)
+- 初学者 GitHub 指南：[20_GitHub初学者下载部署与更新指南](文档与配置/01_可交付_学生可提交/20_GitHub初学者下载部署与更新指南.md)
+
+## 初学者先看这里
+
+已经部署旧版的同学不要覆盖原目录。请把学生测试分支克隆到一个新文件夹：
+
+```powershell
+git clone `
+  --branch agent/poll-recovery-student-test `
+  --single-branch `
+  https://github.com/jby90/Multi-agent-learning-analysis.git `
+  Multi-agent-learning-analysis-student-test
+```
+
+进入新目录后，从原项目复制本机 `Docker镜像/.env`，再按照 [20_GitHub初学者下载部署与更新指南](文档与配置/01_可交付_学生可提交/20_GitHub初学者下载部署与更新指南.md) 构建并启动。不要提交 `.env`，不要执行 `docker compose down -v`。
 
 ## 核心能力
 
@@ -36,6 +52,8 @@
 - A/B 定向消融与第二域固定桩复核：`36 passed`
 - 前端：`28 files, 278 tests passed`
 - 前端生产构建：成功
+
+本次学生探索热修复只调整前端会话轮询恢复，不修改后端状态机、创新 A/B 或三指标算法；新增 3 项轮询/HTTP 状态测试后，当前前端为 `28 files, 281 tests passed`。
 
 正式固定 50 例执行两轮，每个案例每轮只执行一次：
 

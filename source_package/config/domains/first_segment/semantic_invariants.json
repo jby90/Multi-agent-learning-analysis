@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "invariants": [
+    {
+      "invariant_id": "FS-FINISH-RATE-STORED-001",
+      "metric": "finish_rate",
+      "mode": "stored",
+      "knowledge_points": [
+        "完成率字段口径"
+      ],
+      "trigger_terms": [
+        "完成率",
+        "FINISHRATE"
+      ],
+      "canonical_expression": null,
+      "display_expression": null,
+      "canonical_claim": "完成率的计算公式、分子分母、聚合方式和判定阈值，raw未明确，以现场口径为准。",
+      "evidence_ref": "SEC-003",
+      "evidence_quote": "完成率的计算公式、分子分母、聚合方式和判定阈值，raw未明确，以现场口径为准。",
+      "numerator_terms": [],
+      "denominator_terms": []
+    }
+  ]
+}

@@ -25,11 +25,47 @@ ASSET_KEYS = (
     "task_manifest",
     "task_templates",
     "counter_evidence",
+    "semantic_invariants",
     "gateway_scope",
 )
 SCHEMA_FIELDS = frozenset({"tables", "prompt_ddl", "dictionary_rows"})
+SEMANTIC_INVARIANT_ROOT_FIELDS = frozenset({"schema_version", "invariants"})
+SEMANTIC_INVARIANT_FIELDS = frozenset(
+    {
+        "invariant_id",
+        "metric",
+        "mode",
+        "knowledge_points",
+        "trigger_terms",
+        "canonical_expression",
+        "display_expression",
+        "canonical_claim",
+        "evidence_ref",
+        "evidence_quote",
+        "numerator_terms",
+        "denominator_terms",
+    }
+)
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _DOMAIN_ID_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticInvariant:
+    """One domain-owned, machine-checkable metric invariant."""
+
+    invariant_id: str
+    metric: str
+    mode: str
+    knowledge_points: tuple[str, ...]
+    trigger_terms: tuple[str, ...]
+    canonical_expression: str | None
+    display_expression: str | None
+    canonical_claim: str
+    evidence_ref: str
+    evidence_quote: str
+    numerator_terms: tuple[str, ...]
+    denominator_terms: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +82,7 @@ class DomainConfig:
     task_manifest: Mapping[str, Any]
     task_templates: Mapping[str, Any]
     counter_evidence: Mapping[str, Any]
+    semantic_invariants: tuple[SemanticInvariant, ...]
     gateway_scope: Mapping[str, Any]
     package_path: Path
     asset_paths: Mapping[str, Path]
@@ -76,6 +113,117 @@ def _identifier(value: Any, field: str) -> str:
     if not _IDENTIFIER_RE.fullmatch(text):
         raise ValueError(f"{field} must be a SQL identifier")
     return text
+
+
+def _string_tuple(
+    value: Any,
+    field: str,
+    *,
+    allow_empty: bool = False,
+) -> tuple[str, ...]:
+    if not isinstance(value, list) or (not value and not allow_empty):
+        qualifier = "a list" if allow_empty else "a non-empty list"
+        raise ValueError(f"{field} must be {qualifier}")
+    parsed = tuple(_non_empty_string(item, field) for item in value)
+    if len({item.casefold() for item in parsed}) != len(parsed):
+        raise ValueError(f"{field} must not contain duplicates")
+    return parsed
+
+
+def _semantic_invariants(raw: Any) -> tuple[SemanticInvariant, ...]:
+    root = _exact_mapping(
+        raw,
+        SEMANTIC_INVARIANT_ROOT_FIELDS,
+        "semantic_invariants",
+    )
+    schema_version = root["schema_version"]
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != 1
+    ):
+        raise ValueError("semantic_invariants.schema_version must be 1")
+    raw_items = root["invariants"]
+    if not isinstance(raw_items, list):
+        raise ValueError("semantic_invariants.invariants must be a list")
+
+    parsed: list[SemanticInvariant] = []
+    seen_ids: set[str] = set()
+    for index, raw_item in enumerate(raw_items):
+        label = f"semantic_invariants.invariants[{index}]"
+        item = _exact_mapping(raw_item, SEMANTIC_INVARIANT_FIELDS, label)
+        invariant_id = _non_empty_string(item["invariant_id"], f"{label}.invariant_id")
+        folded_id = invariant_id.casefold()
+        if folded_id in seen_ids:
+            raise ValueError("semantic_invariants invariant_id values must be unique")
+        seen_ids.add(folded_id)
+        metric = _identifier(item["metric"], f"{label}.metric")
+        mode = _non_empty_string(item["mode"], f"{label}.mode")
+        if mode not in {"ratio", "stored"}:
+            raise ValueError(f"{label}.mode must be ratio|stored")
+        knowledge_points = _string_tuple(
+            item["knowledge_points"], f"{label}.knowledge_points"
+        )
+        trigger_terms = _string_tuple(
+            item["trigger_terms"], f"{label}.trigger_terms"
+        )
+        numerator_terms = _string_tuple(
+            item["numerator_terms"],
+            f"{label}.numerator_terms",
+            allow_empty=True,
+        )
+        denominator_terms = _string_tuple(
+            item["denominator_terms"],
+            f"{label}.denominator_terms",
+            allow_empty=True,
+        )
+        canonical_expression = item["canonical_expression"]
+        display_expression = item["display_expression"]
+        if mode == "ratio":
+            canonical_expression = _non_empty_string(
+                canonical_expression, f"{label}.canonical_expression"
+            )
+            display_expression = _non_empty_string(
+                display_expression, f"{label}.display_expression"
+            )
+            if not numerator_terms or not denominator_terms:
+                raise ValueError(
+                    f"{label} ratio semantic_invariants require numerator_terms "
+                    "and denominator_terms"
+                )
+        else:
+            if canonical_expression is not None or display_expression is not None:
+                raise ValueError(
+                    f"{label} stored semantic_invariants must not declare a formula"
+                )
+            if numerator_terms or denominator_terms:
+                raise ValueError(
+                    f"{label} stored semantic_invariants must use empty ratio terms"
+                )
+
+        parsed.append(
+            SemanticInvariant(
+                invariant_id=invariant_id,
+                metric=metric,
+                mode=mode,
+                knowledge_points=knowledge_points,
+                trigger_terms=trigger_terms,
+                canonical_expression=canonical_expression,
+                display_expression=display_expression,
+                canonical_claim=_non_empty_string(
+                    item["canonical_claim"], f"{label}.canonical_claim"
+                ),
+                evidence_ref=_non_empty_string(
+                    item["evidence_ref"], f"{label}.evidence_ref"
+                ),
+                evidence_quote=_non_empty_string(
+                    item["evidence_quote"], f"{label}.evidence_quote"
+                ),
+                numerator_terms=numerator_terms,
+                denominator_terms=denominator_terms,
+            )
+        )
+    return tuple(parsed)
 
 
 def _resolve_package(value: str | Path | None) -> Path:
@@ -205,6 +353,7 @@ def load_domain_config(value: str | Path | None = None) -> DomainConfig:
         task_manifest=_deep_freeze(assets["task_manifest"]),
         task_templates=_deep_freeze(assets["task_templates"]),
         counter_evidence=_deep_freeze(assets["counter_evidence"]),
+        semantic_invariants=_semantic_invariants(assets["semantic_invariants"]),
         gateway_scope=_deep_freeze(assets["gateway_scope"]),
         package_path=package,
         asset_paths=frozen_paths,

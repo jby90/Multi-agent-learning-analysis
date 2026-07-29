@@ -14,6 +14,7 @@ ASSET_NAMES = {
     "task_manifest": "task_manifest.json",
     "task_templates": "task_templates.json",
     "counter_evidence": "counter_evidence_map.json",
+    "semantic_invariants": "semantic_invariants.json",
     "gateway_scope": "gateway_scope.json",
 }
 
@@ -50,6 +51,28 @@ def _package(tmp_path: Path) -> Path:
     _write_json(package / "task_templates.json", {"templates": []})
     _write_json(package / "counter_evidence_map.json", {"mappings": []})
     _write_json(
+        package / "semantic_invariants.json",
+        {
+            "schema_version": 1,
+            "invariants": [
+                {
+                    "invariant_id": "FIXTURE-RATIO-001",
+                    "metric": "fixture_rate",
+                    "mode": "ratio",
+                    "knowledge_points": ["fixture point"],
+                    "trigger_terms": ["fixture rate"],
+                    "canonical_expression": "actual_value/plan_value",
+                    "display_expression": "actual value / plan value",
+                    "canonical_claim": "Fixture rate equals actual value divided by plan value.",
+                    "evidence_ref": "FIXTURE-001",
+                    "evidence_quote": "Fixture rate equals actual value divided by plan value.",
+                    "numerator_terms": ["actual value", "actual_value"],
+                    "denominator_terms": ["plan value", "plan_value"],
+                }
+            ],
+        },
+    )
+    _write_json(
         package / "gateway_scope.json",
         {"unsupported_literals": ["库存"]},
     )
@@ -65,6 +88,11 @@ def test_loads_and_deep_freezes_a_complete_package(tmp_path: Path) -> None:
     assert package.table_columns == {"fact_fixture": frozenset({"id", "value"})}
     assert len(package.package_sha256) == 64
     assert package.intents["families"] == ("F1",)
+    assert package.semantic_invariants[0].invariant_id == "FIXTURE-RATIO-001"
+    assert (
+        package.semantic_invariants[0].canonical_expression
+        == "actual_value/plan_value"
+    )
 
     with pytest.raises(TypeError):
         package.intents["families"] = ("F2",)  # type: ignore[index]
@@ -125,3 +153,15 @@ def test_package_hash_is_derived_from_asset_bytes(tmp_path: Path) -> None:
     second = load_domain_config(path).package_sha256
 
     assert second != first
+
+
+def test_rejects_a_ratio_invariant_without_ratio_terms(tmp_path: Path) -> None:
+    path = _package(tmp_path)
+    asset = json.loads(
+        (path / "semantic_invariants.json").read_text(encoding="utf-8")
+    )
+    asset["invariants"][0]["numerator_terms"] = []
+    _write_json(path / "semantic_invariants.json", asset)
+
+    with pytest.raises(ValueError, match="semantic_invariants"):
+        load_domain_config(path)
