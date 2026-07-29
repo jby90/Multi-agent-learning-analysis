@@ -44,6 +44,7 @@ from coordination.evaluation import build_coordination_evidence
 from coordination.parallel import BranchSpec, ParallelStage, ParallelStageExecutor
 from coordination.resource_bundle import ResourceBundle
 from orchestrator.demo_session import (
+    DemoSessionError,
     DemoOptions,
     _DemoRuntime,
     _default_executor_factory,
@@ -130,6 +131,7 @@ class _InteractiveSession:
     follow_up_question: str = ""
     follow_up_turns: list[dict[str, Any]] = field(default_factory=list)
     follow_up_target: str | None = None
+    probed_misconceptions: set[str] = field(default_factory=set)
     follow_up_had_support: bool = False
     generic_fallback_used: bool = False
     recorded_turn_ids: set[str] = field(default_factory=set)
@@ -555,6 +557,9 @@ class InteractiveSessionManager:
                 "system_error",
             )
             return None
+        except DemoSessionError:
+            self._finish_system_error(session)
+            return None
         self._publish_activity(
             session,
             producer_agent,
@@ -589,6 +594,7 @@ class InteractiveSessionManager:
             "message": student_message,
         }
         session.awaiting = "done"
+        session.pending_learning_action = None
         session.outcome = (
             "system_error" if action == "system_error" else "safe_rejected"
         )
@@ -600,6 +606,14 @@ class InteractiveSessionManager:
                 label="质量门已安全阻断该产物",
                 stage=session.runtime.engine.state.value,
             )
+
+    @staticmethod
+    def _finish_system_error(session: _InteractiveSession) -> None:
+        InteractiveSessionManager._finish_review_stop(
+            session,
+            session.artifact or {},
+            "system_error",
+        )
 
     def advance(self, session_id: str) -> dict[str, Any]:
         session = self._get_session(session_id)
@@ -700,6 +714,8 @@ class InteractiveSessionManager:
 
     def _advance_locked(self, session: _InteractiveSession) -> dict[str, Any]:
         session_id = session.session_id
+        if session.awaiting == "done" and session.outcome == "system_error":
+            return self.get_state(session_id)
         if session.awaiting != "advance":
             raise InteractiveSessionError("当前步骤需要先完成学员操作。")
         runtime = session.runtime
@@ -1263,6 +1279,9 @@ class InteractiveSessionManager:
                 task_agent=runtime.task,
                 round_index=generation_round,
                 max_rounds=MAX_FOLLOW_UP_ROUNDS,
+                probed_misconceptions=tuple(
+                    sorted(session.probed_misconceptions)
+                ),
                 completion_allowed=submitted_round >= 2,
                 terminal_round=terminal_round,
             )
@@ -1312,16 +1331,20 @@ class InteractiveSessionManager:
                 "answer": text.strip(),
             }
         )
-        session.follow_up_target = generated.target_misconception
-
         if generated.assessment == "mastered" and submitted_round >= 2:
             answer = self._finish_mastered_follow_up(session)
+            if answer is None:
+                session.processed_turn_ids.add(client_turn_id)
+                return self.get_state(session_id)
             session.artifact = answer
             session.processed_turn_ids.add(client_turn_id)
             return self.get_state(session_id)
 
         if terminal_round:
             answer = self._finish_unmastered_follow_up(session)
+            if answer is None:
+                session.processed_turn_ids.add(client_turn_id)
+                return self.get_state(session_id)
             session.artifact = answer
             session.processed_turn_ids.add(client_turn_id)
             return self.get_state(session_id)
@@ -1344,6 +1367,10 @@ class InteractiveSessionManager:
         session.artifact = reviewed_product
         session.interaction = self._follow_up_interaction(session)
         session.awaiting = "follow_up"
+        next_target = generated.next_target_misconception
+        if next_target not in {None, UNKNOWN_MISCONCEPTION}:
+            session.probed_misconceptions.add(next_target)
+        session.follow_up_target = next_target
         session.processed_turn_ids.add(client_turn_id)
         return self.get_state(session_id)
 
@@ -1373,6 +1400,9 @@ class InteractiveSessionManager:
                     task_agent=runtime.task,
                     round_index=round_index,
                     max_rounds=MAX_FOLLOW_UP_ROUNDS,
+                    probed_misconceptions=tuple(
+                        sorted(session.probed_misconceptions)
+                    ),
                     review_feedback=(
                         "上一版问题未通过专业审核，请重新组织。",
                     ),
@@ -1380,9 +1410,16 @@ class InteractiveSessionManager:
                     terminal_round=terminal_round,
                 )
                 if (
-                    candidate.assessment != initial.assessment
-                    or candidate.target_misconception
-                    != initial.target_misconception
+                    (
+                        candidate.assessment,
+                        candidate.diagnosed_misconception,
+                        candidate.next_target_misconception,
+                    )
+                    != (
+                        initial.assessment,
+                        initial.diagnosed_misconception,
+                        initial.next_target_misconception,
+                    )
                 ):
                     raise FollowUpGenerationError(
                         "regeneration changed the learner assessment"
@@ -1589,7 +1626,12 @@ class InteractiveSessionManager:
                     "event": "learner_follow_up_assessed",
                     "round": round_index,
                     "assessment": generated.assessment,
-                    "target_misconception": generated.target_misconception,
+                    "diagnosed_misconception": (
+                        generated.diagnosed_misconception
+                    ),
+                    "next_target_misconception": (
+                        generated.next_target_misconception
+                    ),
                 },
             },
             "evidence": [],
@@ -1691,7 +1733,7 @@ class InteractiveSessionManager:
                 "T15",
             )
             if (
-                generated.target_misconception == UNKNOWN_MISCONCEPTION
+                generated.diagnosed_misconception == UNKNOWN_MISCONCEPTION
                 and not session.generic_fallback_used
             ):
                 runtime.transition(
@@ -1705,26 +1747,30 @@ class InteractiveSessionManager:
     def _finish_mastered_follow_up(
         self,
         session: _InteractiveSession,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         runtime = session.runtime
-        if runtime.engine.state is State.S7_STUDENT:
-            answer = runtime.transition(
-                self._student_answer_draft(
-                    session,
-                    answer_result="correct",
-                ),
-                "T14",
-            )
-        elif runtime.engine.state is State.S8_PROBE:
-            answer = runtime.transition(
-                self._probe_outcome_draft(
-                    session,
-                    answer_result="correct",
-                ),
-                "T16",
-            )
-        else:
-            raise InteractiveSessionError("当前理解核对进度无法继续。")
+        try:
+            if runtime.engine.state is State.S7_STUDENT:
+                answer = runtime.transition(
+                    self._student_answer_draft(
+                        session,
+                        answer_result="correct",
+                    ),
+                    "T14",
+                )
+            elif runtime.engine.state is State.S8_PROBE:
+                answer = runtime.transition(
+                    self._probe_outcome_draft(
+                        session,
+                        answer_result="correct",
+                    ),
+                    "T16",
+                )
+            else:
+                raise InteractiveSessionError("当前理解核对进度无法继续。")
+        except DemoSessionError:
+            self._finish_system_error(session)
+            return None
         session.pending_learning_action = "step_up"
         session.completed_correction = session.follow_up_had_support
         session.awaiting = "advance"
@@ -1743,25 +1789,29 @@ class InteractiveSessionManager:
     def _finish_unmastered_follow_up(
         self,
         session: _InteractiveSession,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         runtime = session.runtime
-        if runtime.engine.state is State.S7_STUDENT:
-            runtime.transition(
-                self._student_answer_draft(
+        try:
+            if runtime.engine.state is State.S7_STUDENT:
+                runtime.transition(
+                    self._student_answer_draft(
+                        session,
+                        answer_result="wrong",
+                    ),
+                    "T15",
+                )
+            if runtime.engine.state is not State.S8_PROBE:
+                raise InteractiveSessionError("当前理解核对进度无法继续。")
+            answer = runtime.transition(
+                self._probe_outcome_draft(
                     session,
                     answer_result="wrong",
                 ),
-                "T15",
+                "T17",
             )
-        if runtime.engine.state is not State.S8_PROBE:
-            raise InteractiveSessionError("当前理解核对进度无法继续。")
-        answer = runtime.transition(
-            self._probe_outcome_draft(
-                session,
-                answer_result="wrong",
-            ),
-            "T17",
-        )
+        except DemoSessionError:
+            self._finish_system_error(session)
+            return None
         session.interaction = {
             "kind": "learning_notice",
             "message": "这个判断还需要再巩固。我们先回顾一个关键点，再重新练习。",
@@ -2459,6 +2509,7 @@ class InteractiveSessionManager:
         session.follow_up_question = question
         session.follow_up_turns.clear()
         session.follow_up_target = None
+        session.probed_misconceptions.clear()
         session.follow_up_had_support = False
         session.generic_fallback_used = False
         session.processed_turn_ids.clear()
@@ -2654,6 +2705,14 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": str(exc)})
         except InteractiveSessionError as exc:
             self._send_json(409, {"error": str(exc)})
+        except DemoSessionError:
+            self._send_json(
+                409,
+                {
+                    "error": _REVIEW_STOP_COPY["system_error"],
+                    "outcome": "system_error",
+                },
+            )
         except Exception:
             self._send_json(500, {"error": "交互服务暂时不可用。"})
 

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from threading import Event, Thread
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
@@ -19,6 +20,7 @@ from agents.sandbox import (
 from agents.review_agent import ReviewAgent
 from agents.task_agent import TaskAgent, load_task_catalog
 from eval.test_demo_session import ScriptedLLM, _review_reject_fixture
+from orchestrator.demo_session import DemoSessionError
 from orchestrator.interactive_session import (
     InteractiveSessionError,
     InteractiveSessionManager,
@@ -26,6 +28,9 @@ from orchestrator.interactive_session import (
     main,
 )
 from orchestrator.llm import LLMResult, TokenUsage
+
+
+SYSTEM_ERROR_COPY = "内容生成服务暂时不可用，本次学习已安全结束，请稍后重新开始。"
 
 
 class RecordingExecutor:
@@ -117,10 +122,16 @@ def follow_up_response(
     assessment: str,
     question: str,
     target: str = "M-01",
+    next_target: str | None = None,
 ) -> dict[str, str]:
     return {
         "assessment": assessment,
-        "target_misconception": target,
+        "diagnosed_misconception": target,
+        "next_target_misconception": (
+            next_target
+            if next_target is not None
+            else target if question else "NO_NEXT_TARGET"
+        ),
         "question": question,
     }
 
@@ -716,8 +727,9 @@ def test_review_follow_up_failure_closes_session_in_learning_language(
         )
     )
     before_retry = stopped["messages"]
-    with pytest.raises(InteractiveSessionError):
-        manager.advance(session_id)
+    retried = manager.advance(session_id)
+    assert retried["awaiting"] == "done"
+    assert retried["outcome"] == "system_error"
     assert manager.get_state(session_id)["messages"] == before_retry
 
 
@@ -1648,6 +1660,7 @@ def test_four_unmastered_rounds_reenter_teaching_without_stale_follow_up_state(
         follow_up_response(
             "needs_support",
             "如果目标尚未报工，能把它算作已经完成吗？",
+            next_target="M-04",
         ),
         follow_up_response(
             "needs_support",
@@ -1693,6 +1706,80 @@ def test_four_unmastered_rounds_reenter_teaching_without_stale_follow_up_state(
     assert conclusion["state"] == "S7_STUDENT"
     assert conclusion["awaiting"] == "follow_up"
     assert conclusion["interaction"]["kind"] == "free_text_follow_up"
+
+
+def test_r04_exhaustion_after_follow_up_finishes_safely_and_idempotently(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response(
+            "needs_support",
+            "你会先区分目标数量与真实报工数量吗？",
+        ),
+        follow_up_response(
+            "needs_support",
+            "如果目标尚未报工，能把它算作已经完成吗？",
+            next_target="M-04",
+        ),
+        follow_up_response(
+            "needs_support",
+            "判断真实进度时，你最终会采用哪一种数量？",
+        ),
+        follow_up_response("needs_support", ""),
+    )
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    standard_sql = load_task_catalog().templates["T-01"].standard_sql
+    manager.submit_sql(session_id, standard_sql)
+    manager.advance(session_id)
+    for index in range(1, 4):
+        manager.submit_follow_up(
+            session_id,
+            "我仍然认为计划量就是完成量。",
+            f"r04-stop-{index}",
+        )
+    before = manager.submit_follow_up(
+        session_id,
+        "我还是不能区分这两个口径。",
+        "r04-stop-4",
+    )
+    preflight_calls = 0
+
+    def reject_r04(
+        self: ReviewAgent,
+        product: dict[str, Any],
+    ) -> dict[str, str]:
+        del self, product
+        nonlocal preflight_calls
+        preflight_calls += 1
+        return {
+            "rule_id": "R-04",
+            "reason": "该内容与当前学习目标不一致。",
+            "evidence_ref": "fixed-r04-stub",
+        }
+
+    monkeypatch.setattr(ReviewAgent, "preflight_r04", reject_r04)
+    session = manager._get_session(session_id)
+    assert session.learning_contract is not None
+    expected_calls = session.learning_contract.quality_policy.max_review_cycles
+
+    stopped = manager.advance(session_id)
+
+    assert preflight_calls == expected_calls
+    assert stopped["awaiting"] == "done"
+    assert stopped["outcome"] == "system_error"
+    assert stopped["interaction"] == {
+        "kind": "review_notice",
+        "message": SYSTEM_ERROR_COPY,
+    }
+    assert stopped["artifact"] == before["artifact"]
+    assert manager._get_session(session_id).pending_learning_action is None
+    assert manager.advance(session_id) == stopped
+    assert preflight_calls == expected_calls
 
 
 def test_follow_up_path_does_not_fall_back_to_the_obsolete_probe_sql_action(
@@ -1864,6 +1951,198 @@ def test_standard_library_http_exposes_full_interactive_action_flow(
     assert upgraded["artifact"]["payload"]["content"]["template_id"] == "T-01-A"
     assert upgraded["interaction"]["message"] == "根据本次作答表现，已为你提高一档难度。"
     assert completed["state"] == "S10_DONE"
+
+
+def test_step_up_product_failure_finishes_safely_and_is_idempotent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=mastered_follow_up(),
+    )
+    catalog = load_task_catalog()
+    manager.submit_sql(session_id, catalog.templates["T-01"].standard_sql)
+    manager.advance(session_id)
+    manager.submit_follow_up(
+        session_id,
+        "应以实际完成量说明真实进度。",
+        "step-up-stop-1",
+    )
+    manager.submit_follow_up(
+        session_id,
+        "真实报工形成的实际量才能说明完成情况。",
+        "step-up-stop-2",
+    )
+    before = manager.get_state(session_id)
+    production_calls = 0
+
+    def fail_reviewed_product(*_: Any, **__: Any) -> dict[str, Any]:
+        nonlocal production_calls
+        production_calls += 1
+        raise DemoSessionError("simulated reviewed task failure after T19")
+
+    monkeypatch.setattr(
+        "orchestrator.interactive_session._produce_reviewed_product",
+        fail_reviewed_product,
+    )
+
+    stopped = manager.advance(session_id)
+
+    assert stopped["awaiting"] == "done"
+    assert stopped["outcome"] == "system_error"
+    assert stopped["interaction"] == {
+        "kind": "review_notice",
+        "message": SYSTEM_ERROR_COPY,
+    }
+    assert stopped["artifact"] == before["artifact"]
+    assert manager._get_session(session_id).pending_learning_action is None
+    assert production_calls == 1
+    assert manager.advance(session_id) == stopped
+    assert production_calls == 1
+
+
+@pytest.mark.parametrize("terminal_mode", ("mastered", "unmastered"))
+def test_follow_up_terminal_transition_error_finishes_safely(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    terminal_mode: str,
+) -> None:
+    if terminal_mode == "mastered":
+        follow_up_llm = mastered_follow_up()
+        prior_answers = (("应以实际完成量说明真实进度。", "terminal-stop-1"),)
+        final_answer = "真实报工形成的实际量才能说明完成情况。"
+        final_turn_id = "terminal-stop-2"
+        failing_transition = "T14"
+    else:
+        follow_up_llm = FollowUpLLM(
+            follow_up_response(
+                "needs_support",
+                "你会先区分目标数量与真实报工数量吗？",
+            ),
+            follow_up_response(
+                "needs_support",
+                "如果目标尚未报工，能把它算作已经完成吗？",
+                next_target="M-04",
+            ),
+            follow_up_response(
+                "needs_support",
+                "判断真实进度时，你最终会采用哪一种数量？",
+            ),
+            follow_up_response("needs_support", ""),
+        )
+        prior_answers = tuple(
+            ("我仍然认为计划量就是完成量。", f"terminal-stop-{index}")
+            for index in range(1, 4)
+        )
+        final_answer = "我还是不能区分这两个口径。"
+        final_turn_id = "terminal-stop-4"
+        failing_transition = "T17"
+
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    standard_sql = load_task_catalog().templates["T-01"].standard_sql
+    manager.submit_sql(session_id, standard_sql)
+    manager.advance(session_id)
+    for answer, turn_id in prior_answers:
+        manager.submit_follow_up(session_id, answer, turn_id)
+    before = manager.get_state(session_id)
+    session = manager._get_session(session_id)
+    original_transition = session.runtime.transition
+    transition_failures = 0
+
+    def fail_terminal_transition(
+        draft: dict[str, Any],
+        transition_id: str,
+    ) -> dict[str, Any]:
+        nonlocal transition_failures
+        if transition_id == failing_transition:
+            transition_failures += 1
+            raise DemoSessionError(
+                f"simulated terminal transition failure at {transition_id}"
+            )
+        return original_transition(draft, transition_id)
+
+    monkeypatch.setattr(session.runtime, "transition", fail_terminal_transition)
+
+    stopped = manager.submit_follow_up(
+        session_id,
+        final_answer,
+        final_turn_id,
+    )
+
+    assert stopped["awaiting"] == "done"
+    assert stopped["outcome"] == "system_error"
+    assert stopped["interaction"] == {
+        "kind": "review_notice",
+        "message": SYSTEM_ERROR_COPY,
+    }
+    assert stopped["artifact"] == before["artifact"]
+    assert session.pending_learning_action is None
+    assert transition_failures == 1
+    assert manager.submit_follow_up(
+        session_id,
+        final_answer,
+        final_turn_id,
+    ) == stopped
+    assert transition_failures == 1
+
+
+def test_http_demo_session_error_returns_structured_system_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=forbidden_llm,
+        executor_factory=RecordingExecutor,
+    )
+
+    def fail_advance(_: str) -> dict[str, Any]:
+        raise DemoSessionError("no_matching_transition at S3_TASK; rule_hits=R-04")
+
+    monkeypatch.setattr(manager, "advance", fail_advance)
+    server = build_http_server(manager, host="127.0.0.1", port=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = Request(
+        f"http://127.0.0.1:{server.server_port}/api/sessions/session-1/advance",
+        data=b"{}",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+
+    try:
+        with pytest.raises(HTTPError) as raised:
+            urlopen(request, timeout=3)
+        response = raised.value
+        payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+    assert response.code == 409
+    assert payload == {
+        "error": SYSTEM_ERROR_COPY,
+        "outcome": "system_error",
+    }
+    public_payload = json.dumps(payload, ensure_ascii=False)
+    assert not any(
+        marker in public_payload
+        for marker in (
+            "DemoSessionError",
+            "no_matching_transition",
+            "S3_TASK",
+            "R-04",
+            "rule_hits",
+        )
+    )
 
 
 def test_interactive_server_cli_documents_thin_standard_library_options(

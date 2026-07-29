@@ -52,7 +52,8 @@ def test_follow_up_agent_builds_a_grounded_reviewable_probe() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "needs_support",
-            "target_misconception": "M-01",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-01",
             "question": "对照计划量与实际完成量，你会用哪个口径说明真实进度？",
         }
     )
@@ -74,7 +75,8 @@ def test_follow_up_agent_builds_a_grounded_reviewable_probe() -> None:
     assert product is not None
 
     assert turn.assessment == "needs_support"
-    assert turn.target_misconception == "M-01"
+    assert turn.diagnosed_misconception == "M-01"
+    assert turn.next_target_misconception == "M-01"
     assert product["agent"] == "task"
     assert product["role"] == "probe"
     assert product["payload"]["type"] == "quiz_set"
@@ -108,16 +110,84 @@ def test_follow_up_agent_builds_a_grounded_reviewable_probe() -> None:
     assert llm.calls[0]["temperature"] == 0.1
     assert set(
         llm.calls[0]["json_schema"]["properties"][
-            "target_misconception"
+            "diagnosed_misconception"
         ]["enum"]
     ) == {"M-01", "M-02", "M-03", "M-04", "M-05", "UNKNOWN"}
+    assert set(
+        llm.calls[0]["json_schema"]["properties"][
+            "next_target_misconception"
+        ]["enum"]
+    ) == {
+        "M-01",
+        "M-02",
+        "M-03",
+        "M-04",
+        "M-05",
+        "UNKNOWN",
+        "NO_NEXT_TARGET",
+    }
+
+
+def test_repeated_misconception_routes_to_supported_related_target() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "needs_support",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-04",
+            "question": "分别换一个汇总层级后，你会怎样判断两种结果是否可直接比较？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer="我仍然把计划量当作已经完成的数量。",
+        current_task=_current_task(task_agent, "T-01"),
+        task_agent=task_agent,
+        round_index=3,
+        max_rounds=4,
+        probed_misconceptions=("M-01",),
+    )
+
+    assert turn.diagnosed_misconception == "M-01"
+    assert turn.next_target_misconception == "M-04"
+    assert turn.product is not None
+    assert turn.product["payload"]["content"]["target_misconception"] == "M-04"
+    assert [item["ref"] for item in turn.product["evidence"]] == [
+        "M-04:1",
+        "M-04:2",
+    ]
+
+
+def test_follow_up_rejects_model_target_that_disagrees_with_routing() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "needs_support",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-05",
+            "question": "你会怎样区分不同业务口径下的结果？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+
+    with pytest.raises(FollowUpGenerationError, match="deterministic routing"):
+        agent.generate(
+            student_answer="我仍然把计划量当作已经完成的数量。",
+            current_task=_current_task(task_agent, "T-01"),
+            task_agent=task_agent,
+            round_index=3,
+            max_rounds=4,
+            probed_misconceptions=("M-01",),
+        )
 
 
 def test_follow_up_agent_unknown_target_uses_only_current_task_evidence() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "unknown",
-            "target_misconception": "UNKNOWN",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "UNKNOWN",
             "question": "你判断真实进度时，最需要先核对哪一类数据？",
         }
     )
@@ -146,7 +216,8 @@ def test_follow_up_agent_rejects_a_cross_domain_misconception() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "needs_support",
-            "target_misconception": "M-01",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-01",
             "question": "你会先核对哪个字段来判断当天完成情况？",
         }
     )
@@ -167,7 +238,8 @@ def test_follow_up_agent_builds_a_grounded_first_segment_probe() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "needs_support",
-            "target_misconception": "M-FS01",
+            "diagnosed_misconception": "M-FS01",
+            "next_target_misconception": "M-FS01",
             "question": "比较当日实际数和完成率时，你会怎样避免把两种口径混在一起？",
         }
     )
@@ -184,7 +256,8 @@ def test_follow_up_agent_builds_a_grounded_first_segment_probe() -> None:
 
     product = turn.product
     assert product is not None
-    assert turn.target_misconception == "M-FS01"
+    assert turn.diagnosed_misconception == "M-FS01"
+    assert turn.next_target_misconception == "M-FS01"
     assert product["payload"]["content"]["evidence_refs"] == ["M-FS01:1"]
     assert [item["ref"] for item in product["evidence"]] == ["M-FS01:1"]
     assert validate_message(
@@ -215,7 +288,8 @@ def test_follow_up_agent_rejects_unsafe_or_ungrounded_questions(
     llm = FollowUpLLM(
         {
             "assessment": "needs_support",
-            "target_misconception": "M-01",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-01",
             "question": question,
         }
     )
@@ -236,7 +310,8 @@ def test_mastered_turn_after_the_minimum_does_not_generate_an_unused_question() 
     llm = FollowUpLLM(
         {
             "assessment": "mastered",
-            "target_misconception": "M-01",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "NO_NEXT_TARGET",
             "question": "",
         }
     )
@@ -253,40 +328,40 @@ def test_mastered_turn_after_the_minimum_does_not_generate_an_unused_question() 
     )
 
     assert turn.assessment == "mastered"
-    assert turn.target_misconception == "M-01"
+    assert turn.diagnosed_misconception == "M-01"
+    assert turn.next_target_misconception is None
     assert turn.product is None
 
 
-def test_mastered_turn_discards_an_unneeded_model_question() -> None:
+def test_mastered_turn_rejects_an_unneeded_model_question() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "mastered",
-            "target_misconception": "M-03",
+            "diagnosed_misconception": "M-03",
+            "next_target_misconception": "NO_NEXT_TARGET",
             "question": "是否还要继续追问？",
         }
     )
     task_agent = _task_agent()
     agent = FollowUpAgent("trace-production_progress", llm_call=llm)
 
-    turn = agent.generate(
-        student_answer="五月是显著的单期偏低信号，但不能当作随机噪声忽略。",
-        current_task=_current_task(task_agent, "T-05-A"),
-        task_agent=task_agent,
-        round_index=3,
-        max_rounds=4,
-        completion_allowed=True,
-    )
-
-    assert turn.assessment == "mastered"
-    assert turn.target_misconception == "M-03"
-    assert turn.product is None
+    with pytest.raises(FollowUpGenerationError, match="must not generate"):
+        agent.generate(
+            student_answer="五月是显著的单期偏低信号，但不能当作随机噪声忽略。",
+            current_task=_current_task(task_agent, "T-05-A"),
+            task_agent=task_agent,
+            round_index=3,
+            max_rounds=4,
+            completion_allowed=True,
+        )
 
 
 def test_terminal_round_never_generates_a_fifth_question() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "needs_support",
-            "target_misconception": "M-01",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "NO_NEXT_TARGET",
             "question": "",
         }
     )

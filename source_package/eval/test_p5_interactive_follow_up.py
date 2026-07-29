@@ -42,10 +42,16 @@ def _response(
     assessment: str,
     question: str,
     target: str = "M-01",
+    next_target: str | None = None,
 ) -> dict[str, str]:
     return {
         "assessment": assessment,
-        "target_misconception": target,
+        "diagnosed_misconception": target,
+        "next_target_misconception": (
+            next_target
+            if next_target is not None
+            else target if question else "NO_NEXT_TARGET"
+        ),
         "question": question,
     }
 
@@ -225,6 +231,7 @@ def test_fourth_unmastered_round_steps_down_without_generating_a_fifth_question(
         _response(
             "needs_support",
             "如果目标尚未报工，能把它算作已经完成吗？",
+            next_target="M-04",
         ),
         _response(
             "needs_support",

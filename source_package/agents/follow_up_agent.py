@@ -15,6 +15,10 @@ import unicodedata
 
 from jsonschema import Draft202012Validator
 
+from agents.misconception_relations import (
+    default_relation_index,
+    rank_related_targets,
+)
 from agents.task_agent import TaskAgent
 from orchestrator.llm import LLMResult, call_llm
 
@@ -27,6 +31,7 @@ MAX_FOLLOW_UP_ROUNDS = 4
 MAX_LEARNER_TEXT_LENGTH = 500
 MAX_QUESTION_LENGTH = 180
 UNKNOWN_MISCONCEPTION = "UNKNOWN"
+NO_NEXT_TARGET = "NO_NEXT_TARGET"
 _ZERO_WIDTH_RE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
 _NUMBER_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 _ENGINEERING_PATTERNS = (
@@ -60,7 +65,8 @@ class FollowUpGenerationError(ValueError):
 @dataclass(frozen=True, slots=True)
 class FollowUpTurn:
     assessment: str
-    target_misconception: str
+    diagnosed_misconception: str
+    next_target_misconception: str | None
     product: dict[str, Any] | None
     model: str
     latency_ms: int
@@ -102,7 +108,8 @@ def _question_schema(
         "type": "object",
         "required": [
             "assessment",
-            "target_misconception",
+            "diagnosed_misconception",
+            "next_target_misconception",
             "question",
         ],
         "properties": {
@@ -110,9 +117,17 @@ def _question_schema(
                 "type": "string",
                 "enum": ["mastered", "needs_support", "unknown"],
             },
-            "target_misconception": {
+            "diagnosed_misconception": {
                 "type": "string",
                 "enum": [*allowed_targets, UNKNOWN_MISCONCEPTION],
+            },
+            "next_target_misconception": {
+                "type": "string",
+                "enum": [
+                    *allowed_targets,
+                    UNKNOWN_MISCONCEPTION,
+                    NO_NEXT_TARGET,
+                ],
             },
             "question": {
                 "type": "string",
@@ -122,6 +137,24 @@ def _question_schema(
         },
         "additionalProperties": False,
     }
+
+
+def _responsibility_scope(content: Mapping[str, Any]) -> tuple[str, ...]:
+    declared = content.get("responsibility_scope")
+    if isinstance(declared, Sequence) and not isinstance(declared, (str, bytes)):
+        scope = tuple(
+            dict.fromkeys(
+                item.strip()
+                for item in declared
+                if isinstance(item, str) and item.strip()
+            )
+        )
+        if scope:
+            return scope
+    knowledge_point = content.get("knowledge_point")
+    if isinstance(knowledge_point, str) and knowledge_point.strip():
+        return (knowledge_point.strip(),)
+    return ()
 
 
 def _payload_content(message: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -239,6 +272,7 @@ class FollowUpAgent:
         task_agent: TaskAgent,
         round_index: int,
         max_rounds: int = MAX_FOLLOW_UP_ROUNDS,
+        probed_misconceptions: Sequence[str] = (),
         review_feedback: Sequence[str] = (),
         completion_allowed: bool = False,
         terminal_round: bool = False,
@@ -258,6 +292,13 @@ class FollowUpAgent:
             raise ValueError("round_index must be between 2 and max_rounds")
 
         allowed_targets = task_agent.misconception_ids
+        probed = tuple(
+            dict.fromkeys(
+                target
+                for target in probed_misconceptions
+                if isinstance(target, str) and target in allowed_targets
+            )
+        )
         candidates: dict[str, dict[str, Any]] = {}
         candidate_summary: list[dict[str, Any]] = []
         for misconception in allowed_targets:
@@ -276,6 +317,19 @@ class FollowUpAgent:
 
         current_content = _payload_content(current_task)
         current_evidence = _evidence_items(current_task)
+        responsibility_scope = _responsibility_scope(current_content)
+        relation_index = default_relation_index(tuple(allowed_targets))
+        eligible_related_targets = {
+            target: list(
+                rank_related_targets(
+                    target,
+                    responsibility_scope=responsibility_scope,
+                    probed=probed,
+                    relation_index=relation_index,
+                )
+            )
+            for target in allowed_targets
+        }
         schema = _question_schema(
             allowed_targets,
             completion_allowed=completion_allowed or terminal_round,
@@ -293,6 +347,7 @@ class FollowUpAgent:
                                 "question",
                                 "standard_stem",
                                 "knowledge_point",
+                                "responsibility_scope",
                                 "difficulty",
                                 "family",
                             )
@@ -305,8 +360,13 @@ class FollowUpAgent:
                             *allowed_targets,
                             UNKNOWN_MISCONCEPTION,
                         ],
+                        "eligible_related_targets": eligible_related_targets,
+                        "probed_misconceptions": list(probed),
+                        "responsibility_scope": list(responsibility_scope),
                         "round_index": round_index,
                         "max_rounds": max_rounds,
+                        "completion_allowed": completion_allowed,
+                        "terminal_round": terminal_round,
                         "review_feedback": [
                             str(item)
                             for item in review_feedback
@@ -326,15 +386,17 @@ class FollowUpAgent:
             ) from exc
         if not isinstance(result, LLMResult):
             raise FollowUpGenerationError("follow-up model returned no metadata")
-        raw_target = result.data.get("target_misconception")
-        if (
-            isinstance(raw_target, str)
-            and raw_target != UNKNOWN_MISCONCEPTION
-            and raw_target not in allowed_targets
-        ):
-            raise FollowUpGenerationError(
-                "target misconception is not in the current domain"
-            )
+        raw_diagnosed = result.data.get("diagnosed_misconception")
+        raw_next = result.data.get("next_target_misconception")
+        for raw_target in (raw_diagnosed, raw_next):
+            if (
+                isinstance(raw_target, str)
+                and raw_target not in (UNKNOWN_MISCONCEPTION, NO_NEXT_TARGET)
+                and raw_target not in allowed_targets
+            ):
+                raise FollowUpGenerationError(
+                    "target misconception is not in the current domain"
+                )
         try:
             Draft202012Validator(schema).validate(result.data)
         except Exception as exc:
@@ -343,31 +405,62 @@ class FollowUpAgent:
             ) from exc
 
         assessment = str(result.data["assessment"])
-        target = str(result.data["target_misconception"])
-        if (assessment == "unknown") != (target == UNKNOWN_MISCONCEPTION):
+        diagnosed = str(result.data["diagnosed_misconception"])
+        proposed_next = (
+            None
+            if result.data["next_target_misconception"] == NO_NEXT_TARGET
+            else str(result.data["next_target_misconception"])
+        )
+        if (assessment == "unknown") != (
+            diagnosed == UNKNOWN_MISCONCEPTION
+        ):
             raise FollowUpGenerationError(
-                "unknown assessment and target must be aligned"
+                "unknown assessment and diagnosis must be aligned"
             )
-        if target == UNKNOWN_MISCONCEPTION:
-            base = current_task
+        if terminal_round or (completion_allowed and assessment == "mastered"):
+            expected_next: str | None = None
+        elif diagnosed == UNKNOWN_MISCONCEPTION:
+            expected_next = UNKNOWN_MISCONCEPTION
+        elif assessment == "needs_support" and diagnosed in probed:
+            related = rank_related_targets(
+                diagnosed,
+                responsibility_scope=responsibility_scope,
+                probed=probed,
+                relation_index=relation_index,
+            )
+            expected_next = related[0] if related else diagnosed
         else:
-            try:
-                base = candidates[target]
-            except KeyError as exc:
-                raise FollowUpGenerationError(
-                    "target misconception is not in the current domain"
-                ) from exc
+            expected_next = diagnosed
+        if proposed_next != expected_next:
+            raise FollowUpGenerationError(
+                "next target does not match deterministic routing"
+            )
 
         raw_question = result.data["question"]
-        if terminal_round or (completion_allowed and assessment == "mastered"):
+        if expected_next is None:
+            if not isinstance(raw_question, str) or raw_question.strip():
+                raise FollowUpGenerationError(
+                    "completed follow-up must not generate another question"
+                )
             return FollowUpTurn(
                 assessment=assessment,
-                target_misconception=target,
+                diagnosed_misconception=diagnosed,
+                next_target_misconception=None,
                 product=None,
                 model=result.model,
                 latency_ms=result.latency_ms,
                 token_usage=result.token_usage.as_dict(),
             )
+        if expected_next == UNKNOWN_MISCONCEPTION:
+            base = current_task
+        else:
+            try:
+                base = candidates[expected_next]
+            except KeyError as exc:
+                raise FollowUpGenerationError(
+                    "target misconception is not in the current domain"
+                ) from exc
+
         if isinstance(raw_question, str) and not raw_question.strip():
             raise FollowUpGenerationError(
                 "an unfinished follow-up must generate a question"
@@ -399,7 +492,7 @@ class FollowUpAgent:
             ],
             "standard_stem": standard_stem,
             "assessment": assessment,
-            "target_misconception": target,
+            "target_misconception": expected_next,
             "follow_up_round": round_index,
             "max_follow_up_rounds": max_rounds,
             "evidence_refs": evidence_refs,
@@ -426,7 +519,7 @@ class FollowUpAgent:
             "probe": {
                 "wrong_attempts": max(1, round_index - 1),
                 "questions": [question],
-                "target_misconception": target,
+                "target_misconception": expected_next,
             },
             "model": result.model,
             "latency_ms": result.latency_ms,
@@ -438,7 +531,8 @@ class FollowUpAgent:
             draft["student_profile_ref"] = profile_ref
         return FollowUpTurn(
             assessment=assessment,
-            target_misconception=target,
+            diagnosed_misconception=diagnosed,
+            next_target_misconception=expected_next,
             product=draft,
             model=result.model,
             latency_ms=result.latency_ms,
