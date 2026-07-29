@@ -1,0 +1,140 @@
+{
+  "schema_version": "innovation-b-routing-ablation-v1",
+  "input_contract": {
+    "source": "formal-domain-assets-and-fixed-stubs-only",
+    "accepts_temporary_relations": false,
+    "accepts_arbitrary_covered_sets": false,
+    "uses_monkeypatch": false,
+    "uses_post_divergence_llm_output": false
+  },
+  "tasks": [
+    {
+      "template_id": "T-02",
+      "responsibility_scope": [
+        "完成率计算",
+        "计划量与实际量口径"
+      ],
+      "reachable_history_prefix": {
+        "template_id": "T-02",
+        "responsibility_scope": [
+          "完成率计算",
+          "计划量与实际量口径"
+        ],
+        "answer_diagnosis_stub": {
+          "stub_id": "answer-diagnosis-fixed-v1",
+          "rounds": [
+            {
+              "round": 2,
+              "answer": "计划量就是已经完成的数量。",
+              "assessment": "needs_support",
+              "diagnosed_misconception": "M-01"
+            },
+            {
+              "round": 3,
+              "answer": "我仍然把计划量当作完成量。",
+              "assessment": "needs_support",
+              "diagnosed_misconception": "M-01"
+            },
+            {
+              "round": 4,
+              "answer": "我仍无法区分完成率相关口径。",
+              "assessment": "needs_support",
+              "diagnosed_misconception": "M-04"
+            }
+          ]
+        },
+        "probed_misconceptions": [
+          "M-01",
+          "M-04"
+        ],
+        "covered_relation_points": [
+          "计划量与实际量口径",
+          "完成率计算"
+        ],
+        "coverage_sources": [
+          {
+            "round": 3,
+            "source": "M-01",
+            "target": "M-04",
+            "route_support_points": [
+              "计划量与实际量口径",
+              "完成率计算"
+            ],
+            "review_stub": "fixed-evidence-bound-review-v1",
+            "review_decision": "approve",
+            "evidence_refs": [
+              "M-04:1",
+              "M-04:2"
+            ],
+            "backend_committed": true
+          }
+        ],
+        "next_round": 4,
+        "next_diagnosis": "M-04"
+      },
+      "history_prefix_sha256": "79f8f79ebe5f94028a5efb6d47750395dd7c4a4b670fc04bdaff27f6019533d3",
+      "b0_target": "M-05",
+      "b1_target": "M-04",
+      "b0_route_support_points": [
+        "完成率计算"
+      ],
+      "b1_route_support_points": [],
+      "b0_marginal_gain": 0,
+      "b1_marginal_gain": 0,
+      "first_divergence": true,
+      "direct_deterministic_consequence_only": true,
+      "b0_review_gate": {
+        "stub": "fixed-evidence-bound-review-v1",
+        "decision": "approve",
+        "target": "M-05",
+        "evidence_refs": [
+          "M-05:1"
+        ]
+      },
+      "b1_review_gate": {
+        "stub": "fixed-evidence-bound-review-v1",
+        "decision": "approve",
+        "target": "M-04",
+        "evidence_refs": [
+          "M-04:1",
+          "M-04:2"
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "adopt_marginal_support": true,
+    "different_route_support_points": {
+      "b0": 2,
+      "b1": 2
+    },
+    "zero_gain_relation_hops": {
+      "b0": 1,
+      "b1": 0
+    },
+    "repeated_support_point_contributions": {
+      "b0": 1,
+      "b1": 0
+    },
+    "routing_deterministic": true,
+    "cross_domain_targets": 0,
+    "out_of_scope_targets": 0,
+    "unfrozen_evidence_targets": 0,
+    "unapproved_coverage_points": 0,
+    "fourth_round_unclosed": 0,
+    "post_divergence_llm_outputs_compared": 0
+  },
+  "claims_boundary": {
+    "proves": [
+      "real_reachable_first_route_divergence",
+      "distinct_route_support_not_lower",
+      "strict_zero_gain_hop_reduction",
+      "approved_coverage_provenance"
+    ],
+    "does_not_prove": [
+      "learning_outcome_improvement",
+      "multi_node_second_domain_gain",
+      "cross_industry_generalization"
+    ]
+  }
+}

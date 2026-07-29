@@ -16,8 +16,11 @@ import unicodedata
 from jsonschema import Draft202012Validator
 
 from agents.misconception_relations import (
+    RoutingPolicy,
     default_relation_index,
-    rank_related_targets,
+    default_relation_support_points,
+    rank_relation_routes,
+    select_relation_route,
 )
 from agents.task_agent import TaskAgent
 from orchestrator.llm import LLMResult, call_llm
@@ -67,6 +70,7 @@ class FollowUpTurn:
     assessment: str
     diagnosed_misconception: str
     next_target_misconception: str | None
+    route_support_points: tuple[str, ...]
     product: dict[str, Any] | None
     model: str
     latency_ms: int
@@ -155,6 +159,44 @@ def _responsibility_scope(content: Mapping[str, Any]) -> tuple[str, ...]:
     if isinstance(knowledge_point, str) and knowledge_point.strip():
         return (knowledge_point.strip(),)
     return ()
+
+
+def deterministic_follow_up_route(
+    *,
+    assessment: str,
+    diagnosed_misconception: str,
+    completion_allowed: bool,
+    terminal_round: bool,
+    probed_misconceptions: Sequence[str],
+    covered_relation_points: Sequence[str],
+    responsibility_scope: Sequence[str],
+    relation_index: Mapping[str, Sequence[Any]],
+    allowed_targets: Sequence[str],
+    allowed_support_points: Sequence[str],
+    routing_policy: RoutingPolicy,
+) -> tuple[str | None, tuple[str, ...]]:
+    """Resolve one immutable next target and its backend-only route support."""
+
+    if terminal_round or (completion_allowed and assessment == "mastered"):
+        return None, ()
+    if diagnosed_misconception == UNKNOWN_MISCONCEPTION:
+        return UNKNOWN_MISCONCEPTION, ()
+    probed = tuple(dict.fromkeys(probed_misconceptions))
+    if assessment != "needs_support" or diagnosed_misconception not in probed:
+        return diagnosed_misconception, ()
+    route = select_relation_route(
+        diagnosed_misconception,
+        responsibility_scope=responsibility_scope,
+        probed=probed,
+        covered_relation_points=covered_relation_points,
+        relation_index=relation_index,
+        allowed_ids=allowed_targets,
+        allowed_support_points=allowed_support_points,
+        policy=routing_policy,
+    )
+    if route is None:
+        return diagnosed_misconception, ()
+    return route.target, route.route_support_points
 
 
 def _payload_content(message: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -273,6 +315,8 @@ class FollowUpAgent:
         round_index: int,
         max_rounds: int = MAX_FOLLOW_UP_ROUNDS,
         probed_misconceptions: Sequence[str] = (),
+        covered_relation_points: Sequence[str] = (),
+        routing_policy: RoutingPolicy | None = None,
         review_feedback: Sequence[str] = (),
         completion_allowed: bool = False,
         terminal_round: bool = False,
@@ -292,6 +336,7 @@ class FollowUpAgent:
             raise ValueError("round_index must be between 2 and max_rounds")
 
         allowed_targets = task_agent.misconception_ids
+        active_routing_policy = routing_policy or RoutingPolicy()
         probed = tuple(
             dict.fromkeys(
                 target
@@ -319,13 +364,21 @@ class FollowUpAgent:
         current_evidence = _evidence_items(current_task)
         responsibility_scope = _responsibility_scope(current_content)
         relation_index = default_relation_index(tuple(allowed_targets))
+        allowed_route_points = default_relation_support_points(
+            tuple(allowed_targets)
+        )
         eligible_related_targets = {
             target: list(
-                rank_related_targets(
+                route.target
+                for route in rank_relation_routes(
                     target,
                     responsibility_scope=responsibility_scope,
                     probed=probed,
+                    covered_relation_points=covered_relation_points,
                     relation_index=relation_index,
+                    allowed_ids=allowed_targets,
+                    allowed_support_points=allowed_route_points,
+                    policy=active_routing_policy,
                 )
             )
             for target in allowed_targets
@@ -417,20 +470,19 @@ class FollowUpAgent:
             raise FollowUpGenerationError(
                 "unknown assessment and diagnosis must be aligned"
             )
-        if terminal_round or (completion_allowed and assessment == "mastered"):
-            expected_next: str | None = None
-        elif diagnosed == UNKNOWN_MISCONCEPTION:
-            expected_next = UNKNOWN_MISCONCEPTION
-        elif assessment == "needs_support" and diagnosed in probed:
-            related = rank_related_targets(
-                diagnosed,
-                responsibility_scope=responsibility_scope,
-                probed=probed,
-                relation_index=relation_index,
-            )
-            expected_next = related[0] if related else diagnosed
-        else:
-            expected_next = diagnosed
+        expected_next, route_support_points = deterministic_follow_up_route(
+            assessment=assessment,
+            diagnosed_misconception=diagnosed,
+            completion_allowed=completion_allowed,
+            terminal_round=terminal_round,
+            probed_misconceptions=probed,
+            covered_relation_points=covered_relation_points,
+            responsibility_scope=responsibility_scope,
+            relation_index=relation_index,
+            allowed_targets=allowed_targets,
+            allowed_support_points=allowed_route_points,
+            routing_policy=active_routing_policy,
+        )
         if proposed_next != expected_next:
             raise FollowUpGenerationError(
                 "next target does not match deterministic routing"
@@ -446,6 +498,7 @@ class FollowUpAgent:
                 assessment=assessment,
                 diagnosed_misconception=diagnosed,
                 next_target_misconception=None,
+                route_support_points=(),
                 product=None,
                 model=result.model,
                 latency_ms=result.latency_ms,
@@ -533,6 +586,7 @@ class FollowUpAgent:
             assessment=assessment,
             diagnosed_misconception=diagnosed,
             next_target_misconception=expected_next,
+            route_support_points=route_support_points,
             product=draft,
             model=result.model,
             latency_ms=result.latency_ms,

@@ -22,8 +22,16 @@ from agents.follow_up_agent import (
     FollowUpGenerationError,
     FollowUpTurn,
     UNKNOWN_MISCONCEPTION,
+    _responsibility_scope,
     contains_engineering_text,
+    deterministic_follow_up_route,
     normalize_learner_input,
+)
+from agents.misconception_relations import (
+    RelationIntegrityError,
+    RoutingPolicy,
+    default_relation_index,
+    default_relation_support_points,
 )
 from agents.sandbox import (
     QueryExecutionError,
@@ -212,6 +220,7 @@ class _InteractiveSession:
     follow_up_turns: list[dict[str, Any]] = field(default_factory=list)
     follow_up_target: str | None = None
     probed_misconceptions: set[str] = field(default_factory=set)
+    covered_relation_points: set[str] = field(default_factory=set)
     follow_up_had_support: bool = False
     generic_fallback_used: bool = False
     recorded_turn_ids: set[str] = field(default_factory=set)
@@ -241,6 +250,7 @@ class InteractiveSessionManager:
         executor_factory: Callable[[], Any] = _default_executor_factory,
         mode: str | None = None,
         follow_up_review_policy: FollowUpReviewPolicy | None = None,
+        routing_policy: RoutingPolicy | None = None,
     ) -> None:
         self._trace_dir = Path(trace_dir)
         self._cache_dir = Path(cache_dir)
@@ -258,6 +268,12 @@ class InteractiveSessionManager:
         self._follow_up_review_policy = (
             follow_up_review_policy or FollowUpReviewPolicy()
         )
+        if routing_policy is not None and not isinstance(
+            routing_policy,
+            RoutingPolicy,
+        ):
+            raise ValueError("routing_policy must be a RoutingPolicy")
+        self._routing_policy = routing_policy or RoutingPolicy()
         self._evidence_stage_executor = ParallelStageExecutor(max_concurrency=3)
         self._resource_stage_executor = ParallelStageExecutor(max_concurrency=3)
         self._sessions: dict[str, _InteractiveSession] = {}
@@ -1363,6 +1379,9 @@ class InteractiveSessionManager:
             submitted_round + 1,
             MAX_FOLLOW_UP_ROUNDS,
         )
+        probed_snapshot = tuple(sorted(session.probed_misconceptions))
+        covered_snapshot = tuple(sorted(session.covered_relation_points))
+        approved_route_support_points: tuple[str, ...] = ()
         try:
             generated = session.follow_up_agent.generate(
                 student_answer=answer_text,
@@ -1370,9 +1389,9 @@ class InteractiveSessionManager:
                 task_agent=runtime.task,
                 round_index=generation_round,
                 max_rounds=MAX_FOLLOW_UP_ROUNDS,
-                probed_misconceptions=tuple(
-                    sorted(session.probed_misconceptions)
-                ),
+                probed_misconceptions=probed_snapshot,
+                covered_relation_points=covered_snapshot,
+                routing_policy=self._routing_policy,
                 completion_allowed=submitted_round >= 2,
                 terminal_round=terminal_round,
             )
@@ -1386,6 +1405,40 @@ class InteractiveSessionManager:
                     completion_allowed=submitted_round >= 2,
                     terminal_round=terminal_round,
                     initial=generated,
+                    probed_snapshot=probed_snapshot,
+                    covered_snapshot=covered_snapshot,
+                )
+            relation_index = default_relation_index(
+                tuple(runtime.task.misconception_ids)
+            )
+            recomputed_target, approved_route_support_points = (
+                deterministic_follow_up_route(
+                    assessment=generated.assessment,
+                    diagnosed_misconception=(
+                        generated.diagnosed_misconception
+                    ),
+                    completion_allowed=submitted_round >= 2,
+                    terminal_round=terminal_round,
+                    probed_misconceptions=probed_snapshot,
+                    covered_relation_points=covered_snapshot,
+                    responsibility_scope=_responsibility_scope(
+                        _payload_content(current_task)
+                    ),
+                    relation_index=relation_index,
+                    allowed_targets=runtime.task.misconception_ids,
+                    allowed_support_points=default_relation_support_points(
+                        tuple(runtime.task.misconception_ids)
+                    ),
+                    routing_policy=self._routing_policy,
+                )
+            )
+            if (
+                recomputed_target != generated.next_target_misconception
+                or approved_route_support_points
+                != generated.route_support_points
+            ):
+                raise RelationIntegrityError(
+                    "approved follow-up route does not match backend recomputation"
                 )
         except ReviewFlowTerminal as terminal:
             self._finish_review_stop(
@@ -1403,6 +1456,10 @@ class InteractiveSessionManager:
             )
             session.processed_turn_ids.add(client_turn_id)
             return self.get_state(session_id)
+        except RelationIntegrityError:
+            self._finish_system_error(session)
+            session.processed_turn_ids.add(client_turn_id)
+            return self.get_state(session_id)
         except (FollowUpGenerationError, ReviewFlowError) as exc:
             raise InteractiveSessionError(
                 "内容暂时无法继续生成，请稍后重试。"
@@ -1415,14 +1472,13 @@ class InteractiveSessionManager:
                 submitted_round,
             )
         )
-        session.follow_up_turns.append(
-            {
-                "round": submitted_round,
-                "question": session.follow_up_question,
-                "answer": text.strip(),
-            }
-        )
+        turn_record = {
+            "round": submitted_round,
+            "question": session.follow_up_question,
+            "answer": text.strip(),
+        }
         if generated.assessment == "mastered" and submitted_round >= 2:
+            session.follow_up_turns.append(turn_record)
             answer = self._finish_mastered_follow_up(session)
             if answer is None:
                 session.processed_turn_ids.add(client_turn_id)
@@ -1432,6 +1488,7 @@ class InteractiveSessionManager:
             return self.get_state(session_id)
 
         if terminal_round:
+            session.follow_up_turns.append(turn_record)
             answer = self._finish_unmastered_follow_up(session)
             if answer is None:
                 session.processed_turn_ids.add(client_turn_id)
@@ -1453,16 +1510,34 @@ class InteractiveSessionManager:
             )
         if generated.assessment != "mastered":
             self._record_unmastered_transition(session, generated)
-        session.follow_up_round = submitted_round + 1
-        session.follow_up_question = question
-        session.artifact = reviewed_product
-        session.interaction = self._follow_up_interaction(session)
-        session.awaiting = "follow_up"
         next_target = generated.next_target_misconception
+        next_turns = [*session.follow_up_turns, turn_record]
+        next_probed = set(session.probed_misconceptions)
         if next_target not in {None, UNKNOWN_MISCONCEPTION}:
-            session.probed_misconceptions.add(next_target)
+            next_probed.add(next_target)
+        next_covered = set(session.covered_relation_points)
+        next_covered.update(approved_route_support_points)
+        next_processed = set(session.processed_turn_ids)
+        next_processed.add(client_turn_id)
+        next_round = submitted_round + 1
+        next_interaction = {
+            "kind": "free_text_follow_up",
+            "prompt": question,
+            "round": next_round,
+            "max_rounds": MAX_FOLLOW_UP_ROUNDS,
+            "turns": [dict(turn) for turn in next_turns],
+        }
+
+        session.follow_up_round = next_round
+        session.follow_up_question = question
+        session.follow_up_turns = next_turns
+        session.artifact = reviewed_product
+        session.interaction = next_interaction
+        session.awaiting = "follow_up"
+        session.probed_misconceptions = next_probed
+        session.covered_relation_points = next_covered
         session.follow_up_target = next_target
-        session.processed_turn_ids.add(client_turn_id)
+        session.processed_turn_ids = next_processed
         return self.get_state(session_id)
 
     def _review_follow_up_product(
@@ -1475,6 +1550,8 @@ class InteractiveSessionManager:
         completion_allowed: bool,
         terminal_round: bool,
         initial: FollowUpTurn,
+        probed_snapshot: tuple[str, ...],
+        covered_snapshot: tuple[str, ...],
     ) -> tuple[FollowUpTurn, dict[str, Any]]:
         runtime = session.runtime
         candidate = initial
@@ -1495,9 +1572,9 @@ class InteractiveSessionManager:
                     task_agent=runtime.task,
                     round_index=round_index,
                     max_rounds=MAX_FOLLOW_UP_ROUNDS,
-                    probed_misconceptions=tuple(
-                        sorted(session.probed_misconceptions)
-                    ),
+                    probed_misconceptions=probed_snapshot,
+                    covered_relation_points=covered_snapshot,
+                    routing_policy=self._routing_policy,
                     review_feedback=last_feedback,
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
@@ -2651,6 +2728,7 @@ class InteractiveSessionManager:
         session.follow_up_turns.clear()
         session.follow_up_target = None
         session.probed_misconceptions.clear()
+        session.covered_relation_points.clear()
         session.follow_up_had_support = False
         session.generic_fallback_used = False
         session.processed_turn_ids.clear()
