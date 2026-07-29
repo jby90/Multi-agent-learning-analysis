@@ -181,6 +181,26 @@ describe('interactiveApi', () => {
     )
   })
 
+  it('preserves the HTTP status needed to distinguish an expired session', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      error: '会话不存在或已失效。',
+    }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+    const api = createInteractiveApi('http://127.0.0.1:8765')
+
+    let caught: unknown
+    try {
+      await api.getState('missing-session')
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(InteractiveApiError)
+    expect((caught as InteractiveApiError).status).toBe(404)
+  })
+
   it('turns an unreadable error response into fixed channel copy', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(
       'Traceback: no_matching_transition at S4_VERIFY',
