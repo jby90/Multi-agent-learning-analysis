@@ -1,5 +1,40 @@
 # 保留旧版并并行运行新版
 
+## 创新 A+B 源码版（新增，推荐开发组使用）
+
+创新 A+B 冻结源码对应 Git 标签 `innovation-ab-code-freeze-20260729`、提交 `6e2042e`。它使用独立 Compose 和端口，不覆盖下面的 1.1.0 旧版或 `coordination-32d3e49` 协同重构版。
+
+在仓库根目录、Docker Hub 可访问时构建：
+
+```powershell
+docker build --file .\docker\backend\Dockerfile --tag multiagent-decision-backend:innovation-ab-6e2042e .
+docker build --file .\docker\frontend\Dockerfile --tag multiagent-decision-frontend:innovation-ab-6e2042e .
+```
+
+随后启动独立创新版：
+
+```powershell
+docker compose --env-file .\Docker镜像\.env --file .\Docker镜像\docker-compose.innovation-ab.yml up --detach --wait --wait-timeout 120
+```
+
+默认入口为：
+
+- 旧版 1.1.0：`http://127.0.0.1:18080/`
+- 原协同重构版：`http://127.0.0.1:18081/`
+- 创新 A+B 版：`http://127.0.0.1:18082/`
+
+创新版只复用旧版数据库网络和只读账号，拥有独立前后端容器、镜像标签与 runtime 卷。若端口冲突，可在 `.env` 中设置 `INNOVATION_AB_FRONTEND_HOST_PORT` 与 `INNOVATION_AB_BACKEND_HOST_PORT`。
+
+只停止创新版且保留另外两版：
+
+```powershell
+docker compose --env-file .\Docker镜像\.env --file .\Docker镜像\docker-compose.innovation-ab.yml down
+```
+
+不要附加 `-v`，也不要对旧版 Compose 执行 `down -v`。
+
+下面内容继续保留，作为 `coordination-32d3e49` 历史协同重构版的离线镜像部署说明。
+
 本目录提供当前协同重构版的后端、前端增量镜像。它适用于已经部署过旧版、已经拥有 `multiagent-decision-1-1-0_database_data` 数据卷的学生。推荐保留旧版并在另一组端口同时运行新版。
 
 本次没有修改数据库结构和比赛数据，因此不需要重新加载数据库镜像，也不需要重新导入 CSV。

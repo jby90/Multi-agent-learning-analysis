@@ -1,0 +1,106 @@
+{
+  "schema_version": "innovation-ab-final-gate-v1",
+  "frozen_code": {
+    "commit": "6e2042e",
+    "tag": "innovation-ab-code-freeze-20260729"
+  },
+  "execution_contract": {
+    "matrix_cases_per_round": 50,
+    "rounds": 2,
+    "attempts_per_case": 1,
+    "resumed": false,
+    "retried": false,
+    "parameters_changed_between_rounds": false
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "attempts": 50,
+      "outcomes": {
+        "completed": 49,
+        "safe_rejected": 0,
+        "system_error": 1,
+        "external_unavailable": 0
+      },
+      "metrics": {
+        "hallucination": {"numerator": 2, "denominator": 987, "rate": "0.002026", "excellence_pass": true},
+        "coverage": {"numerator": 10, "denominator": 10, "rate": "1.000000", "excellence_pass": true},
+        "adaptation_auto": {"numerator": 163, "denominator": 163, "rate": "1.000000", "excellence_pass": true}
+      },
+      "routing_family_mismatch": 1,
+      "stops": [
+        {"case_id": "E2E-018", "outcome": "system_error", "reason": "lecture failed review preflight after 3: R-04"}
+      ],
+      "ledger_sha256": "06ee2d9ae9d8c1c59542e54dbac73c13ef09e230637465e11bc48d88d0514b33",
+      "dataset_sha256": "d3e7bd2dcf51500be7a1a30aee0b4643105b183c7b9e34f60acf3b6c5c8d0007",
+      "two_pass_metrics_sha256": "b9c1c35cc718d6dc29f1f4e7ff969b1750c914cf645709ff9d3c48467eb4000e",
+      "two_pass_identical": true,
+      "api_results": 453,
+      "tokens": 623400,
+      "cost_cny": "1.867134"
+    },
+    {
+      "round": 2,
+      "attempts": 50,
+      "outcomes": {
+        "completed": 47,
+        "safe_rejected": 2,
+        "system_error": 1,
+        "external_unavailable": 0
+      },
+      "metrics": {
+        "hallucination": {"numerator": 2, "denominator": 973, "rate": "0.002055", "excellence_pass": true},
+        "coverage": {"numerator": 10, "denominator": 10, "rate": "1.000000", "excellence_pass": true},
+        "adaptation_auto": {"numerator": 159, "denominator": 159, "rate": "1.000000", "excellence_pass": true}
+      },
+      "routing_family_mismatch": 0,
+      "stops": [
+        {"case_id": "E2E-003", "outcome": "safe_rejected", "reason": "sandbox rejected process_order outside the task output authority"},
+        {"case_id": "E2E-005", "outcome": "safe_rejected", "reason": "sandbox rejected process_order outside the task output authority"},
+        {"case_id": "E2E-012", "outcome": "system_error", "reason": "lecture failed review preflight after 3: R-04"}
+      ],
+      "ledger_sha256": "fd3a41afbaef6b36d720363641e1347c81729f199297839076f354dab8c2b775",
+      "dataset_sha256": "2d50cc84f9982697d2a9eb7e878b6b91932f4da4e2c9dffd909e86e8ea0324db",
+      "two_pass_metrics_sha256": "e6635d8a0d4b12276781e83eab04321571406187ed9c9f74a91c535ada74f2b8",
+      "two_pass_identical": true,
+      "api_results": 435,
+      "tokens": 602721,
+      "cost_cny": "1.779732"
+    }
+  ],
+  "combined": {
+    "attempts": 100,
+    "completed": 96,
+    "safe_rejected": 2,
+    "system_error": 2,
+    "external_unavailable": 0,
+    "api_results": 888,
+    "tokens": 1226121,
+    "cost_cny": "3.646866",
+    "all_three_metrics_passed_excellence_in_both_rounds": true,
+    "strict_prior_zero_hallucination_numerator_preserved": false
+  },
+  "evidence_boundaries": {
+    "formal_50x2_proves": [
+      "final shared workflow version passes all three formal metric thresholds",
+      "coverage and automatic adaptation remain complete in both rounds",
+      "failed attempts remain in the ledger and fail closed"
+    ],
+    "formal_50x2_does_not_prove": [
+      "innovation A directly reduces live rebuttal cost",
+      "innovation B improves learning outcomes",
+      "second-domain end-to-end live capability"
+    ],
+    "second_domain_is_reported_separately": true
+  },
+  "docker_validation": {
+    "innovation_frontend": "http://127.0.0.1:18082/",
+    "legacy_frontend": "http://127.0.0.1:18080/",
+    "coordination_frontend": "http://127.0.0.1:18081/",
+    "container_combination_tests": "51 passed",
+    "http_smoke": "passed",
+    "canonical_clean_build": "blocked by Docker Hub anonymous-token EOF",
+    "local_runtime_overlay_validation": "passed",
+    "compose_sha256": "c085c421ec998c55ab3d356bb516fb6371de06c4dc033399c8b1d268a0366ee1"
+  }
+}

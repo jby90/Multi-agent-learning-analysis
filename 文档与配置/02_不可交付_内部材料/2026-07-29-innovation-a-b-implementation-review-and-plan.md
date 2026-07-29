@@ -2,7 +2,7 @@
 
 - 日期：2026-07-29
 - 文档性质：内部实施评审与执行计划
-- 当前状态：已审批；正在按 A → B → A+B 顺序实施
+- 当前状态：A、B、A+B 组合门禁、正式 50×2 与三版本 Docker 终验均已完成；规范 Dockerfile clean build 受外部 Docker Hub token EOF 阻断，已单独披露
 - 基线原则：以最新交付代码为唯一代码基线，不以旧版说明、压缩包或历史行号代替真实代码
 - 关联规格：
   - `2026-07-29-transaction-selective-rebuttal-design.md`
