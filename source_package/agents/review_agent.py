@@ -48,6 +48,13 @@ R03_PROMPT = (PROMPT_DIR / "review_r03.md").read_text(encoding="utf-8")
 FOLLOW_UP_EVIDENCE_PROMPT = (
     PROMPT_DIR / "review_follow_up_evidence.md"
 ).read_text(encoding="utf-8")
+SAFE_EVIDENCE_RESTATEMENT_QUESTIONS = frozenset(
+    {
+        "根据当前查询结果,你会怎样回答题目中的问题?",
+        "请引用当前查询结果中的字段和值说明你的判断?",
+        "只依据当前查询结果,你能够确认什么?",
+    }
+)
 R02_OUTPUT_SCHEMA = {
     "type": "object",
     "required": ["supported", "reason"],
@@ -1262,6 +1269,12 @@ def _follow_up_evidence_review(
             (),
             0,
         )
+
+    normalized_question = unicodedata.normalize("NFKC", question).replace(
+        "，", ","
+    ).replace("？", "?")
+    if normalized_question in SAFE_EVIDENCE_RESTATEMENT_QUESTIONS:
+        return None, (), 1
 
     user_data: dict[str, Any] = {
         "question": question,

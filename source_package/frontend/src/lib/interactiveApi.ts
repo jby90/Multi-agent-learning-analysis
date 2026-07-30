@@ -107,37 +107,56 @@ export interface InteractiveFollowUpTurn {
   round: number
   question: string
   answer: string
+  feedback?: string
+}
+
+export interface InteractiveTrainingReport {
+  title: string
+  knowledge_point: string
+  initial_difficulty?: string | null
+  final_difficulty?: string | null
+  pretest_score?: { correct?: number; total?: number; rate?: number } | null
+  query_count: number
+  follow_up_rounds: number
+  completed_correction: boolean
+  achievement: string
+  next_knowledge_point?: string | null
+}
+
+type InteractiveFeedback = {
+  feedback?: string
+  next_step_reason?: string
 }
 
 export type InteractiveInteraction =
-  | {
+  | (InteractiveFeedback & {
       kind: 'free_text_follow_up'
       prompt: string
       round: number
       max_rounds: number
       turns: InteractiveFollowUpTurn[]
-    }
-  | {
+    })
+  | (InteractiveFeedback & {
       kind: 'data_collision'
       misconception: string
       wrong_label: string
       wrong_value: string
       correct_label: string
       correct_value: string
-    }
-  | {
+    })
+  | (InteractiveFeedback & {
       kind: 'next_learning_step'
       message: string
       knowledge_point?: string
-    }
-  | {
+    })
+  | (InteractiveFeedback & {
       kind: 'learning_notice'
       message: string
-    }
-  | {
+    })
+  | (InteractiveFeedback & {
       kind: 'review_notice'
       message: string
-    }
+    })
 
 export interface InteractiveState {
   session_id: string
@@ -154,6 +173,7 @@ export interface InteractiveState {
   messages: Record<string, unknown>[]
   artifact: Record<string, unknown> | null
   interaction: InteractiveInteraction | null
+  training_report?: InteractiveTrainingReport | null
   outcome?: InteractiveOutcome | null
 }
 

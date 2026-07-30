@@ -3,18 +3,16 @@ import { CircleAlert, LoaderCircle } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import knowledgeCatalog from 'virtual:knowledge-catalog'
-import AgentStage from './components/AgentStage.vue'
+import CollaborationWorkspace from './components/CollaborationWorkspace.vue'
 import LearningPath from './components/LearningPath.vue'
 import DataCollisionMoment from './components/DataCollisionMoment.vue'
-import EvaluationEvidencePanel from './components/EvaluationEvidencePanel.vue'
+import FloatingAgentAssistant from './components/FloatingAgentAssistant.vue'
 import LivePractice from './components/LivePractice.vue'
-import LiveStepGuide from './components/LiveStepGuide.vue'
 import ProfileComparison from './components/ProfileComparison.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
 import ReplayToolbar from './components/ReplayToolbar.vue'
 import ResourcePanel from './components/ResourcePanel.vue'
 import ResourceBundleStrip from './components/ResourceBundleStrip.vue'
-import TracePanel from './components/TracePanel.vue'
 import { useAgentEventPlayback } from './composables/useAgentEventPlayback'
 import { useReplay, type ReplaySpeed } from './composables/useReplay'
 import { buildTraceView, listKeyframes } from './lib/traceModel'
@@ -41,6 +39,9 @@ const {
 const replayCollision = ref<DataCollision>()
 const replayCollisionKey = ref('')
 const dismissedReplayCollision = ref('')
+const liveCollision = ref<DataCollision>()
+const liveCollisionKey = ref('')
+const dismissedLiveCollision = ref('')
 const loading = ref(true)
 const errorMessage = ref('')
 const transferMessage = ref('')
@@ -61,19 +62,10 @@ const liveHasResource = computed(() => Boolean(
 ))
 const activeCollision = computed<DataCollision | undefined>(() => {
   if (entryMode.value === 'replay') return replayCollision.value
-  const interaction = liveState.value?.interaction
-  if (interaction?.kind !== 'data_collision') return undefined
-  return {
-    misconception: interaction.misconception,
-    wrongLabel: interaction.wrong_label,
-    wrongValue: interaction.wrong_value,
-    correctLabel: interaction.correct_label,
-    correctValue: interaction.correct_value,
-    step: liveState.value?.messages.length ?? 0,
-  }
+  return liveCollision.value
 })
 const collisionKey = computed(() => entryMode.value === 'live'
-  ? `${liveState.value?.trace_id ?? 'live'}-${activeCollision.value?.step ?? 0}`
+  ? liveCollisionKey.value
   : replayCollisionKey.value)
 
 const traceOptions = computed(() => documents.value.map((document) => {
@@ -132,6 +124,21 @@ function changeViewMode(value: 'student' | 'collaboration'): void {
 
 function updateLiveState(state: InteractiveState): void {
   liveState.value = state
+  const interaction = state.interaction
+  if (interaction?.kind === 'data_collision') {
+    const key = `${state.trace_id}-${state.messages.length}`
+    if (key !== dismissedLiveCollision.value) {
+      liveCollisionKey.value = key
+      liveCollision.value = {
+        misconception: interaction.misconception,
+        wrongLabel: interaction.wrong_label,
+        wrongValue: interaction.wrong_value,
+        correctLabel: interaction.correct_label,
+        correctValue: interaction.correct_value,
+        step: state.messages.length,
+      }
+    }
+  }
   if (!state.messages.length) return
   try {
     liveDocument.value = parseTraceJsonl(
@@ -146,6 +153,9 @@ function updateLiveState(state: InteractiveState): void {
 function resetLiveState(): void {
   liveState.value = undefined
   liveDocument.value = undefined
+  liveCollision.value = undefined
+  liveCollisionKey.value = ''
+  dismissedLiveCollision.value = ''
   resetAgentEventPlayback()
 }
 
@@ -187,9 +197,13 @@ function exportTrace(): void {
 }
 
 function completeCollision(): void {
-  if (entryMode.value !== 'replay') return
-  dismissedReplayCollision.value = replayCollisionKey.value
-  replayCollision.value = undefined
+  if (entryMode.value === 'replay') {
+    dismissedReplayCollision.value = replayCollisionKey.value
+    replayCollision.value = undefined
+    return
+  }
+  dismissedLiveCollision.value = liveCollisionKey.value
+  liveCollision.value = undefined
 }
 
 watch(
@@ -246,7 +260,15 @@ onMounted(loadTraces)
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    class="app-shell"
+    :class="[
+      `is-${entryMode}-entry`,
+      `is-${viewMode}-mode`,
+      { 'has-empty-live-session': entryMode === 'live' && !liveState },
+      { 'has-live-session': entryMode === 'live' && Boolean(liveState) },
+    ]"
+  >
     <ReplayToolbar
       :traces="traceOptions"
       :selected-file="selectedFile"
@@ -260,6 +282,7 @@ onMounted(loadTraces)
       :entry-mode="entryMode"
       :view-mode="viewMode"
       :can-export="Boolean(exportDocument)"
+      :has-session="Boolean(liveState)"
       @select="selectTrace"
       @play="replay.play"
       @pause="replay.pause"
@@ -317,64 +340,90 @@ onMounted(loadTraces)
       <template v-else>
         <ProfilePanel :view="view" :catalog="knowledgeCatalog" />
         <ResourcePanel :view="view" />
-        <div v-if="viewMode === 'collaboration'" class="collaboration-observatory">
-          <AgentStage :view="view" />
-          <TracePanel :view="view" />
-        </div>
+        <CollaborationWorkspace
+          v-if="viewMode === 'collaboration'"
+          :view="view"
+        />
       </template>
       <LearningPath v-if="!comparison" :view="view" :catalog="knowledgeCatalog" />
     </div>
 
-    <div
+    <main
       v-else
-      class="workspace-grid live-workspace"
-      :class="{
-        'is-student-view': viewMode === 'student',
-        'is-collaboration-view': viewMode === 'collaboration',
-        'is-live-empty': !liveView,
-      }"
+      class="live-page-shell"
+      :class="[
+        liveState ? 'workspace-grid live-workspace' : 'role-selection-page',
+        {
+          'is-student-view': viewMode === 'student',
+          'is-collaboration-view': viewMode === 'collaboration',
+          'is-live-booting': Boolean(liveState && !liveView),
+        },
+      ]"
+      :aria-label="liveState ? '岗位训练工作台' : '选择岗位训练路径'"
     >
       <ProfilePanel v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />
       <div
         class="live-training-stage"
         :class="{
           'is-empty': !liveView,
-          'has-step-guide': Boolean(liveView && !liveHasResource),
         }"
       >
-        <LiveStepGuide
-          v-if="liveView && !liveHasResource"
-          :state="liveState"
-        />
-        <ResourceBundleStrip
-          v-if="liveState?.resource_bundle"
-          :bundle="liveState.resource_bundle"
-        />
-        <ResourcePanel
-          v-if="liveView && liveHasResource"
-          :view="liveView"
-        />
-        <LivePractice
-          @state="updateLiveState"
-          @agent-event="receiveAgentEvent"
-          @reset="resetLiveState"
-        />
+        <header v-if="liveState" class="training-workbench-heading">
+          <div>
+            <span class="section-kicker">单屏训练台</span>
+            <strong>任务与微课同步工作台</strong>
+          </div>
+          <span class="training-workbench-status">
+            {{ liveHasResource ? '微课已就绪' : '微课准备中' }}
+          </span>
+        </header>
+        <div
+          class="training-workbench-body"
+          :class="{
+            'has-learning-resource': liveHasResource,
+            'is-profile-selection': !liveState,
+          }"
+        >
+          <LivePractice
+            :class="{ 'training-task-station': Boolean(liveState) }"
+            :sql-result="liveView?.sqlResult"
+            @state="updateLiveState"
+            @agent-event="receiveAgentEvent"
+            @reset="resetLiveState"
+          />
+          <aside v-if="liveState" class="training-lesson-station" aria-label="常驻微课">
+            <ResourceBundleStrip
+              v-if="liveState.resource_bundle"
+              :bundle="liveState.resource_bundle"
+            />
+            <ResourcePanel
+              v-if="liveView && liveHasResource"
+              :view="liveView"
+              lesson-pager
+            />
+            <section v-else class="lesson-station-placeholder">
+              <span>微课</span>
+              <strong>完成岗前诊断后生成</strong>
+              <p>微课会常驻在这里，并按知识卡片分页展示。</p>
+            </section>
+          </aside>
+        </div>
       </div>
-      <div
+      <CollaborationWorkspace
         v-if="viewMode === 'collaboration' && liveView"
-        class="collaboration-observatory"
-      >
-        <EvaluationEvidencePanel :evidence="liveState?.coordination_evidence" />
-        <AgentStage
-          :view="liveView"
-          :events="liveAgentEvents"
-          :contract="liveState?.learning_contract ?? undefined"
-          :evidence-bundle="liveState?.evidence_bundle ?? undefined"
-          :resource-bundle="liveState?.resource_bundle ?? undefined"
-        />
-        <TracePanel :view="liveView" />
-      </div>
+        :view="liveView"
+        :events="liveAgentEvents"
+        :contract="liveState?.learning_contract ?? undefined"
+        :evidence-bundle="liveState?.evidence_bundle ?? undefined"
+        :resource-bundle="liveState?.resource_bundle ?? undefined"
+        :coordination-evidence="liveState?.coordination_evidence"
+      />
       <LearningPath v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />
-    </div>
+      <FloatingAgentAssistant
+        v-if="viewMode === 'student' && liveView"
+        :view="liveView"
+        :events="liveAgentEvents"
+      />
+    </main>
   </div>
 </template>

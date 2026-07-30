@@ -1494,6 +1494,48 @@ def test_follow_up_question_requires_semantic_support_from_bound_evidence() -> N
     assert request["evidence_quotes"]
 
 
+def test_evidence_restatement_follow_up_is_deterministically_safe() -> None:
+    product = {
+        "msg_id": "trace-safe-follow-up-001",
+        "trace_id": "trace-safe",
+        "step": 1,
+        "agent": "task",
+        "role": "probe",
+        "payload": {
+            "type": "quiz_set",
+            "content": {
+                "event": "follow_up_question_ready",
+                "question": "请引用当前查询结果中的字段和值说明你的判断？",
+                "standard_stem": "分别读取当日实际数和完成率",
+                "evidence_refs": ["T-FS02"],
+            },
+        },
+        "evidence": [
+            {
+                "kind": "quiz_answer_key",
+                "ref": "T-FS02",
+                "quote": json.dumps(
+                    {"expected_points": ["读取真实字段"]},
+                    ensure_ascii=False,
+                ),
+            }
+        ],
+        "claims": [],
+        "timestamp": TIMESTAMP,
+    }
+    llm = SequentialLLM([])
+
+    hit, results, checks = _review_module()._follow_up_evidence_review(
+        product,
+        llm,
+    )
+
+    assert hit is None
+    assert results == ()
+    assert checks == 1
+    assert llm.calls == []
+
+
 def test_r03_grounded_scope_proof_short_circuits_the_llm() -> None:
     product = _atomic_lecture_product(include_prerequisite=True)
     report = deepcopy(LEARNING_REPORT)

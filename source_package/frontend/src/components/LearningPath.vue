@@ -35,12 +35,15 @@ const levelLabel = {
   advanced: '进阶档',
 }
 
-const nodes = computed(() => {
-  const values: Array<{
-    key: string
-    label: string
-    status: 'complete' | 'current' | 'planned'
-  }> = completed.value.map((label) => ({
+type PathNode = {
+  key: string
+  label: string
+  status: 'complete' | 'current' | 'planned'
+  isNext?: boolean
+}
+
+const traceNodes = computed(() => {
+  const values: PathNode[] = completed.value.map((label) => ({
     key: `complete-${label}`,
     label,
     status: 'complete' as const,
@@ -62,6 +65,70 @@ const nodes = computed(() => {
   return values
 })
 
+const stageLabels = ['岗位与诊断', '个性微课', '数据实操', '理解核对', '培养更新']
+const stateStageIndex: Record<string, number> = {
+  S0_INIT: 0,
+  S1_DIAGNOSIS: 0,
+  S2_KNOWLEDGE: 1,
+  S3_TASK: 2,
+  S4_VERIFY: 2,
+  S5_REVIEW: 3,
+  S6_DEBATE: 3,
+  S7_STUDENT: 3,
+  S8_PROBE: 3,
+  S9_PATH_UPDATE: 4,
+  S10_DONE: 5,
+  S_FAIL: 4,
+}
+
+const currentStageIndex = computed(() => stateStageIndex[props.view.currentState] ?? 0)
+const progressPercent = computed(() => Math.round(
+  (Math.min(currentStageIndex.value, stageLabels.length) / stageLabels.length) * 100,
+))
+const currentStageLabel = computed(() => (
+  current.value
+    ?? (currentStageIndex.value >= stageLabels.length
+    ? '本轮训练已完成'
+    : stageLabels[currentStageIndex.value])
+))
+
+const nodes = computed<PathNode[]>(() => {
+  const stages: PathNode[] = stageLabels.map((label, index) => ({
+    key: `stage-${index}`,
+    label,
+    status: index < currentStageIndex.value
+      ? 'complete'
+      : index === currentStageIndex.value
+        ? 'current'
+        : 'planned',
+  }))
+  if (plan.value) {
+    const nextStage = stages.find((stage) => stage.status === 'planned')
+    if (nextStage) {
+      nextStage.isNext = true
+    } else {
+      stages.push({
+        key: `next-focus-${plan.value.knowledgePoint}`,
+        label: '后续重点',
+        status: 'planned',
+        isNext: true,
+      })
+    }
+  }
+  return stages
+})
+
+const nextStep = computed(() => {
+  if (plan.value) return `${plan.value.knowledgePoint} · ${levelLabel[plan.value.difficulty]}`
+  const next = stageLabels[Math.min(currentStageIndex.value + 1, stageLabels.length - 1)]
+  return currentStageIndex.value >= stageLabels.length ? '保持并巩固本轮成果' : `下一步：${next}`
+})
+
+/* Keep the trace-derived path available to accessibility and future exports;
+   the visible strip uses a stable five-stage vocabulary so sparse early traces
+   never produce an empty oversized card. */
+const tracePathSummary = computed(() => traceNodes.value.map((item) => item.label).join('、'))
+
 const misconception = computed(() => {
   const value = message.value?.content.target_misconception
   return typeof value === 'string' ? misconceptionLabel(value) : undefined
@@ -74,11 +141,16 @@ const misconception = computed(() => {
       <div>
         <span class="section-kicker">培养路径</span>
         <h2 v-if="summary">{{ summary }}</h2>
+        <strong v-else class="path-current-stage">{{ currentStageLabel }}</strong>
       </div>
-      <Route :size="18" aria-hidden="true" />
+      <div class="path-progress-summary">
+        <span>{{ progressPercent }}%</span>
+        <small>{{ nextStep }}</small>
+      </div>
     </header>
 
-    <ol v-if="nodes.length" class="path-nodes">
+    <span v-if="tracePathSummary" class="visually-hidden">{{ tracePathSummary }}</span>
+    <ol class="path-nodes" :aria-label="tracePathSummary || summary || '本轮培养路径'">
       <li
         v-for="node in nodes"
         :key="node.key"
@@ -90,9 +162,9 @@ const misconception = computed(() => {
           <CircleDot v-else-if="node.status === 'current'" :size="16" aria-hidden="true" />
           <Check v-else :size="15" aria-hidden="true" />
         </span>
-        <span v-if="node.status === 'planned'" class="planned-node-copy">
-          <strong>下一步：{{ node.label }}</strong>
-          <small>{{ plan ? levelLabel[plan.difficulty] : '' }}</small>
+        <span v-if="node.isNext && plan" class="planned-node-copy">
+          <strong>{{ node.label }}</strong>
+          <small>下一步：{{ plan.knowledgePoint }} · {{ levelLabel[plan.difficulty] }}</small>
         </span>
         <span v-else>{{ node.label }}</span>
       </li>

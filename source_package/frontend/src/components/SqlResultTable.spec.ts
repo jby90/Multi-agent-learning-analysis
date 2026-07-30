@@ -56,9 +56,9 @@ describe('SqlResultTable', () => {
       },
     })
 
-    expect(wrapper.get('button').text()).toBe('查看我提交的查询')
-    await wrapper.get('button').trigger('click')
-    expect(wrapper.get('button').text()).toBe('收起我提交的查询')
+    expect(wrapper.get('.sql-toggle').text()).toBe('查看我提交的查询')
+    await wrapper.get('.sql-toggle').trigger('click')
+    expect(wrapper.get('.sql-toggle').text()).toBe('收起我提交的查询')
     expect(wrapper.get('pre').text()).toBe(
       'SELECT SUM(plan_qty) AS plan_qty FROM fact_production_progress',
     )
@@ -75,7 +75,7 @@ describe('SqlResultTable', () => {
       },
     })
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('.sql-toggle').trigger('click')
 
     expect(wrapper.get('pre').text()).toBe('查询内容已隐藏')
     expect(wrapper.text()).not.toMatch(
@@ -120,6 +120,29 @@ describe('SqlResultTable', () => {
     expect(wrapper.text()).not.toMatch(
       /Q4|safe_rejected|no_matching_transition|msg_id|rule_hits|verdict|routing_|custom_internal_name|object_payload/iu,
     )
+  })
+
+  it('opens a focused result view and restores it with Escape', async () => {
+    const wrapper = mount(SqlResultTable, {
+      props: {
+        message: resultMessage({
+          question: '按船号比较计划兑现情况',
+          columns: ['ship_no', 'complete_rate'],
+          rows: [{ ship_no: 'H2601', complete_rate: '62.36%' }],
+        }),
+      },
+    })
+
+    await wrapper.get('.content-focus-toggle').trigger('click')
+    expect(wrapper.get('.sql-result').classes()).toContain('is-focus-mode')
+    expect(wrapper.get('.content-focus-toggle').attributes('aria-label'))
+      .toBe('退出查询结果专注模式')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.sql-result').classes()).not.toContain('is-focus-mode')
+    wrapper.unmount()
   })
 
   it('keeps approved production and second-domain result columns in business language', () => {

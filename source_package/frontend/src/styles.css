@@ -3096,6 +3096,70 @@ p {
   list-style: none;
 }
 
+.follow-up-history-panel {
+  overflow: hidden;
+  background: rgba(242, 247, 252, 0.88);
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  border-radius: 14px;
+}
+
+.follow-up-history-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  color: var(--paper-ink);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.follow-up-history-toggle span {
+  color: var(--paper-muted);
+  font-size: 11px;
+}
+
+.follow-up-history-toggle strong {
+  color: var(--blue);
+  font-size: 11px;
+}
+
+.follow-up-history-panel .follow-up-history {
+  max-height: 210px;
+  padding: 0 10px 10px;
+  overflow: auto;
+}
+
+.follow-up-latest-summary {
+  display: grid;
+  gap: 5px;
+  padding: 0 12px 10px;
+}
+
+.follow-up-latest-summary p {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.follow-up-latest-summary b {
+  color: var(--paper-muted);
+  font-size: 11px;
+}
+
+.follow-up-latest-summary small {
+  overflow: hidden;
+  color: #42617f;
+  font-size: 11px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .follow-up-history li {
   position: relative;
   display: grid;
@@ -3199,6 +3263,11 @@ p {
   }
 
   .follow-up-history p {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .follow-up-latest-summary p {
     grid-template-columns: 1fr;
     gap: 2px;
   }

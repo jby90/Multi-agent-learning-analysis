@@ -862,8 +862,8 @@ function statusLabel(status: AgentActivityStatus): string {
 .assessment-satellite::before { position: absolute; top: 50%; left: -8px; width: 8px; height: 1px; content: ''; background: currentColor; opacity: .45; }
 .assessment-satellite > .agent-teacher-avatar { width: 32px; height: 32px; }
 .assessment-satellite span { display: grid; gap: 2px; min-width: 0; }
-.assessment-satellite b { color: #e8f9ff; font-size: 8px; white-space: nowrap; }
-.assessment-satellite small { display: -webkit-box; overflow: hidden; color: #729bae; font-size: 7px; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.assessment-satellite b { color: #e8f9ff; font-size: 10px; white-space: nowrap; }
+.assessment-satellite small { display: -webkit-box; overflow: hidden; color: #729bae; font-size: 9px; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .assessment-satellite > i { position: absolute; right: 4px; bottom: 3px; width: 4px; height: 4px; background: #5be5ff; border-radius: 50%; box-shadow: 0 0 7px #5be5ff; animation: signal .7s ease-in-out infinite alternate; }
 .assessment-satellite.is-done { color: #58dda0; border-color: rgba(83,224,158,.26) !important; }
 .assessment-satellite.is-queued { opacity: .7; }
@@ -872,8 +872,8 @@ function statusLabel(status: AgentActivityStatus): string {
 .review-agent-team { position: absolute; top: calc(100% + 6px); right: -5px; display: grid; gap: 4px; width: 208px; padding: 6px; color: #91b5c7; background: linear-gradient(155deg,rgba(7,28,43,.98),rgba(10,34,49,.97)); border: 1px solid rgba(88,213,250,.24); border-radius: 11px; box-shadow: 0 15px 30px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.025); transform-origin: top right; }
 .review-agent-team::before { position: absolute; top: -5px; right: 17px; width: 9px; height: 9px; content: ''; background: #092033; border-top: 1px solid rgba(88,213,250,.24); border-left: 1px solid rgba(88,213,250,.24); transform: rotate(45deg); }
 .review-agent-team > header { display: grid; gap: 1px; padding: 0 2px 3px; border-bottom: 1px solid rgba(108,188,219,.1); }
-.review-agent-team > header b { color: #dff6ff; font-size: 9px; }
-.review-agent-team > header small { overflow: hidden; color: #63cfea; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.review-agent-team > header b { color: #dff6ff; font-size: 11px; }
+.review-agent-team > header small { overflow: hidden; color: #63cfea; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .review-team-connector { position: absolute; top: -12px; right: 20px; width: 2px; height: 10px; overflow: hidden; background: rgba(80,219,255,.18); }
 .review-team-connector i { position: absolute; left: -1px; width: 4px; height: 4px; background: #e5fbff; border-radius: 50%; box-shadow: 0 0 7px #4bdcff; transform: translateY(-50%); }
 .review-team-members { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
@@ -890,10 +890,10 @@ function statusLabel(status: AgentActivityStatus): string {
 .review-specialist-avatar { position: relative; grid-row: 1/3; display: grid; place-items: center; width: 34px; height: 34px; overflow: hidden; border-radius: 8px; }
 .review-specialist-scan { position: absolute; right: 3px; left: 3px; height: 1px; background: currentColor; box-shadow: 0 0 6px currentColor; }
 .review-specialist-copy { display: grid; gap: 1px; min-width: 0; padding-right: 23px; }
-.review-specialist-copy b { overflow: hidden; color: #e7f7ff; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.review-specialist-copy small { overflow: hidden; color: #6e98aa; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
-.review-team-members code { position: absolute; top: 5px; right: 4px; color: currentColor; font: 800 7px/1 ui-monospace,monospace; }
-.review-specialist-status { color: #638596; font-size: 7px; }
+.review-specialist-copy b { overflow: hidden; color: #e7f7ff; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.review-specialist-copy small { overflow: hidden; color: #6e98aa; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.review-team-members code { position: absolute; top: 5px; right: 4px; color: currentColor; font: 800 9px/1 ui-monospace,monospace; }
+.review-specialist-status { color: #638596; font-size: 9px; }
 .review-agent-team.is-parallel { border-color: rgba(83,220,255,.42); box-shadow: 0 15px 32px rgba(0,0,0,.34),0 0 22px rgba(42,199,238,.1); }
 .review-agent-team.is-arbitrating { border-color: rgba(187,151,255,.42); }
 .review-agent-team.is-arbitrating > header small { color: #c1a5ff; }
@@ -907,30 +907,30 @@ function statusLabel(status: AgentActivityStatus): string {
 .parallel-proof { margin: 0 14px 14px; padding: 14px; background: linear-gradient(135deg,rgba(5,25,39,.96),rgba(8,31,47,.92)); border: 1px solid rgba(76,210,255,.22); border-radius: 13px; box-shadow: inset 0 1px rgba(255,255,255,.025),0 12px 30px rgba(0,0,0,.18); }
 .parallel-proof-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .parallel-proof-heading > div { display: grid; gap: 3px; }
-.parallel-proof-heading div > span { color: #53d8ff; font: 700 8px/1 ui-monospace,monospace; letter-spacing: .14em; }
+.parallel-proof-heading div > span { color: #53d8ff; font: 700 10px/1 ui-monospace,monospace; letter-spacing: .12em; }
 .parallel-proof-heading div > strong { color: #e7f7ff; font-size: 12px; }
-.proof-state { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; color: #65e2ff; background: rgba(57,205,245,.075); border: 1px solid rgba(76,210,255,.2); border-radius: 999px; font-size: 9px; font-weight: 600; }
+.proof-state { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; color: #65e2ff; background: rgba(57,205,245,.075); border: 1px solid rgba(76,210,255,.2); border-radius: 999px; font-size: 10px; font-weight: 600; }
 .proof-state i { width: 6px; height: 6px; background: currentColor; border-radius: 50%; box-shadow: 0 0 9px currentColor; }
 .parallel-proof.is-running .proof-state i { animation: proof-led .7s ease-in-out infinite alternate; }
 .parallel-proof.is-complete .proof-state { color: #5de0a3; background: rgba(62,213,147,.075); border-color: rgba(78,219,157,.22); }
 .parallel-proof-audit { display: flex; flex-wrap: wrap; gap: 6px; }
 .parallel-proof-audit > span { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 5px 8px; color: #789cad; background: rgba(255,255,255,.025); border: 1px solid rgba(108,185,215,.1); border-radius: 7px; }
-.parallel-proof-audit code { color: #5edcff; font: 800 8px/1 ui-monospace,monospace; }
-.parallel-proof-audit b { color: #b7d2df; font-size: 8px; }
-.parallel-proof-audit time { color: #67899a; font: 700 8px/1 ui-monospace,monospace; }
+.parallel-proof-audit code { color: #5edcff; font: 800 10px/1 ui-monospace,monospace; }
+.parallel-proof-audit b { color: #b7d2df; font-size: 10px; }
+.parallel-proof-audit time { color: #67899a; font: 700 10px/1 ui-monospace,monospace; }
 .parallel-proof-audit .proof-join-audit { margin-left: auto; color: #60dffc; }
 .proof-join-audit i { width: 8px; height: 8px; border: 1px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: proof-spin .8s linear infinite; }
-.proof-join-audit small { color: #67899a; font-size: 7px; }
+.proof-join-audit small { color: #67899a; font-size: 9px; }
 .parallel-proof-audit .proof-join-audit.is-complete { color: #58dca0; border-color: rgba(78,219,157,.18); }
 .parallel-proof-meta { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1.35fr) minmax(90px,.65fr) minmax(90px,.65fr); gap: 7px; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(112,193,224,.1); }
 .parallel-proof-meta > span { display: grid; gap: 3px; min-width: 0; }
-.parallel-proof-meta small { color: #557687; font: 700 7px/1 ui-monospace,monospace; letter-spacing: .08em; }
-.parallel-proof-meta code,.parallel-proof-meta b { overflow: hidden; color: #a9c8d6; font: 700 8px/1.2 ui-monospace,monospace; text-overflow: ellipsis; white-space: nowrap; }
+.parallel-proof-meta small { color: #557687; font: 700 9px/1 ui-monospace,monospace; letter-spacing: .06em; }
+.parallel-proof-meta code,.parallel-proof-meta b { overflow: hidden; color: #a9c8d6; font: 700 10px/1.2 ui-monospace,monospace; text-overflow: ellipsis; white-space: nowrap; }
 .parallel-proof-meta .proof-saving b { color: #5bdda0; }
 .proof-enter-active,.proof-leave-active { transition: opacity .28s ease,transform .28s ease; }
 .proof-enter-from,.proof-leave-to { opacity: 0; transform: translateY(-6px); }
 .stage-activity-feed { display: grid; gap: 5px; margin: 0; padding: 10px 14px 14px; list-style: none; background: rgba(2,12,20,.42); border-top: 1px solid rgba(113,187,220,.08); }
-.stage-activity-feed li { display: grid; grid-template-columns: 7px auto 1fr auto; gap: 8px; align-items: center; min-height: 26px; padding: 0 8px; color: #8babbc; font-size: 10px; }
+.stage-activity-feed li { display: grid; grid-template-columns: 7px auto 1fr auto; gap: 8px; align-items: center; min-height: 28px; padding: 0 8px; color: #8babbc; font-size: 11px; }
 .stage-activity-feed li > span { width: 6px; height: 6px; background: #4edaff; border-radius: 50%; box-shadow: 0 0 7px currentColor; }
 .stage-activity-feed b { color: #dcecf4; }
 .stage-activity-feed p { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; }

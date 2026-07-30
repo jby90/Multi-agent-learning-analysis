@@ -47,6 +47,82 @@ function taskView(
 
 
 describe('ResourcePanel', () => {
+  it('paginates the lesson and omits task/result duplicates in resident mode', async () => {
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: resourceView(
+          '# 岗位微课\n\n#### 本节目标\n\n理解计划量。\n\n#### 核心概念\n\n实际完成量表示真实产出。',
+          '实际完成量表示真实产出。',
+        ),
+        lessonPager: true,
+      },
+    })
+
+    expect(wrapper.get('[aria-label="微课分页阅读"]')).toBeTruthy()
+    expect(wrapper.get('.resource-heading h2').text()).toBe('知识卡片')
+    expect(wrapper.find('#task-resource').exists()).toBe(false)
+    expect(wrapper.find('.sql-result').exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="下一张微课卡片"]')).toBeTruthy()
+
+    const before = wrapper.get('.lesson-page-heading h3').text()
+    await wrapper.get('button[aria-label="下一张微课卡片"]').trigger('click')
+    expect(wrapper.get('.lesson-page-heading h3').text()).not.toBe(before)
+  })
+
+  it('keeps the current lesson card while entering and leaving focus mode', async () => {
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: resourceView(
+          '# 岗位微课\n\n#### 本节目标\n\n理解计划量。\n\n#### 核心概念\n\n实际完成量表示真实产出。',
+          '实际完成量表示真实产出。',
+        ),
+        lessonPager: true,
+      },
+    })
+
+    await wrapper.get('button[aria-label="下一张微课卡片"]').trigger('click')
+    const currentCard = wrapper.get('.lesson-page-heading h3').text()
+
+    await wrapper.get('.content-focus-toggle').trigger('click')
+    expect(wrapper.get('.resource-panel').classes()).toContain('is-focus-mode')
+    expect(wrapper.get('.lesson-page-heading h3').text()).toBe(currentCard)
+    expect(wrapper.get('.content-focus-toggle').attributes('aria-label'))
+      .toBe('退出微课专注模式')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.resource-panel').classes()).not.toContain('is-focus-mode')
+    expect(wrapper.get('.lesson-page-heading h3').text()).toBe(currentCard)
+    wrapper.unmount()
+  })
+
+  it('keeps the personalized practice question and difficulty in resident lesson pages', async () => {
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: taskView('quiz_set', {
+          difficulty: 'applied',
+          misconception: 'M-01',
+          question: '作为新入职的生产计划员，请核对H2601在2025-05的计划量与实际完成量。',
+        }),
+        lessonPager: true,
+      },
+    })
+
+    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
+    while (next.attributes('disabled') === undefined) {
+      await next.trigger('click')
+    }
+
+    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('练习题')
+    expect(wrapper.get('.lesson-page-task h3').text())
+      .toContain('作为新入职的生产计划员')
+    expect(wrapper.get('.lesson-page-task .task-difficulty-ladder').attributes('aria-label'))
+      .toBe('题目难度：应用，三级分阶中的第二级')
+    expect(wrapper.get('.lesson-page-task .probe-notice').text())
+      .toContain('本题针对：计划量与实际量的区分')
+  })
+
   it('renders level-four markdown headings without leaking hash markers', () => {
     const claim = '计划量与实际量必须分开理解。'
     const wrapper = mount(ResourcePanel, {

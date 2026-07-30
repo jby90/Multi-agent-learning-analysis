@@ -116,6 +116,48 @@ _MAPPED_FOLLOW_UP_REVIEW_FEEDBACK = {
     "R-05": "只围绕已经确认有效的学习结果重新组织问题。",
 }
 
+_INITIAL_FOLLOW_UP_QUESTIONS = {
+    "Q1": "根据刚才的查询结果，实际完成量是多少，它能说明怎样的完成情况？",
+    "Q2": "根据刚才的查询结果，计划量与实际完成量分别是多少，哪一个表示已经完成的数量？",
+    "Q3": "根据刚才的查询结果，该工序的完成率是多少，这个数值说明了怎样的完成情况？",
+    "Q4": "根据刚才的月度序列，哪一个月的完成率变化最明显，你依据的数值是什么？",
+    "Q5": "根据刚才的船号对比，哪一艘船的完成率最低，你依据的数值是什么？",
+    "Q6": "根据刚才的三道工序结果，哪一道工序完成率最低，你依据的数值是什么？",
+    "Q7": "根据刚才的责任单元对比，哪个责任单元完成率最低，你依据的数值是什么？",
+}
+
+
+def _initial_follow_up_question(task: Mapping[str, Any]) -> str:
+    """Turn a reviewed data task into one evidence-citing reflection prompt."""
+
+    content = _payload_content(task)
+    family = content.get("family")
+    if isinstance(family, str):
+        question = _INITIAL_FOLLOW_UP_QUESTIONS.get(family)
+        if question is not None:
+            return question
+    return "根据刚才的查询结果，你能引用至少一项数据说明自己的判断吗？"
+
+
+def _is_vacuous_follow_up_answer(value: str) -> bool:
+    compact = "".join(value.split()).rstrip("。！!？?")
+    return compact in {
+        "是",
+        "是的",
+        "否",
+        "不是",
+        "不是的",
+        "对",
+        "对的",
+        "不对",
+        "正确",
+        "错误",
+        "同意",
+        "不同意",
+        "知道",
+        "不知道",
+    }
+
 
 def _feedback_for_re_verdict(
     audited_message: Mapping[str, Any],
@@ -216,6 +258,7 @@ class _InteractiveSession:
     completed_correction: bool = False
     interaction: dict[str, Any] | None = None
     follow_up_round: int = 1
+    follow_up_submission_count: int = 0
     follow_up_question: str = ""
     follow_up_turns: list[dict[str, Any]] = field(default_factory=list)
     follow_up_target: str | None = None
@@ -235,6 +278,7 @@ class _InteractiveSession:
     prefetched_assessment: dict[str, Any] | None = None
     prefetched_assessment_generator: Any = None
     resource_bundle: ResourceBundle | None = None
+    training_report: dict[str, Any] | None = None
 
 
 class InteractiveSessionManager:
@@ -684,6 +728,37 @@ class InteractiveSessionManager:
         return product
 
     @staticmethod
+    def _settle_active_agent_events(
+        session: _InteractiveSession,
+        *,
+        status: str,
+        activity: str,
+        label: str,
+        exclude: frozenset[str] = frozenset(),
+    ) -> None:
+        if session.events is None:
+            return
+        active_statuses = {
+            "working",
+            "collaborating",
+            "reviewing",
+            "debating",
+        }
+        latest_events: dict[str, Mapping[str, Any]] = {}
+        for event in session.events.after():
+            latest_events[str(event["agent"])] = event
+        for agent, event in sorted(latest_events.items()):
+            if agent in exclude or event.get("status") not in active_statuses:
+                continue
+            session.events.publish(
+                agent=agent,
+                status=status,
+                activity=activity,
+                label=label,
+                stage=session.runtime.engine.state.value,
+            )
+
+    @staticmethod
     def _finish_review_stop(
         session: _InteractiveSession,
         artifact: dict[str, Any],
@@ -706,6 +781,13 @@ class InteractiveSessionManager:
             "system_error" if action == "system_error" else "safe_rejected"
         )
         if session.events is not None:
+            InteractiveSessionManager._settle_active_agent_events(
+                session,
+                status="idle",
+                activity="session_stopped",
+                label="本轮已安全停止，等待重新开始",
+                exclude=frozenset({"review"}),
+            )
             session.events.publish(
                 agent="review",
                 status="blocked",
@@ -1192,11 +1274,36 @@ class InteractiveSessionManager:
         if evidence_result is None:
             raise InteractiveSessionError("数据实操结果缺失。")
         current_content = _payload_content(session.learning_task or {})
-        difficulty_action = (
-            "step_up" if session.task_phase == "progression" else "keep"
-        )
+        # The progression task was already introduced by a dedicated T19
+        # path update whose action is ``step_up``.  Completing that task does
+        # not perform a second difficulty change; it only records attainment
+        # at the current difficulty.
+        difficulty_action = "keep"
         runtime = session.runtime
         remaining_blind_spots = self._remaining_blind_spots(session)
+        diagnosis_content = _payload_content(session.diagnosis)
+        score = diagnosis_content.get("pretest_score")
+        knowledge_point = current_content.get("knowledge_point")
+        session.training_report = {
+            "title": "本轮训练报告",
+            "knowledge_point": (
+                str(knowledge_point) if isinstance(knowledge_point, str) else "本轮知识点"
+            ),
+            "initial_difficulty": diagnosis_content.get("difficulty"),
+            "final_difficulty": current_content.get("difficulty"),
+            "pretest_score": dict(score) if isinstance(score, Mapping) else None,
+            "query_count": session.query_count,
+            "follow_up_rounds": session.follow_up_submission_count,
+            "completed_correction": session.completed_correction,
+            "achievement": (
+                "完成了数据实操、证据核对和结论修正。"
+                if session.completed_correction
+                else "完成了数据实操和多轮理解核对。"
+            ),
+            "next_knowledge_point": (
+                remaining_blind_spots[0] if remaining_blind_spots else None
+            ),
+        }
         path = runtime.transition(
             _path_update_draft(
                 runtime.options.trace_id,
@@ -1235,6 +1342,12 @@ class InteractiveSessionManager:
         session.pending_learning_action = None
         session.awaiting = "done"
         session.outcome = "completed"
+        self._settle_active_agent_events(
+            session,
+            status="done",
+            activity="session_completed",
+            label="本轮职责已完成",
+        )
         return self.get_state(session.session_id)
 
     @staticmethod
@@ -1342,6 +1455,10 @@ class InteractiveSessionManager:
             raise InteractiveSessionError(
                 "请用业务或学习语言描述你的判断。"
             ) from exc
+        if _is_vacuous_follow_up_answer(answer_text):
+            raise InteractiveSessionError(
+                "请引用查询结果或业务依据说明判断，不能只回答“是”或“否”。"
+            )
         if not session.follow_up_question:
             raise InteractiveSessionError("当前理解核对内容不完整，请稍后重试。")
 
@@ -1383,18 +1500,27 @@ class InteractiveSessionManager:
         covered_snapshot = tuple(sorted(session.covered_relation_points))
         approved_route_support_points: tuple[str, ...] = ()
         try:
-            generated = session.follow_up_agent.generate(
-                student_answer=answer_text,
-                current_task=current_task,
-                task_agent=runtime.task,
-                round_index=generation_round,
-                max_rounds=MAX_FOLLOW_UP_ROUNDS,
-                probed_misconceptions=probed_snapshot,
-                covered_relation_points=covered_snapshot,
-                routing_policy=self._routing_policy,
-                completion_allowed=submitted_round >= 2,
-                terminal_round=terminal_round,
-            )
+            try:
+                generated = session.follow_up_agent.generate(
+                    student_answer=answer_text,
+                    current_task=current_task,
+                    task_agent=runtime.task,
+                    current_question=session.follow_up_question,
+                    round_index=generation_round,
+                    max_rounds=MAX_FOLLOW_UP_ROUNDS,
+                    probed_misconceptions=probed_snapshot,
+                    covered_relation_points=covered_snapshot,
+                    routing_policy=self._routing_policy,
+                    completion_allowed=submitted_round >= 2,
+                    terminal_round=terminal_round,
+                )
+            except FollowUpGenerationError:
+                generated = session.follow_up_agent.deterministic_fallback(
+                    current_task=current_task,
+                    round_index=generation_round,
+                    max_rounds=MAX_FOLLOW_UP_ROUNDS,
+                    terminal_round=terminal_round,
+                )
             reviewed_product: dict[str, Any] | None = None
             if generated.product is not None:
                 generated, reviewed_product = self._review_follow_up_product(
@@ -1476,10 +1602,15 @@ class InteractiveSessionManager:
             "round": submitted_round,
             "question": session.follow_up_question,
             "answer": text.strip(),
+            "feedback": self._follow_up_feedback(generated.assessment),
         }
+        session.follow_up_submission_count += 1
         if generated.assessment == "mastered" and submitted_round >= 2:
             session.follow_up_turns.append(turn_record)
-            answer = self._finish_mastered_follow_up(session)
+            answer = self._finish_mastered_follow_up(
+                session,
+                feedback=str(turn_record["feedback"]),
+            )
             if answer is None:
                 session.processed_turn_ids.add(client_turn_id)
                 return self.get_state(session_id)
@@ -1489,7 +1620,10 @@ class InteractiveSessionManager:
 
         if terminal_round:
             session.follow_up_turns.append(turn_record)
-            answer = self._finish_unmastered_follow_up(session)
+            answer = self._finish_unmastered_follow_up(
+                session,
+                feedback=str(turn_record["feedback"]),
+            )
             if answer is None:
                 session.processed_turn_ids.add(client_turn_id)
                 return self.get_state(session_id)
@@ -1526,6 +1660,14 @@ class InteractiveSessionManager:
             "round": next_round,
             "max_rounds": MAX_FOLLOW_UP_ROUNDS,
             "turns": [dict(turn) for turn in next_turns],
+            "feedback": turn_record["feedback"],
+            "next_step_reason": (
+                "当前回答已有正确依据；为避免一次偶然作答被误判为掌握，"
+                "还需要完成下一轮不同角度的核对。"
+                if generated.assessment == "mastered"
+                else "当前回答的证据或解释还不完整，因此继续留在本知识点，"
+                "用下一问补齐判断依据。"
+            ),
         }
 
         session.follow_up_round = next_round
@@ -1962,9 +2104,19 @@ class InteractiveSessionManager:
         elif runtime.engine.state is not State.S8_PROBE:
             raise InteractiveSessionError("当前理解核对进度无法继续。")
 
+    @staticmethod
+    def _follow_up_feedback(assessment: str) -> str:
+        if assessment == "mastered":
+            return "回答有效：你已经引用了与问题对应的数据，并给出了可由当前证据支持的判断。"
+        if assessment == "needs_support":
+            return "回答部分有效：方向基本相关，但关键数值、比较对象或因果依据仍不完整。"
+        return "暂时无法确认掌握：当前回答还不足以和查询证据建立稳定对应，请明确引用结果中的字段和值。"
+
     def _finish_mastered_follow_up(
         self,
         session: _InteractiveSession,
+        *,
+        feedback: str,
     ) -> dict[str, Any] | None:
         runtime = session.runtime
         try:
@@ -1996,17 +2148,31 @@ class InteractiveSessionManager:
             session.follow_up_target == "M-01"
             and session.completed_correction
         ):
-            session.interaction = self._collision_interaction(session)
+            session.interaction = {
+                **self._collision_interaction(session),
+                "feedback": feedback,
+                "next_step_reason": (
+                    "已完成至少两轮理解核对，回答通过证据审核并达到当前知识点要求，"
+                    "因此进入纠正展示和下一步训练。"
+                ),
+            }
         else:
             session.interaction = {
                 "kind": "next_learning_step",
                 "message": "你的判断已经能够用数据说明，正在为你安排下一步训练。",
+                "feedback": feedback,
+                "next_step_reason": (
+                    "已完成至少两轮理解核对，回答通过证据审核并达到当前知识点要求，"
+                    "因此进入下一步训练。"
+                ),
             }
         return answer
 
     def _finish_unmastered_follow_up(
         self,
         session: _InteractiveSession,
+        *,
+        feedback: str,
     ) -> dict[str, Any] | None:
         runtime = session.runtime
         try:
@@ -2033,6 +2199,11 @@ class InteractiveSessionManager:
         session.interaction = {
             "kind": "learning_notice",
             "message": "这个判断还需要再巩固。我们先回顾一个关键点，再重新练习。",
+            "feedback": feedback,
+            "next_step_reason": (
+                "本轮已达到四次核对上限，但回答仍未形成完整的证据化判断；"
+                "为避免带着误解继续进阶，系统安排回看微课并重新练习。"
+            ),
         }
         session.active_task = None
         session.learning_task = None
@@ -2366,6 +2537,7 @@ class InteractiveSessionManager:
             "messages": messages,
             "artifact": session.artifact,
             "interaction": session.interaction,
+            "training_report": session.training_report,
         }
 
     def get_agent_events(
@@ -2718,7 +2890,7 @@ class InteractiveSessionManager:
         session: _InteractiveSession,
         task: Mapping[str, Any],
     ) -> None:
-        question = str(_payload_content(task).get("question", "")).strip()
+        question = _initial_follow_up_question(task)
         if not question or contains_engineering_text(question):
             raise InteractiveSessionError(
                 "当前理解核对内容不完整，请稍后重试。"

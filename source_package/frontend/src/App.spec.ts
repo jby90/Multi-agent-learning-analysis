@@ -130,7 +130,7 @@ describe('App', () => {
     expect(wrapper.text()).toContain('实时实操')
   })
 
-  it('fills the live resource column with a step guide before resources arrive', async () => {
+  it('uses the cultivation path as the only journey navigation', async () => {
     installFetch()
     const wrapper = mount(App, {
       global: { stubs: { DiagnosisRadar: true } },
@@ -158,24 +158,53 @@ describe('App', () => {
     practice.vm.$emit('state', state)
     await flushPromises()
 
-    const guide = wrapper.get('[data-testid="live-step-guide"]')
-    expect(guide.text()).toContain('当前：完成岗前测评')
-    expect(guide.text()).toContain('接下来：打开岗位微课')
-    expect(guide.text()).not.toContain('无需离开本页')
-    expect(wrapper.get('.live-training-stage').classes()).toContain('has-step-guide')
+    expect(wrapper.find('[data-testid="live-step-guide"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="切换训练内容"]').exists()).toBe(false)
+    expect(wrapper.get('.training-workbench-body')).toBeTruthy()
+    expect(wrapper.get('[aria-label="常驻微课"]').text()).toContain('完成岗前诊断后生成')
+    expect(wrapper.get('.learning-path').text()).toContain('培养路径')
+    expect(wrapper.text()).not.toContain('训练步骤')
+  })
 
-    practice.vm.$emit('state', {
-      ...state,
-      state: 'S2_KNOWLEDGE',
-      awaiting: 'advance',
-      messages: demoTrace(
-        'interactive-guide', 'planner_new', '新入职生产计划员',
-        '先理解工序链。', '1156.87',
-      ).split('\n').map((line) => JSON.parse(line) as Record<string, unknown>),
-    } satisfies InteractiveState)
+  it('keeps the current task and paged lesson visible in one persistent workbench', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-pane', 'planner_new', '新入职生产计划员',
+      '先理解工序链。', '1156.87',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, unknown>)
+    const state: InteractiveState = {
+      session_id: 'session-pane',
+      trace_id: 'interactive-pane',
+      trace_path: 'traces/interactive-pane.jsonl',
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages,
+      artifact: null,
+      interaction: null,
+    }
+    const practice = wrapper.getComponent(LivePractice)
+    practice.vm.$emit('state', state)
     await flushPromises()
 
-    expect(wrapper.get('.live-training-stage').classes()).not.toContain('has-step-guide')
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(practice.isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="常驻微课"]').isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="微课分页阅读"]').isVisible()).toBe(true)
+    expect(wrapper.get('.training-workbench-heading').text()).toContain('任务与微课同步工作台')
+
+    practice.vm.$emit('state', { ...state, messages: [...messages] })
+    await flushPromises()
+
+    expect(practice.isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="常驻微课"]').isVisible()).toBe(true)
   })
 
   it('clears restored live panels when the learner restarts', async () => {

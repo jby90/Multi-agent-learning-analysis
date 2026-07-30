@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { BookOpen, CircleAlert, ListChecks } from '@lucide/vue'
-import { computed } from 'vue'
+import { BookOpen, CircleAlert, ListChecks, Maximize2, Minimize2 } from '@lucide/vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
   dataFieldLabel,
@@ -13,7 +13,24 @@ import EvidenceClaim from './EvidenceClaim.vue'
 import SqlResultTable from './SqlResultTable.vue'
 
 
-const props = defineProps<{ view: TraceView }>()
+const props = withDefaults(defineProps<{
+  view: TraceView
+  lessonPager?: boolean
+}>(), {
+  lessonPager: false,
+})
+const focusMode = ref(false)
+
+function toggleFocusMode(): void {
+  focusMode.value = !focusMode.value
+}
+
+function leaveFocusMode(event: KeyboardEvent): void {
+  if (event.key === 'Escape') focusMode.value = false
+}
+
+onMounted(() => window.addEventListener('keydown', leaveFocusMode))
+onBeforeUnmount(() => window.removeEventListener('keydown', leaveFocusMode))
 
 interface MarkdownBlock {
   kind: 'heading' | 'paragraph' | 'list'
@@ -28,6 +45,13 @@ interface LectureSection {
 interface KeyMetric {
   label: string
   value: string
+}
+
+interface LessonPage {
+  key: string
+  title: string
+  kind: 'metrics' | 'section' | 'evidence' | 'task'
+  section?: LectureSection
 }
 
 interface GuideMarkdownContent {
@@ -171,6 +195,34 @@ const lectureSections = computed<LectureSection[]>(() => {
   return sections
 })
 
+const lessonPageIndex = ref(0)
+const lessonPages = computed<LessonPage[]>(() => {
+  const pages: LessonPage[] = []
+  if (lectureMetrics.value.length) {
+    pages.push({ key: 'metrics', title: '本节关键数据', kind: 'metrics' })
+  }
+  lectureSections.value.forEach((section, index) => {
+    pages.push({
+      key: `section-${index}`,
+      title: section.title || `知识卡片 ${index + 1}`,
+      kind: 'section',
+      section,
+    })
+  })
+  if (unmatchedClaims.value.length) {
+    pages.push({ key: 'evidence', title: '数据出处', kind: 'evidence' })
+  }
+  if (props.view.task) {
+    pages.push({
+      key: `task-${props.view.task.msgId}`,
+      title: props.view.task.payloadType === 'practice_guide' ? '实操指南' : '练习题',
+      kind: 'task',
+    })
+  }
+  return pages
+})
+const currentLessonPage = computed(() => lessonPages.value[lessonPageIndex.value])
+
 const lectureMetrics = computed<KeyMetric[]>(() => {
   const metrics: KeyMetric[] = []
   const seen = new Set<string>()
@@ -227,6 +279,25 @@ const unmatchedClaims = computed(() => {
     (claim) => !lectureBlocks.value.some((block) => block.text.includes(claim.text)),
   )
 })
+
+watch(
+  () => props.view.lecture?.msgId,
+  () => { lessonPageIndex.value = 0 },
+)
+watch(
+  () => lessonPages.value.length,
+  (length) => {
+    lessonPageIndex.value = Math.min(lessonPageIndex.value, Math.max(0, length - 1))
+  },
+)
+
+function previousLessonPage(): void {
+  lessonPageIndex.value = Math.max(0, lessonPageIndex.value - 1)
+}
+
+function nextLessonPage(): void {
+  lessonPageIndex.value = Math.min(lessonPages.value.length - 1, lessonPageIndex.value + 1)
+}
 
 const lectureKnowledgePoint = computed(() => {
   const value = props.view.lecture?.content.knowledge_point
@@ -380,20 +451,155 @@ function claimsFor(message: TraceMessage, text: string) {
 </script>
 
 <template>
-  <main class="panel resource-panel">
+  <main
+    class="panel resource-panel"
+    :class="{ 'is-lesson-pager': lessonPager, 'is-focus-mode': focusMode }"
+  >
     <header class="panel-heading resource-heading">
       <div>
-        <h2>微课 / 实操</h2>
+        <span v-if="lessonPager" class="section-kicker">常驻微课</span>
+        <h2>{{ lessonPager ? '知识卡片' : '微课 / 实操' }}</h2>
       </div>
       <div class="resource-heading-status">
         <span v-if="hasApprovedResource" class="professional-review-badge">
           已通过专业审核 ✓
         </span>
         <BookOpen :size="19" aria-hidden="true" />
+        <button
+          type="button"
+          class="content-focus-toggle"
+          :aria-label="focusMode ? '退出微课专注模式' : '最大化微课'"
+          :title="focusMode ? '退出专注模式（Esc）' : '最大化微课'"
+          @click="toggleFocusMode"
+        >
+          <Minimize2 v-if="focusMode" :size="16" aria-hidden="true" />
+          <Maximize2 v-else :size="16" aria-hidden="true" />
+          <span>{{ focusMode ? '还原' : '专注学习' }}</span>
+        </button>
       </div>
     </header>
 
-    <div class="resource-scroll">
+    <section v-if="lessonPager" class="lesson-pager" aria-label="微课分页阅读">
+      <div v-if="view.lecture && currentLessonPage" class="lesson-page">
+        <header class="lesson-page-heading">
+          <div>
+            <span>{{ learnerText(String(view.lecture.content.knowledge_point ?? '岗位微课')) }}</span>
+            <h3>{{ currentLessonPage.title }}</h3>
+          </div>
+          <b>{{ lessonPageIndex + 1 }} / {{ lessonPages.length }}</b>
+        </header>
+
+        <div v-if="currentLessonPage.kind === 'metrics'" class="lesson-page-metrics">
+          <article v-for="metric in lectureMetrics" :key="`${metric.label}-${metric.value}`">
+            <span>{{ metric.label }}</span>
+            <strong class="instrument-number">{{ metric.value }}</strong>
+          </article>
+        </div>
+
+        <div
+          v-else-if="currentLessonPage.kind === 'section' && currentLessonPage.section"
+          class="lesson-page-copy"
+        >
+          <template
+            v-for="(block, index) in currentLessonPage.section.blocks"
+            :key="`${index}-${block.text}`"
+          >
+            <div v-if="block.kind === 'list'" class="markdown-list-item">
+              <span aria-hidden="true"></span>
+              <EvidenceClaim
+                :text="block.text"
+                :claims="claimsFor(view.lecture, block.text)"
+                :evidence="view.lecture.evidence"
+                :knowledge-point="lectureKnowledgePoint"
+                :matches-blind-spot="lectureMatchesBlindSpot"
+              />
+            </div>
+            <p v-else>
+              <EvidenceClaim
+                :text="block.text"
+                :claims="claimsFor(view.lecture, block.text)"
+                :evidence="view.lecture.evidence"
+                :knowledge-point="lectureKnowledgePoint"
+                :matches-blind-spot="lectureMatchesBlindSpot"
+              />
+            </p>
+          </template>
+        </div>
+
+        <section
+          v-else-if="currentLessonPage.kind === 'task' && view.task"
+          id="task-resource"
+          class="lesson-page-task task-card"
+          :class="isPracticeGuide ? 'practice-guide-card' : 'quiz-card'"
+          aria-label="本轮练习题"
+        >
+          <div class="task-card-heading">
+            <span class="resource-eyebrow">
+              <ListChecks :size="14" aria-hidden="true" />
+              {{ isPracticeGuide ? '实操指南' : '练习题' }}
+            </span>
+            <div
+              v-if="taskDifficulty"
+              class="task-difficulty-ladder"
+              :aria-label="`题目难度：${taskDifficulty.label}，三级分阶中的第${taskDifficulty.ordinal}级`"
+            >
+              <span
+                v-for="(step, index) in difficultySteps"
+                :key="step"
+                class="task-difficulty-step"
+                :class="{ 'is-active': index === taskDifficulty.index, 'is-reached': index <= taskDifficulty.index }"
+              >{{ step }}</span>
+            </div>
+          </div>
+          <h3 :class="{ 'guide-question': isPracticeGuide }">{{ taskQuestion }}</h3>
+          <p v-if="isPracticeGuide && hasGuideStructure" class="guide-intro">{{ guideIntro }}</p>
+          <p v-if="taskMisconception" class="probe-notice">
+            <CircleAlert :size="15" aria-hidden="true" />
+            本题针对：{{ taskMisconception }}
+          </p>
+        </section>
+
+        <ul v-else class="lesson-page-evidence">
+          <li v-for="claim in unmatchedClaims" :key="claim.text">
+            <EvidenceClaim
+              :text="claim.text"
+              :claims="[claim]"
+              :evidence="view.lecture.evidence"
+              :knowledge-point="lectureKnowledgePoint"
+              :matches-blind-spot="lectureMatchesBlindSpot"
+            />
+          </li>
+        </ul>
+      </div>
+      <section v-else class="resource-placeholder">
+        <BookOpen :size="20" aria-hidden="true" />
+        <p>岗位微课将在本轮测评完成后出现。</p>
+      </section>
+
+      <footer v-if="lessonPages.length > 1" class="lesson-pager-actions">
+        <button
+          type="button"
+          aria-label="上一张微课卡片"
+          :disabled="lessonPageIndex === 0"
+          @click="previousLessonPage"
+        >上一页</button>
+        <span aria-label="微课分页进度">
+          <i
+            v-for="(page, index) in lessonPages"
+            :key="page.key"
+            :class="{ 'is-current': index === lessonPageIndex }"
+          ></i>
+        </span>
+        <button
+          type="button"
+          aria-label="下一张微课卡片"
+          :disabled="lessonPageIndex === lessonPages.length - 1"
+          @click="nextLessonPage"
+        >下一页</button>
+      </footer>
+    </section>
+
+    <div v-else class="resource-scroll">
       <section v-if="view.lecture" id="lecture-resource" class="lecture-card">
         <div class="resource-title-row">
           <span class="resource-eyebrow"><BookOpen :size="14" aria-hidden="true" /> 岗位微课</span>
@@ -539,6 +745,193 @@ function claimsFor(message: TraceMessage, text: string) {
 </template>
 
 <style scoped>
+.resource-panel.is-lesson-pager {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 62px minmax(0, 1fr);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.is-lesson-pager .resource-heading {
+  min-height: 0;
+  padding: 12px 16px;
+}
+
+.is-lesson-pager .resource-heading > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.is-lesson-pager .resource-heading h2 {
+  font-size: 16px;
+}
+
+.is-lesson-pager .professional-review-badge {
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+.lesson-pager {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 52px;
+  padding: 0 16px;
+  overflow: hidden;
+}
+
+.lesson-page {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 18px 2px 12px;
+  overflow: auto;
+}
+
+.lesson-page-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lesson-page-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.lesson-page-heading span {
+  overflow: hidden;
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-page-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.lesson-page-heading b {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 10px;
+  background: #f3f4f7;
+  border-radius: 999px;
+}
+
+.lesson-page-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lesson-page-metrics article {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 12px 10px;
+  background: #f5f5f7;
+  border-radius: 12px;
+}
+
+.lesson-page-metrics span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-page-metrics strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.lesson-page-copy {
+  display: grid;
+  gap: 12px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.lesson-page-copy p {
+  margin: 0;
+}
+
+.lesson-page-evidence {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-page-evidence li {
+  padding: 11px 12px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  background: #f5f5f7;
+  border-radius: 10px;
+}
+
+.lesson-pager-actions {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 76px;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.lesson-pager-actions button {
+  min-height: 32px;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 650;
+  background: rgba(0, 113, 227, 0.07);
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.lesson-pager-actions button:disabled {
+  color: #a6a6ab;
+  background: #f5f5f7;
+  cursor: default;
+}
+
+.lesson-pager-actions > span {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.lesson-pager-actions i {
+  width: 5px;
+  height: 5px;
+  background: #d2d2d7;
+  border-radius: 50%;
+}
+
+.lesson-pager-actions i.is-current {
+  width: 16px;
+  background: var(--blue);
+  border-radius: 999px;
+}
+
 .practice-guide-card {
   display: grid;
 }

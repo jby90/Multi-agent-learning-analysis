@@ -24,6 +24,18 @@ function mountToolbar() {
 
 
 describe('ReplayToolbar trace transfer', () => {
+  it('keeps the live landing navigation focused until a training session exists', async () => {
+    const wrapper = mountToolbar()
+
+    await wrapper.setProps({ entryMode: 'live', hasSession: false })
+    expect(wrapper.text()).toContain('实时实操 · 数据截至 2025-07-31')
+    expect(wrapper.find('.session-commandbar').exists()).toBe(false)
+    expect(wrapper.find('.audience-switch').exists()).toBe(false)
+
+    await wrapper.setProps({ hasSession: true })
+    expect(wrapper.find('.audience-switch').exists()).toBe(true)
+  })
+
   it('emits the actual JSONL file selected by the learner', async () => {
     const wrapper = mountToolbar()
     const input = wrapper.get('input[aria-label="导入会话记录"]')

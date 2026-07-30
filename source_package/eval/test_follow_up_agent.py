@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Any
 
 import pytest
@@ -333,7 +334,155 @@ def test_mastered_turn_after_the_minimum_does_not_generate_an_unused_question() 
     assert turn.product is None
 
 
-def test_mastered_turn_rejects_an_unneeded_model_question() -> None:
+def test_follow_up_model_receives_the_active_question_and_reviewed_rows() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "mastered",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "M-02",
+            "question": "是否还需要检查后续月份？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+    current_question = "查询结果中另外两道工序的完成率分别是多少？"
+
+    turn = agent.generate(
+        student_answer="AZTP完成率为0.9149，ZZTP完成率为1.0249。",
+        current_task=_current_task(task_agent, "T-03"),
+        task_agent=task_agent,
+        current_question=current_question,
+        round_index=3,
+        max_rounds=4,
+        completion_allowed=True,
+    )
+
+    request = json.loads(llm.calls[0]["user"])
+    assert request["current_question"] == current_question
+    assert request["current_evidence_rows"] == [
+        {"complete_rate": "0.9149", "process_code": "AZTP"},
+        {"complete_rate": "0.6236", "process_code": "YCL"},
+        {"complete_rate": "1.0249", "process_code": "ZZTP"},
+    ]
+    assert turn.assessment == "mastered"
+    assert turn.diagnosed_misconception == "UNKNOWN"
+    assert turn.next_target_misconception is None
+    assert turn.product is None
+
+
+def test_reviewed_extreme_field_and_value_override_an_unknown_false_negative() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "unknown",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "UNKNOWN",
+            "question": "查询结果中另外两道工序的完成率分别是多少？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer="YCL完成率最低 0.6236",
+        current_task=_current_task(task_agent, "T-03"),
+        task_agent=task_agent,
+        current_question=(
+            "根据刚才的三道工序结果，哪一道工序完成率最低，"
+            "你依据的数值是什么？"
+        ),
+        round_index=2,
+        max_rounds=4,
+    )
+
+    assert turn.assessment == "mastered"
+    assert turn.diagnosed_misconception == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    "student_answer",
+    (
+        "YCL最低",
+        "YCL完成率最低 0.9149",
+        "AZTP完成率最低 0.6236",
+        "0.6236",
+    ),
+)
+def test_reviewed_extreme_guard_does_not_accept_incomplete_or_mismatched_evidence(
+    student_answer: str,
+) -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "unknown",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "UNKNOWN",
+            "question": "查询结果中另外两道工序的完成率分别是多少？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer=student_answer,
+        current_task=_current_task(task_agent, "T-03"),
+        task_agent=task_agent,
+        current_question=(
+            "根据刚才的三道工序结果，哪一道工序完成率最低，"
+            "你依据的数值是什么？"
+        ),
+        round_index=2,
+        max_rounds=4,
+    )
+
+    assert turn.assessment == "unknown"
+
+
+def test_advanced_delay_fallback_uses_template_specific_questions() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-07-B")
+    agent = FollowUpAgent("trace-production_progress")
+
+    questions = []
+    for round_index in (2, 3, 4):
+        turn = agent.deterministic_fallback(
+            current_task=current_task,
+            round_index=round_index,
+        )
+        assert turn.product is not None
+        content = turn.product["payload"]["content"]
+        assert content["standard_stem"] == (
+            current_task["payload"]["content"]["standard_stem"]
+        )
+        questions.append(content["question"])
+
+    assert questions == [
+        "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
+        "根据当前查询结果，你会怎样回答题目中的问题？",
+        "只依据当前月度表，四态候选应归为哪一种状态？",
+    ]
+
+
+@pytest.mark.parametrize("domain_id", ("production_progress", "first_segment"))
+def test_every_template_has_three_distinct_fallback_questions(
+    domain_id: str,
+) -> None:
+    task_agent = _task_agent(domain_id)
+    catalog = load_task_catalog(domain_config=load_domain_config(domain_id))
+    agent = FollowUpAgent(f"trace-{domain_id}")
+
+    for template_id in catalog.templates:
+        current_task = _current_task(task_agent, template_id)
+        questions = []
+        for round_index in (2, 3, 4):
+            turn = agent.deterministic_fallback(
+                current_task=current_task,
+                round_index=round_index,
+            )
+            assert turn.product is not None
+            questions.append(turn.product["payload"]["content"]["question"])
+        assert len(set(questions)) == 3, template_id
+
+
+def test_mastered_turn_discards_an_unneeded_model_question() -> None:
     llm = FollowUpLLM(
         {
             "assessment": "mastered",
@@ -345,15 +494,18 @@ def test_mastered_turn_rejects_an_unneeded_model_question() -> None:
     task_agent = _task_agent()
     agent = FollowUpAgent("trace-production_progress", llm_call=llm)
 
-    with pytest.raises(FollowUpGenerationError, match="must not generate"):
-        agent.generate(
-            student_answer="五月是显著的单期偏低信号，但不能当作随机噪声忽略。",
-            current_task=_current_task(task_agent, "T-05-A"),
-            task_agent=task_agent,
-            round_index=3,
-            max_rounds=4,
-            completion_allowed=True,
-        )
+    turn = agent.generate(
+        student_answer="五月是显著的单期偏低信号，但不能当作随机噪声忽略。",
+        current_task=_current_task(task_agent, "T-05-A"),
+        task_agent=task_agent,
+        round_index=3,
+        max_rounds=4,
+        completion_allowed=True,
+    )
+
+    assert turn.assessment == "mastered"
+    assert turn.next_target_misconception is None
+    assert turn.product is None
 
 
 def test_terminal_round_never_generates_a_fifth_question() -> None:

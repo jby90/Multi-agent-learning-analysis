@@ -35,15 +35,16 @@ const bundle: InteractiveResourceBundle = {
 }
 
 describe('ResourceBundleStrip', () => {
-  it('presents the three contract-bound resources without exposing draft content', () => {
+  it('keeps orchestration evidence available behind a compact learner summary', () => {
     const wrapper = mount(ResourceBundleStrip, { props: { bundle } })
 
-    expect(wrapper.text()).toContain('三路教学资源已汇聚')
+    expect(wrapper.get('summary').text()).toContain('微课、实操与测验已准备')
+    expect(wrapper.get('summary').text()).toContain('3/3 已就绪')
+    expect(wrapper.get('details').attributes('open')).toBeUndefined()
     expect(wrapper.text()).toContain('岗位微课')
     expect(wrapper.text()).toContain('实操任务')
     expect(wrapper.text()).toContain('分阶测验')
-    expect(wrapper.text()).toContain('同一学习契约')
-    expect(wrapper.text()).toContain('独立生成 · 确定性汇聚')
+    expect(wrapper.text()).toContain('三项内容基于同一学习目标')
     expect(wrapper.findAll('article')).toHaveLength(3)
   })
 })

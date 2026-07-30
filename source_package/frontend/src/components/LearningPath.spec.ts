@@ -107,5 +107,6 @@ describe('LearningPath', () => {
     expect(wrapper.get('.path-heading h2').text()).not.toContain('完成岗前测评3/5与岗位微课')
     expect(wrapper.get('.path-node.is-planned').text()).toContain('下一步：完成率计算')
     expect(wrapper.get('.path-node.is-planned').text()).toContain('应用档')
+    expect(wrapper.findAll('.path-node').length).toBeGreaterThanOrEqual(5)
   })
 })

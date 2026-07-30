@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import profiles from 'virtual:profile-catalog'
 
 import {
@@ -11,6 +11,8 @@ import {
   type InteractivePretestQuestion,
   type InteractiveState,
 } from '../lib/interactiveApi'
+import type { TraceMessage } from '../types/trace'
+import SqlResultTable from './SqlResultTable.vue'
 import {
   isLearnerSafeText,
   learnerText,
@@ -24,6 +26,7 @@ import {
 const props = withDefaults(defineProps<{
   api?: InteractiveApi
   pollIntervalMs?: number
+  sqlResult?: TraceMessage
 }>(), {
   pollIntervalMs: 1500,
 })
@@ -39,10 +42,13 @@ const sessionStorageKey = 'ref-interactive-session'
 const session = ref<InteractiveState>()
 const questions = ref<InteractivePretestQuestion[]>([])
 const answers = ref<Record<string, string>>({})
+const pretestPage = ref(0)
 const sqlText = ref('')
 const followUpText = ref('')
 const followUpClientTurnId = ref<string>()
 const followUpSubmittedText = ref('')
+const followUpHistoryExpanded = ref(false)
+const sqlHintLevel = ref(0)
 const busy = ref(false)
 const errorMessage = ref('')
 let pollTimer: number | undefined
@@ -52,6 +58,15 @@ let eventSessionId = ''
 
 const pretestComplete = computed(() => questions.value.length === 5
   && questions.value.every((question) => answers.value[question.question_id]))
+const currentPretestQuestion = computed(() => questions.value[pretestPage.value])
+const answeredPretestCount = computed(() => questions.value.filter(
+  (question) => Boolean(answers.value[question.question_id]),
+).length)
+const currentPretestAnswered = computed(() => {
+  const question = currentPretestQuestion.value
+  return Boolean(question && answers.value[question.question_id])
+})
+const isLastPretestPage = computed(() => pretestPage.value >= questions.value.length - 1)
 
 const advanceAction = computed(() => {
   const value = session.value
@@ -134,11 +149,119 @@ function sqlFeedbackFrom(value: InteractiveState | undefined): SqlFeedback | und
 }
 
 const sqlFeedback = computed(() => sqlFeedbackFrom(session.value))
+const activeTaskContent = computed<Record<string, unknown> | undefined>(() => {
+  const messages = session.value?.messages ?? []
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (!message) continue
+    if (message.agent !== 'task') continue
+    const payload = message.payload
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) continue
+    const content = (payload as Record<string, unknown>).content
+    if (typeof content !== 'object' || content === null || Array.isArray(content)) continue
+    return content as Record<string, unknown>
+  }
+  return undefined
+})
+const activeTaskPrompt = computed(() => {
+  const record = activeTaskContent.value
+  if (!record) return undefined
+  for (const field of ['contextualized_stem', 'question', 'standard_stem']) {
+    const value = record[field]
+    if (typeof value === 'string' && value.trim()) return learnerText(value)
+  }
+  return undefined
+})
+const activeTaskKnowledgePoint = computed(() => {
+  const value = activeTaskContent.value?.knowledge_point
+  return typeof value === 'string' && value.trim() ? learnerText(value) : undefined
+})
+function difficultyLabel(value: unknown): string {
+  const labels: Record<string, string> = { basic: '基础', applied: '应用', advanced: '进阶' }
+  return typeof value === 'string' ? (labels[value] ?? learnerText(value)) : '—'
+}
+const activeTaskDifficulty = computed(() => {
+  const value = activeTaskContent.value?.difficulty
+  return typeof value === 'string' ? difficultyLabel(value) : undefined
+})
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    : []
+}
+
+function fieldLabel(value: string): string {
+  const labels: Record<string, string> = {
+    ship_no: '船号', process_code: '工序', period_date: '月份',
+    plan_qty: '计划量', actual_qty: '实际完成量', completion_rate: '完成率',
+  }
+  return labels[value] ?? value
+}
+
+const sqlHints = computed(() => {
+  const authority = activeTaskContent.value?.query_authority
+  const record = typeof authority === 'object' && authority !== null && !Array.isArray(authority)
+    ? authority as Record<string, unknown>
+    : undefined
+  const outputs = stringList(record?.output_columns).map(fieldLabel)
+  const filters = stringList(record?.filter_columns).map(fieldLabel)
+  const groups = stringList(record?.group_by_columns).map(fieldLabel)
+  const times = stringList(record?.time_values)
+  return [
+    '先确定题目要求返回什么，再写一条 SELECT 查询；输入错误不会修改数据库，也不会丢失当前训练进度。',
+    outputs.length
+      ? `结果列应能回答题目，重点检查：${outputs.join('、')}。`
+      : '检查 SELECT 后的结果列是否能直接回答题目。',
+    [
+      filters.length ? `筛选条件涉及${filters.join('、')}` : '按题目对象设置筛选条件',
+      times.length ? `时间范围包含${times.join('、')}` : '',
+      groups.length ? `需要按${groups.join('、')}分组比较` : '',
+    ].filter(Boolean).join('；') + '。',
+  ]
+})
+
+watch(() => activeTaskPrompt.value, () => {
+  sqlHintLevel.value = 0
+})
 const followUpInputLength = computed(
   () => followUpText.value.trim().normalize('NFKC').length,
 )
+const followUpIsVacuous = computed(() => {
+  const compact = followUpText.value
+    .trim()
+    .normalize('NFKC')
+    .replace(/\s+/gu, '')
+    .replace(/[。！!？?]+$/gu, '')
+  return [
+    '是', '是的', '否', '不是', '不是的', '对', '对的', '不对',
+    '正确', '错误', '同意', '不同意', '知道', '不知道',
+  ].includes(compact)
+})
 const canSubmitFollowUp = computed(
-  () => followUpInputLength.value >= 2 && followUpInputLength.value <= 500,
+  () => followUpInputLength.value >= 2
+    && followUpInputLength.value <= 500
+    && !followUpIsVacuous.value,
+)
+const followUpTurns = computed(() => {
+  const interaction = session.value?.interaction
+  return interaction?.kind === 'free_text_follow_up' ? interaction.turns : []
+})
+const latestFollowUpTurn = computed(() => {
+  const turns = followUpTurns.value
+  return turns.length ? turns[turns.length - 1] : undefined
+})
+
+watch(
+  () => {
+    const interaction = session.value?.interaction
+    return interaction?.kind === 'free_text_follow_up'
+      ? `${session.value?.session_id}:${interaction.round}`
+      : ''
+  },
+  () => {
+    followUpHistoryExpanded.value = false
+  },
 )
 
 function applyState(value: InteractiveState): void {
@@ -153,6 +276,22 @@ function progressFingerprint(value: InteractiveState): string {
     value.messages.length,
     value.artifact ? JSON.stringify(value.artifact) : '',
   ].join('|')
+}
+
+function followUpProgressed(
+  previous: InteractiveState,
+  current: InteractiveState,
+): boolean {
+  if (current.awaiting !== 'follow_up') return true
+  if (current.state !== previous.state) return true
+  const previousInteraction = previous.interaction
+  const currentInteraction = current.interaction
+  if (
+    previousInteraction?.kind !== 'free_text_follow_up'
+    || currentInteraction?.kind !== 'free_text_follow_up'
+  ) return false
+  return currentInteraction.round > previousInteraction.round
+    || currentInteraction.turns.length > previousInteraction.turns.length
 }
 
 async function reconcileLateAdvance(previous: InteractiveState): Promise<boolean> {
@@ -175,6 +314,15 @@ function connectAgentEvents(sessionId: string): void {
   })
 }
 
+function previousPretestPage(): void {
+  pretestPage.value = Math.max(0, pretestPage.value - 1)
+}
+
+function nextPretestPage(): void {
+  if (!currentPretestAnswered.value) return
+  pretestPage.value = Math.min(questions.value.length - 1, pretestPage.value + 1)
+}
+
 async function selectProfile(profileId: string): Promise<void> {
   if (busy.value) return
   busy.value = true
@@ -185,6 +333,7 @@ async function selectProfile(profileId: string): Promise<void> {
     connectAgentEvents(created.session_id)
     applyState(created)
     questions.value = await api.getPretest(created.session_id)
+    pretestPage.value = 0
   } catch (error) {
     errorMessage.value = publicRequestError(error, '实操通道暂时不可用。')
   } finally {
@@ -290,7 +439,21 @@ async function submitFollowUp(): Promise<void> {
     followUpSubmittedText.value = ''
     followUpClientTurnId.value = undefined
   } catch (error) {
-    errorMessage.value = publicRequestError(error, '本轮判断暂时无法提交。')
+    let reconciled = false
+    try {
+      const current = await api.getState(value.session_id)
+      reconciled = followUpProgressed(value, current)
+      if (reconciled) applyState(current)
+    } catch {
+      reconciled = false
+    }
+    if (reconciled) {
+      followUpText.value = ''
+      followUpSubmittedText.value = ''
+      followUpClientTurnId.value = undefined
+    } else {
+      errorMessage.value = publicRequestError(error, '本轮判断暂时无法提交。')
+    }
   } finally {
     busy.value = false
   }
@@ -305,6 +468,7 @@ async function pollState(sessionId: string): Promise<void> {
     applyState(value)
     if (value.awaiting === 'pretest' && !questions.value.length) {
       questions.value = await api.getPretest(sessionId)
+      pretestPage.value = 0
     }
     errorMessage.value = ''
   } catch (error) {
@@ -331,6 +495,7 @@ function resetSession(): void {
   sessionStorage.removeItem(sessionStorageKey)
   session.value = undefined
   questions.value = []
+  pretestPage.value = 0
   answers.value = {}
   sqlText.value = ''
   followUpText.value = ''
@@ -365,11 +530,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="live-practice panel" aria-label="岗位实操通道">
-    <header class="live-practice-heading">
-      <h2>实操</h2>
+  <section
+    class="live-practice panel"
+    :class="{
+      'is-profile-picker': !session,
+      'has-inline-result': Boolean(session && sqlResult),
+    }"
+    aria-label="岗位实操通道"
+  >
+    <header v-if="session" class="live-practice-heading">
+      <div>
+        <span class="section-kicker">当前任务</span>
+        <h2>实操</h2>
+      </div>
       <button
-        v-if="session"
         type="button"
         class="restart-training"
         aria-label="重新开始训练"
@@ -378,9 +552,38 @@ onBeforeUnmount(() => {
       >重新开始</button>
     </header>
 
+    <SqlResultTable
+      v-if="session && sqlResult"
+      class="task-inline-result"
+      title="拖动右下角可调整查询结果高度"
+      :message="sqlResult"
+    />
+
+    <section v-if="!session" class="profile-picker-hero" aria-labelledby="profile-picker-title">
+      <div class="profile-picker-copy">
+        <span class="profile-picker-eyebrow">个性化岗位训练</span>
+        <h1 id="profile-picker-title">从你的岗位出发，建立真正用得上的数字化能力</h1>
+        <p>选择与你当前经历最接近的岗位。系统会据此调整讲解重点、任务难度和练习顺序。</p>
+      </div>
+      <ol class="profile-picker-flow" aria-label="岗位训练流程">
+        <li><span>01</span><strong>选择岗位</strong><small>确定学习起点</small></li>
+        <li><span>02</span><strong>岗前测评</strong><small>识别知识盲区</small></li>
+        <li><span>03</span><strong>微课与实操</strong><small>按能力动态适配</small></li>
+        <li><span>04</span><strong>理解核对</strong><small>形成可验证结果</small></li>
+      </ol>
+    </section>
+
+    <header v-if="!session" class="profile-picker-heading">
+      <div>
+        <span class="section-kicker">选择训练路径</span>
+        <h2>哪一种经历最接近你？</h2>
+      </div>
+      <p>三个岗位共享相同培养目标，但学习内容与难度会因人而异。</p>
+    </header>
+
     <div v-if="!session" class="profile-choice-grid">
       <button
-        v-for="profile in profiles"
+        v-for="(profile, index) in profiles"
         :key="profile.id"
         type="button"
         class="profile-choice"
@@ -388,8 +591,17 @@ onBeforeUnmount(() => {
         :disabled="busy"
         @click="selectProfile(profile.id)"
       >
-        <strong>{{ learnerText(profile.title) }}</strong>
-        <small>{{ learnerText(profile.background) }}</small>
+        <span class="profile-choice-index">岗位 {{ String(index + 1).padStart(2, '0') }}</span>
+        <span class="profile-choice-copy">
+          <strong>{{ learnerText(profile.title) }}</strong>
+          <small>{{ learnerText(profile.background) }}</small>
+          <span v-if="profile.strengths.length" class="profile-choice-strengths">
+            <span v-for="strength in profile.strengths" :key="strength">
+              {{ learnerText(strength) }}
+            </span>
+          </span>
+        </span>
+        <span class="profile-choice-action">选择岗位 <span aria-hidden="true">→</span></span>
       </button>
     </div>
 
@@ -398,34 +610,86 @@ onBeforeUnmount(() => {
       class="pretest-form"
       @submit.prevent="submitPretest"
     >
-      <header>
-        <span>岗前测评</span>
-        <strong>{{ learnerText(session.profile.title) }}</strong>
-        <p>逐题选择你认为正确的答案，完成后生成个人训练重点。</p>
+      <header class="pretest-heading">
+        <div>
+          <span>岗前测评</span>
+          <strong>{{ learnerText(session.profile.title) }}</strong>
+          <p>一次只处理一道题，完成后生成个人训练重点。</p>
+        </div>
+        <div class="pretest-progress-copy" aria-live="polite">
+          <b>{{ pretestPage + 1 }}</b><span>/ {{ questions.length }}</span>
+          <small>已作答 {{ answeredPretestCount }} 题</small>
+        </div>
       </header>
+      <ol class="pretest-page-dots" aria-label="测评题目进度">
+        <li
+          v-for="(question, index) in questions"
+          :key="question.question_id"
+          :class="{
+            'is-current': index === pretestPage,
+            'is-complete': Boolean(answers[question.question_id]),
+          }"
+        >
+          <button
+            type="button"
+            :aria-label="`前往第${index + 1}题`"
+            :aria-current="index === pretestPage ? 'step' : undefined"
+            @click="pretestPage = index"
+          >{{ index + 1 }}</button>
+        </li>
+      </ol>
       <fieldset
-        v-for="(question, index) in questions"
-        :key="question.question_id"
+        v-if="currentPretestQuestion"
+        :key="currentPretestQuestion.question_id"
         class="pretest-question"
       >
-        <legend><span>{{ index + 1 }}</span>{{ learnerText(question.stem) }}</legend>
-        <label v-for="(label, option) in question.options" :key="option">
+        <legend><span>{{ pretestPage + 1 }}</span>{{ learnerText(currentPretestQuestion.stem) }}</legend>
+        <label v-for="(label, option) in currentPretestQuestion.options" :key="option">
           <input
-            v-model="answers[question.question_id]"
+            v-model="answers[currentPretestQuestion.question_id]"
             type="radio"
-            :name="question.question_id"
+            :name="currentPretestQuestion.question_id"
             :value="option"
           />
           <span class="option-letter">{{ option }}</span>
           <span class="option-copy">{{ learnerText(label) }}</span>
         </label>
       </fieldset>
-      <button class="primary-action" type="submit" :disabled="busy || !pretestComplete">
-        提交岗前测评
-      </button>
+      <footer class="pretest-page-actions">
+        <button
+          type="button"
+          class="secondary-action"
+          :disabled="busy || pretestPage === 0"
+          @click="previousPretestPage"
+        >上一题</button>
+        <button
+          v-if="!isLastPretestPage"
+          type="button"
+          class="primary-action"
+          :disabled="busy || !currentPretestAnswered"
+          @click="nextPretestPage"
+        >下一题</button>
+        <button
+          v-else
+          class="primary-action"
+          type="submit"
+          :disabled="busy || !pretestComplete"
+        >提交岗前测评</button>
+      </footer>
     </form>
 
     <div v-else-if="advanceAction" class="live-action-block">
+      <section
+        v-if="session.interaction?.feedback || session.interaction?.next_step_reason"
+        class="answer-feedback-card"
+        aria-live="polite"
+      >
+        <strong>本轮评价</strong>
+        <p v-if="session.interaction.feedback">{{ learnerText(session.interaction.feedback) }}</p>
+        <small v-if="session.interaction.next_step_reason">
+          进入下一步的理由：{{ learnerText(session.interaction.next_step_reason) }}
+        </small>
+      </section>
       <p
         v-if="session.interaction?.kind === 'learning_notice'"
         class="learning-notice"
@@ -447,6 +711,29 @@ onBeforeUnmount(() => {
       <header>
         <span>数据实操</span>
       </header>
+      <article v-if="activeTaskPrompt" class="sql-task-brief">
+        <span>本题任务</span>
+        <h3>{{ activeTaskPrompt }}</h3>
+        <small v-if="activeTaskKnowledgePoint || activeTaskDifficulty">
+          {{ [activeTaskKnowledgePoint, activeTaskDifficulty && `${activeTaskDifficulty}难度`].filter(Boolean).join(' · ') }}
+        </small>
+      </article>
+      <section class="sql-teacher-hint" aria-label="实操老师提示">
+        <div>
+          <strong>实操老师提示</strong>
+          <button
+            type="button"
+            class="text-action"
+            @click="sqlHintLevel = sqlHintLevel >= sqlHints.length ? 0 : sqlHintLevel + 1"
+          >{{ sqlHintLevel >= sqlHints.length ? '收起提示' : `查看提示 ${sqlHintLevel + 1}/${sqlHints.length}` }}</button>
+        </div>
+        <ol v-if="sqlHintLevel">
+          <li v-for="hint in sqlHints.slice(0, sqlHintLevel)" :key="hint">{{ hint }}</li>
+        </ol>
+      </section>
+      <p class="sql-safety-note">
+        查询输错时会留在本题并提示修改；系统只会读取数据，修改数据或越权语句会在进入数据库前被拦截。
+      </p>
       <p
         v-if="session.interaction?.kind === 'learning_notice'"
         class="learning-notice"
@@ -496,26 +783,64 @@ onBeforeUnmount(() => {
         <p>结合刚才的数据，用自己的话说明判断依据。</p>
       </header>
 
-      <ol
-        v-if="session.interaction.turns.length"
-        class="follow-up-history"
+      <section
+        v-if="followUpTurns.length"
+        class="follow-up-history-panel"
+        :class="{ 'is-expanded': followUpHistoryExpanded }"
         aria-label="已完成的理解核对"
       >
-        <li
-          v-for="turn in session.interaction.turns"
-          :key="turn.round"
+        <button
+          type="button"
+          class="follow-up-history-toggle"
+          :aria-expanded="followUpHistoryExpanded"
+          @click="followUpHistoryExpanded = !followUpHistoryExpanded"
         >
-          <span>第 {{ turn.round }} 轮</span>
-          <p class="follow-up-question">
-            <b>导师提问</b>
-            {{ learnerText(turn.question) }}
-          </p>
-          <p class="follow-up-answer">
+          <span>已完成 {{ followUpTurns.length }} 轮</span>
+          <strong>{{ followUpHistoryExpanded ? '收起记录' : '查看完整记录' }}</strong>
+        </button>
+        <ol v-if="followUpHistoryExpanded" class="follow-up-history">
+          <li v-for="turn in followUpTurns" :key="turn.round">
+            <span>第 {{ turn.round }} 轮</span>
+            <p class="follow-up-question">
+              <b>导师提问</b>
+              {{ learnerText(turn.question) }}
+            </p>
+            <p class="follow-up-answer">
+              <b>你的回答</b>
+              {{ learnerText(turn.answer) }}
+            </p>
+            <p v-if="turn.feedback" class="follow-up-feedback">
+              <b>老师评价</b>
+              {{ learnerText(turn.feedback) }}
+            </p>
+          </li>
+        </ol>
+        <article v-else-if="latestFollowUpTurn" class="follow-up-latest-summary">
+          <p>
             <b>你的回答</b>
-            {{ learnerText(turn.answer) }}
+            {{ learnerText(latestFollowUpTurn.answer) }}
           </p>
-        </li>
-      </ol>
+          <p v-if="session.interaction.feedback || latestFollowUpTurn.feedback">
+            <b>老师评价</b>
+            {{ learnerText(session.interaction.feedback || latestFollowUpTurn.feedback || '') }}
+          </p>
+          <small v-if="session.interaction.next_step_reason">
+            继续本知识点：{{ learnerText(session.interaction.next_step_reason) }}
+          </small>
+        </article>
+      </section>
+
+      <section
+        v-else-if="session.interaction.feedback || session.interaction.next_step_reason"
+        class="answer-feedback-card is-compact"
+        aria-live="polite"
+      >
+        <strong>老师评价</strong>
+        <p v-if="session.interaction.feedback">{{ learnerText(session.interaction.feedback) }}</p>
+        <small v-if="session.interaction.next_step_reason">
+          继续本知识点：{{ learnerText(session.interaction.next_step_reason) }}
+        </small>
+      </section>
 
       <article class="follow-up-current">
         <span>这一轮</span>
@@ -529,7 +854,7 @@ onBeforeUnmount(() => {
           aria-label="输入你的判断"
           rows="5"
           maxlength="500"
-          placeholder="例如：我会以实际发生的数据判断完成情况，因为……"
+          placeholder="请引用查询结果或业务依据，例如：YCL 为 62.36%，低于另外两道工序，因此……"
           :disabled="busy"
           @input="updateFollowUpDraft"
           @keydown.ctrl.enter.prevent="submitFollowUp"
@@ -537,7 +862,9 @@ onBeforeUnmount(() => {
         ></textarea>
       </label>
       <footer class="follow-up-actions">
-        <small>{{ followUpInputLength }} / 500 字</small>
+        <small :class="{ 'needs-evidence': followUpIsVacuous }">
+          {{ followUpIsVacuous ? '请补充数据或业务依据，不能只回答“是/否”' : `${followUpInputLength} / 500 字` }}
+        </small>
         <button
           type="button"
           class="primary-action"
@@ -556,6 +883,37 @@ onBeforeUnmount(() => {
 
     <div v-else-if="session.awaiting === 'done'" class="live-complete">
       <strong>{{ completionMessage }}</strong>
+      <section v-if="session.training_report" class="training-report" aria-label="本轮训练报告">
+        <header>
+          <span>本轮训练报告</span>
+          <h3>{{ learnerText(session.training_report.knowledge_point) }}</h3>
+        </header>
+        <div class="training-report-metrics">
+          <article v-if="session.training_report.pretest_score">
+            <span>岗前测评</span>
+            <strong>
+              {{ session.training_report.pretest_score.correct }}/{{ session.training_report.pretest_score.total }}
+            </strong>
+          </article>
+          <article>
+            <span>数据查询</span>
+            <strong>{{ session.training_report.query_count }} 次</strong>
+          </article>
+          <article>
+            <span>最终核对</span>
+            <strong>{{ session.training_report.follow_up_rounds }} 轮</strong>
+          </article>
+          <article>
+            <span>结论修正</span>
+            <strong>{{ session.training_report.completed_correction ? '已完成' : '无需修正' }}</strong>
+          </article>
+          <article>
+            <span>最终难度</span>
+            <strong>{{ difficultyLabel(session.training_report.final_difficulty) }}档</strong>
+          </article>
+        </div>
+        <p>{{ learnerText(session.training_report.achievement) }}</p>
+      </section>
       <template v-if="nextKnowledgePoint">
         <p>本知识点已经达标，下一知识点：{{ learnerText(nextKnowledgePoint) }}</p>
         <button

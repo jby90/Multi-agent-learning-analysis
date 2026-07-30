@@ -146,13 +146,10 @@ def test_free_text_requires_two_rounds_and_every_displayed_question_is_reviewed(
     assert confirmation["interaction"]["prompt"] == (
         "换个角度看，真实完成情况应由哪一类数据来说明？"
     )
-    assert confirmation["interaction"]["turns"] == [
-        {
-            "round": 1,
-            "question": conclusion["interaction"]["prompt"],
-            "answer": "应该看实际完成量，计划量只是目标。",
-        }
-    ]
+    assert confirmation["interaction"]["turns"][0]["round"] == 1
+    assert confirmation["interaction"]["turns"][0]["question"] == conclusion["interaction"]["prompt"]
+    assert confirmation["interaction"]["turns"][0]["answer"] == "应该看实际完成量，计划量只是目标。"
+    assert "回答有效" in confirmation["interaction"]["turns"][0]["feedback"]
     products = _follow_up_products(confirmation)
     assert len(products) == 1
     assert products[0]["evidence"]
@@ -173,10 +170,9 @@ def test_free_text_requires_two_rounds_and_every_displayed_question_is_reviewed(
 
     assert mastered["state"] == "S9_PATH_UPDATE"
     assert mastered["awaiting"] == "advance"
-    assert mastered["interaction"] == {
-        "kind": "next_learning_step",
-        "message": "你的判断已经能够用数据说明，正在为你安排下一步训练。",
-    }
+    assert mastered["interaction"]["kind"] == "next_learning_step"
+    assert "回答有效" in mastered["interaction"]["feedback"]
+    assert "进入下一步训练" in mastered["interaction"]["next_step_reason"]
     assert _transitions(mastered)[-1] == "T14"
     assert len(_follow_up_products(mastered)) == 1
     assert len(follow_up.calls) == 2
@@ -258,10 +254,9 @@ def test_fourth_unmastered_round_steps_down_without_generating_a_fifth_question(
 
     assert stepped_down["state"] == "S2_KNOWLEDGE"
     assert stepped_down["awaiting"] == "advance"
-    assert stepped_down["interaction"] == {
-        "kind": "learning_notice",
-        "message": "这个判断还需要再巩固。我们先回顾一个关键点，再重新练习。",
-    }
+    assert stepped_down["interaction"]["kind"] == "learning_notice"
+    assert "回答部分有效" in stepped_down["interaction"]["feedback"]
+    assert "四次核对上限" in stepped_down["interaction"]["next_step_reason"]
     assert len(_follow_up_products(stepped_down)) == 3
     assert len(follow_up.calls) == 4
     assert _transitions(stepped_down)[-2:] == ["T15", "T17"]

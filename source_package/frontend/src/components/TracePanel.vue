@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Activity } from '@lucide/vue'
-import { computed } from 'vue'
+import { Activity, ChevronLeft, ChevronRight } from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
 
 import type { AgentActivityStatus } from '../lib/interactiveApi'
 import { agentLabel, agentPurpose } from '../lib/tracePresentation'
@@ -12,6 +12,7 @@ import TraceCard from './TraceCard.vue'
 
 
 const props = defineProps<{ view: TraceView }>()
+const recordPage = ref(0)
 
 type TimelineItem =
   | { kind: 'message'; id: string; message: TraceMessage }
@@ -114,6 +115,30 @@ const timeline = computed<TimelineItem[]>(() => {
   }
   return items
 })
+
+watch(
+  () => timeline.value.length,
+  (length, previousLength) => {
+    if (!length) {
+      recordPage.value = 0
+      return
+    }
+    if (length > (previousLength ?? 0)) {
+      recordPage.value = length - 1
+      return
+    }
+    recordPage.value = Math.min(recordPage.value, length - 1)
+  },
+  { immediate: true },
+)
+
+function previousRecord(): void {
+  recordPage.value = Math.max(0, recordPage.value - 1)
+}
+
+function nextRecord(): void {
+  recordPage.value = Math.min(timeline.value.length - 1, recordPage.value + 1)
+}
 </script>
 
 <template>
@@ -162,11 +187,33 @@ const timeline = computed<TimelineItem[]>(() => {
       </div>
     </details>
 
-    <div class="trace-scroll" aria-live="polite">
-      <template v-for="item in timeline" :key="item.id">
+    <div class="trace-record-page" aria-live="polite">
+      <div
+        v-for="(item, index) in timeline"
+        v-show="recordPage === index"
+        :key="item.id"
+        class="trace-record-slide"
+      >
         <DebateGroupComponent v-if="item.kind === 'debate'" :group="item.group" />
         <TraceCard v-else :message="item.message" />
-      </template>
+      </div>
+      <p v-if="!timeline.length" class="trace-record-empty">协作开始后，本轮记录会在这里逐页出现。</p>
     </div>
+
+    <footer v-if="timeline.length" class="trace-record-pager">
+      <button
+        type="button"
+        aria-label="上一条协作记录"
+        :disabled="recordPage === 0"
+        @click="previousRecord"
+      ><ChevronLeft :size="16" aria-hidden="true" />上一条</button>
+      <span><b>{{ recordPage + 1 }}</b> / {{ timeline.length }}</span>
+      <button
+        type="button"
+        aria-label="下一条协作记录"
+        :disabled="recordPage >= timeline.length - 1"
+        @click="nextRecord"
+      >下一条<ChevronRight :size="16" aria-hidden="true" /></button>
+    </footer>
   </aside>
 </template>

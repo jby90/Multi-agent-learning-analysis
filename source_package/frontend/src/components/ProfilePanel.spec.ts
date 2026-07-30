@@ -43,6 +43,11 @@ describe('ProfilePanel learning evidence', () => {
       expect.arrayContaining(['#lecture-resource', '#task-resource']),
     )
     expect(match.text()).not.toMatch(/KB-\d+|检索|命中/)
+    expect(wrapper.get('.profile-detail-content').attributes()).toMatchObject({
+      role: 'region',
+      'aria-label': '完整学习画像内容',
+      tabindex: '0',
+    })
   })
 
   it('exposes the actual five-stage difficulty journey and adjustment actions', () => {

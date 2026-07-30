@@ -1296,10 +1296,9 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     upgraded_content = upgraded["artifact"]["payload"]["content"]
     assert conclusion_content["template_id"] == "T-01"
     assert answered["state"] == "S9_PATH_UPDATE"
-    assert answered["interaction"] == {
-        "kind": "next_learning_step",
-        "message": "你的判断已经能够用数据说明，正在为你安排下一步训练。",
-    }
+    assert answered["interaction"]["kind"] == "next_learning_step"
+    assert "回答有效" in answered["interaction"]["feedback"]
+    assert "进入下一步训练" in answered["interaction"]["next_step_reason"]
     assert upgraded["state"] == "S7_STUDENT"
     assert upgraded["awaiting"] == "sql"
     assert upgraded["interaction"] == {
@@ -1333,7 +1332,7 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     assert completed["state"] == "S10_DONE"
     assert completed["awaiting"] == "done"
     assert completed["outcome"] == "completed"
-    assert completed["artifact"]["payload"]["content"]["difficulty_action"] == "step_up"
+    assert completed["artifact"]["payload"]["content"]["difficulty_action"] == "keep"
     assert completed["interaction"] == {
         "kind": "next_learning_step",
         "message": "下一知识点：完成率计算",
@@ -1407,6 +1406,10 @@ def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(
     assert conclusion["state"] == "S7_STUDENT"
     assert conclusion["awaiting"] == "follow_up"
     assert conclusion["interaction"]["kind"] == "free_text_follow_up"
+    assert conclusion["interaction"]["prompt"] == (
+        "根据刚才的三道工序结果，哪一道工序完成率最低，你依据的数值是什么？"
+    )
+    assert conclusion["interaction"]["prompt"] != conclusion_content["question"]
     assert strategy_calls == []
     assessment_branch = next(
         branch
@@ -1433,6 +1436,122 @@ def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(
     assert "CONCLUSION_TASK_ID" not in source
     assert "def submit_answer" not in source
     assert '"kind": "choice"' not in source
+
+
+def test_follow_up_rejects_a_bare_yes_without_calling_the_model(
+    tmp_path: Path,
+) -> None:
+    executor = CatalogExecutor()
+    follow_up_llm = FollowUpLLM()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=follow_up_llm,
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+    manager.advance(session_id)
+    task = manager.advance(session_id)
+    content = task["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[content["template_id"]].standard_sql,
+    )
+    before = manager.advance(session_id)
+
+    with pytest.raises(InteractiveSessionError, match="不能只回答"):
+        manager.submit_follow_up(session_id, "是的", "bare-yes")
+
+    after = manager.get_state(session_id)
+    assert after["interaction"] == before["interaction"]
+    assert after["awaiting"] == "follow_up"
+    assert follow_up_llm.calls == []
+
+
+def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
+    tmp_path: Path,
+) -> None:
+    def unavailable_follow_up(**_: Any) -> Any:
+        raise RuntimeError("temporary model failure")
+
+    executor = CatalogExecutor()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=unavailable_follow_up,
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+    manager.advance(session_id)
+    task = manager.advance(session_id)
+    content = task["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[content["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+
+    continued = manager.submit_follow_up(
+        session_id,
+        "YCL最低，完成率为62.36%，低于另外两道工序。",
+        "fallback-turn-1",
+    )
+
+    assert continued["state"] == "S7_STUDENT"
+    assert continued["awaiting"] == "follow_up"
+    assert continued["interaction"]["round"] == 2
+    assert len(continued["interaction"]["turns"]) == 1
+    assert continued["interaction"]["prompt"] == (
+        "查询结果中AZTP和ZZTP的完成率分别是多少？"
+    )
+    assert continued["artifact"]["model"] == "deterministic-evidence-fallback"
+
+    continued = manager.submit_follow_up(
+        session_id,
+        "AZTP为0.9149，ZZTP为1.0249。",
+        "fallback-turn-2",
+    )
+
+    assert continued["state"] == "S8_PROBE"
+    assert continued["awaiting"] == "follow_up"
+    assert continued["interaction"]["round"] == 3
+    assert len(continued["interaction"]["turns"]) == 2
+    assert continued["interaction"]["prompt"] == (
+        "按完成率从低到高，三道工序应怎样排序？"
+    )
+
+    continued = manager.submit_follow_up(
+        session_id,
+        "从低到高依次为YCL、AZTP、ZZTP。",
+        "fallback-turn-3",
+    )
+
+    assert continued["state"] == "S8_PROBE"
+    assert continued["awaiting"] == "follow_up"
+    assert continued["interaction"]["round"] == 4
+    assert len(continued["interaction"]["turns"]) == 3
+    assert continued["interaction"]["prompt"] == (
+        "请引用当前查询结果中的字段和值说明你的判断？"
+    )
+
+    finished = manager.submit_follow_up(
+        session_id,
+        "ZZTP最高，完成率为1.0249。",
+        "fallback-turn-4",
+    )
+
+    assert finished["awaiting"] == "advance"
+    assert finished["interaction"]["kind"] == "learning_notice"
 
 
 def test_top_tier_answer_completes_without_claiming_a_fake_increase(
@@ -1482,6 +1601,13 @@ def test_top_tier_answer_completes_without_claiming_a_fake_increase(
     content = completed["artifact"]["payload"]["content"]
     assert content["difficulty_action"] == "keep"
     assert "提高一档难度" not in json.dumps(completed, ensure_ascii=False)
+    latest_events = {}
+    for event in manager.get_agent_events(session_id):
+        latest_events[event["agent"]] = event
+    assert not any(
+        event["status"] in {"working", "collaborating", "reviewing", "debating"}
+        for event in latest_events.values()
+    )
 
 
 def test_progression_selection_failure_is_retryable_and_uses_learning_language(
@@ -1571,6 +1697,9 @@ def test_free_text_support_and_correction_complete_existing_flow(
     completed = manager.advance(session_id)
 
     assert follow_up["interaction"]["kind"] == "free_text_follow_up"
+    assert completed["training_report"]["title"] == "本轮训练报告"
+    assert completed["training_report"]["query_count"] == 2
+    assert completed["training_report"]["follow_up_rounds"] >= 2
     assert follow_up["awaiting"] == "follow_up"
     assert (
         supported["artifact"]["payload"]["content"]["event"]
@@ -1579,14 +1708,10 @@ def test_free_text_support_and_correction_complete_existing_flow(
     assert supported["artifact"]["evidence"]
     assert supported["state"] == "S8_PROBE"
     assert supported["awaiting"] == "follow_up"
-    assert corrected["interaction"] == {
-        "kind": "data_collision",
-        "misconception": "计划量与实际完成量的区分",
-        "wrong_label": "计划量",
-        "wrong_value": "1855.06",
-        "correct_label": "实际完成量",
-        "correct_value": "1156.87",
-    }
+    assert corrected["interaction"]["kind"] == "data_collision"
+    assert corrected["interaction"]["wrong_value"] == "1855.06"
+    assert corrected["interaction"]["correct_value"] == "1156.87"
+    assert "回答有效" in corrected["interaction"]["feedback"]
     assert corrected["state"] == "S9_PATH_UPDATE"
     assert upgraded["state"] == "S7_STUDENT"
     assert upgraded["awaiting"] == "sql"
@@ -1693,10 +1818,9 @@ def test_four_unmastered_rounds_reenter_teaching_without_stale_follow_up_state(
 
     assert second_wrong["state"] == "S2_KNOWLEDGE"
     assert second_wrong["awaiting"] == "advance"
-    assert second_wrong["interaction"] == {
-        "kind": "learning_notice",
-        "message": "这个判断还需要再巩固。我们先回顾一个关键点，再重新练习。",
-    }
+    assert second_wrong["interaction"]["kind"] == "learning_notice"
+    assert "回答部分有效" in second_wrong["interaction"]["feedback"]
+    assert "四次核对上限" in second_wrong["interaction"]["next_step_reason"]
     assert lecture["state"] == "S3_TASK"
     assert relearned_task["state"] == "S7_STUDENT"
     assert relearned_task["awaiting"] == "sql"
@@ -1998,6 +2122,14 @@ def test_step_up_product_failure_finishes_safely_and_is_idempotent(
     }
     assert stopped["artifact"] == before["artifact"]
     assert manager._get_session(session_id).pending_learning_action is None
+    latest_events = {}
+    for event in manager.get_agent_events(session_id):
+        latest_events[event["agent"]] = event
+    assert latest_events["review"]["status"] == "blocked"
+    assert not any(
+        event["status"] in {"working", "collaborating", "reviewing", "debating"}
+        for event in latest_events.values()
+    )
     assert production_calls == 1
     assert manager.advance(session_id) == stopped
     assert production_calls == 1

@@ -86,24 +86,34 @@ const difficulty = computed(() => {
         </div>
       </div>
 
-      <DiagnosisRadar
-        :dimensions="knowledgeDimensions"
-        :blind-spots="blindSpots"
-      />
+      <details class="profile-detail-disclosure">
+        <summary>查看完整学习画像</summary>
+        <div
+          class="profile-detail-content"
+          role="region"
+          aria-label="完整学习画像内容"
+          tabindex="0"
+        >
+          <DiagnosisRadar
+            :dimensions="knowledgeDimensions"
+            :blind-spots="blindSpots"
+          />
 
-      <div class="blind-spot-list">
-        <h4>知识盲区</h4>
-        <p v-if="!blindSpots.length" class="quiet-copy">本轮尚未标记知识盲区。</p>
-        <ul v-else>
-          <li v-for="spot in blindSpots" :key="spot">
-            <CircleDotDashed :size="13" aria-hidden="true" />
-            {{ spot }}
-          </li>
-        </ul>
-      </div>
+          <div class="blind-spot-list">
+            <h4>知识盲区</h4>
+            <p v-if="!blindSpots.length" class="quiet-copy">本轮尚未标记知识盲区。</p>
+            <ul v-else>
+              <li v-for="spot in blindSpots" :key="spot">
+                <CircleDotDashed :size="13" aria-hidden="true" />
+                {{ spot }}
+              </li>
+            </ul>
+          </div>
 
-      <ResourceMatch :view="view" />
-      <DifficultyJourney :view="view" :catalog="catalog" />
+          <ResourceMatch :view="view" />
+          <DifficultyJourney :view="view" :catalog="catalog" />
+        </div>
+      </details>
     </section>
     <section v-else class="panel-empty">
       岗前测评尚未播放到此处。

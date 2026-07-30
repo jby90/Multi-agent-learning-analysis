@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Code2, Database } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { Code2, Database, Maximize2, Minimize2 } from '@lucide/vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
   dataFieldLabel,
@@ -14,6 +14,18 @@ import type { TraceMessage } from '../types/trace'
 
 const props = defineProps<{ message: TraceMessage }>()
 const showSql = ref(false)
+const focusMode = ref(false)
+
+function toggleFocusMode(): void {
+  focusMode.value = !focusMode.value
+}
+
+function leaveFocusMode(event: KeyboardEvent): void {
+  if (event.key === 'Escape') focusMode.value = false
+}
+
+onMounted(() => window.addEventListener('keydown', leaveFocusMode))
+onBeforeUnmount(() => window.removeEventListener('keydown', leaveFocusMode))
 
 const columns = computed(() => {
   const value = props.message.content.columns
@@ -68,13 +80,31 @@ function cellValue(value: unknown): string {
 </script>
 
 <template>
-  <section class="sql-result" aria-label="数据查询结果">
+  <section
+    class="sql-result"
+    :class="{ 'is-focus-mode': focusMode }"
+    aria-label="数据查询结果"
+  >
     <div class="sql-result-heading">
       <div>
         <span class="resource-eyebrow"><Database :size="14" aria-hidden="true" /> 数据实操</span>
         <h3>{{ learnerText(String(message.content.question ?? '查询结果')) }}</h3>
       </div>
-      <span v-if="!failureFeedback" class="row-count">{{ rows.length }} 行</span>
+      <div class="sql-result-heading-actions">
+        <span v-if="!failureFeedback" class="row-count">{{ rows.length }} 行</span>
+        <button
+          v-if="!failureFeedback && columns.length"
+          type="button"
+          class="content-focus-toggle"
+          :aria-label="focusMode ? '退出查询结果专注模式' : '最大化查询结果'"
+          :title="focusMode ? '退出专注模式（Esc）' : '最大化查询结果'"
+          @click="toggleFocusMode"
+        >
+          <Minimize2 v-if="focusMode" :size="16" aria-hidden="true" />
+          <Maximize2 v-else :size="16" aria-hidden="true" />
+          <span>{{ focusMode ? '还原' : '专注分析' }}</span>
+        </button>
+      </div>
     </div>
 
     <aside v-if="failureFeedback" class="panel-empty compact-empty query-failure">

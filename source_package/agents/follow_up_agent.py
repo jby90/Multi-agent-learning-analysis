@@ -35,6 +35,28 @@ MAX_LEARNER_TEXT_LENGTH = 500
 MAX_QUESTION_LENGTH = 180
 UNKNOWN_MISCONCEPTION = "UNKNOWN"
 NO_NEXT_TARGET = "NO_NEXT_TARGET"
+_DEFAULT_FALLBACK_QUESTIONS = (
+    "根据当前查询结果，你会怎样回答题目中的问题？",
+    "请引用当前查询结果中的字段和值说明你的判断？",
+    "只依据当前查询结果，你能够确认什么？",
+)
+_TEMPLATE_FALLBACK_QUESTIONS = {
+    "T-03": (
+        "查询结果中AZTP和ZZTP的完成率分别是多少？",
+        "按完成率从低到高，三道工序应怎样排序？",
+        "请引用当前查询结果中的字段和值说明你的判断？",
+    ),
+    "T-10": (
+        "查询结果中的月偏差率是多少？",
+        "该偏差率为正值还是负值？",
+        "只依据该偏差率，当前属于欠产还是超产？",
+    ),
+    "T-07-B": (
+        "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
+        "根据当前查询结果，你会怎样回答题目中的问题？",
+        "只依据当前月度表，四态候选应归为哪一种状态？",
+    ),
+}
 _ZERO_WIDTH_RE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
 _NUMBER_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 _ENGINEERING_PATTERNS = (
@@ -248,6 +270,130 @@ def _expected_points(evidence: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
+def _expected_rows(
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    """Return only reviewed scalar result rows from task evidence."""
+
+    values: list[dict[str, Any]] = []
+    for item in evidence:
+        quote = item.get("quote")
+        if not isinstance(quote, str):
+            continue
+        try:
+            data = json.loads(quote)
+        except json.JSONDecodeError:
+            continue
+        rows = data.get("expected_rows") if isinstance(data, Mapping) else None
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, Mapping) or any(
+                isinstance(value, (Mapping, list, tuple, set))
+                for value in row.values()
+            ):
+                continue
+            values.append({str(key): value for key, value in row.items()})
+    return tuple(values)
+
+
+def _decimal_scalar(value: Any) -> Decimal | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return Decimal(str(value).strip())
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _matches_reviewed_completion_extreme(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Confirm one narrow, fully reproducible completion-rate extrema answer.
+
+    This is intentionally a positive-only guard for model false negatives.  It
+    requires the learner to state the metric, the requested extrema direction,
+    one reviewed row identifier, and that row's exact reviewed value.  It never
+    infers correctness from keywords or from unreviewed model output.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    if "完成率" not in normalized_question or "完成率" not in normalized_answer:
+        return False
+    if any(token in normalized_question for token in ("最低", "最小")):
+        direction = "min"
+        if not any(token in normalized_answer for token in ("最低", "最小")):
+            return False
+    elif any(token in normalized_question for token in ("最高", "最大")):
+        direction = "max"
+        if not any(token in normalized_answer for token in ("最高", "最大")):
+            return False
+    else:
+        return False
+
+    rows = _expected_rows(evidence)
+    if len(rows) < 2:
+        return False
+    common_keys = set(rows[0])
+    for row in rows[1:]:
+        common_keys.intersection_update(row)
+    metric_keys = [
+        key
+        for key in common_keys
+        if _match_key(key) in {
+            "completerate",
+            "completionrate",
+            _match_key("完成率"),
+        }
+    ]
+    if len(metric_keys) != 1:
+        return False
+    metric_key = metric_keys[0]
+    reviewed: list[tuple[Mapping[str, Any], Decimal]] = []
+    for row in rows:
+        value = _decimal_scalar(row.get(metric_key))
+        if value is None:
+            return False
+        reviewed.append((row, value))
+    extreme_value = (
+        min(value for _, value in reviewed)
+        if direction == "min"
+        else max(value for _, value in reviewed)
+    )
+    winners = [row for row, value in reviewed if value == extreme_value]
+    if len(winners) != 1:
+        return False
+
+    cited_numbers = _numbers_in(normalized_answer)
+    exact_value_cited = extreme_value in cited_numbers
+    if not exact_value_cited:
+        percent_values = {
+            Decimal(token)
+            for token in re.findall(
+                r"([-+]?\d+(?:\.\d+)?)\s*%",
+                normalized_answer,
+            )
+        }
+        exact_value_cited = extreme_value * Decimal("100") in percent_values
+    if not exact_value_cited:
+        return False
+
+    winner = winners[0]
+    identifiers = [
+        unicodedata.normalize("NFKC", str(value)).casefold().strip()
+        for key, value in winner.items()
+        if key != metric_key
+        and isinstance(value, str)
+        and value.strip()
+        and _decimal_scalar(value) is None
+    ]
+    return any(identifier in normalized_answer for identifier in identifiers)
+
+
 def _match_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return "".join(character for character in normalized if character.isalnum())
@@ -306,6 +452,126 @@ class FollowUpAgent:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
 
+    def deterministic_fallback(
+        self,
+        *,
+        current_task: Mapping[str, Any],
+        round_index: int,
+        max_rounds: int = MAX_FOLLOW_UP_ROUNDS,
+        terminal_round: bool = False,
+    ) -> FollowUpTurn:
+        """Build one evidence-bound probe when model output fails hard gates.
+
+        The fallback deliberately does not infer mastery or a misconception.  It
+        keeps the learner in the reviewed follow-up loop and asks for one more
+        item already present in the approved task evidence.
+        """
+
+        if terminal_round:
+            return FollowUpTurn(
+                assessment="unknown",
+                diagnosed_misconception=UNKNOWN_MISCONCEPTION,
+                next_target_misconception=None,
+                route_support_points=(),
+                product=None,
+                model="deterministic-evidence-fallback",
+                latency_ms=0,
+                token_usage={
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                },
+            )
+
+        current_content = _payload_content(current_task)
+        evidence = _evidence_items(current_task)
+        source_standard_stem = str(
+            current_content.get("standard_stem")
+            or current_content.get("question")
+            or ""
+        ).strip()
+        if not source_standard_stem:
+            raise FollowUpGenerationError("follow-up evidence has no standard stem")
+        template_id = str(current_content.get("template_id") or "").strip()
+        template_questions = _TEMPLATE_FALLBACK_QUESTIONS.get(template_id)
+        standard_stem = source_standard_stem
+        fallback_questions = (
+            template_questions or _DEFAULT_FALLBACK_QUESTIONS
+        )
+        question_index = min(
+            max(round_index - MIN_FOLLOW_UP_ROUNDS, 0),
+            len(fallback_questions) - 1,
+        )
+        question = _validate_question(
+            fallback_questions[question_index],
+            standard_stem=source_standard_stem,
+            evidence=evidence,
+        )
+        evidence_refs = [str(item["ref"]) for item in evidence]
+        content: dict[str, Any] = {
+            "event": "follow_up_question_ready",
+            "question": question,
+            "questions": [
+                {
+                    "id": f"follow-up-{round_index}",
+                    "prompt": question,
+                }
+            ],
+            "standard_stem": standard_stem,
+            "assessment": "unknown",
+            "target_misconception": UNKNOWN_MISCONCEPTION,
+            "follow_up_round": round_index,
+            "max_follow_up_rounds": max_rounds,
+            "evidence_refs": evidence_refs,
+        }
+        for key in (
+            "knowledge_point",
+            "difficulty",
+            "family",
+            "responsibility_scope",
+        ):
+            value = current_content.get(key)
+            if value is not None:
+                content[key] = deepcopy(value)
+        product: dict[str, Any] = {
+            "trace_id": self._trace_id,
+            "agent": "task",
+            "role": "probe",
+            "payload": {"type": "quiz_set", "content": content},
+            "evidence": evidence,
+            "claims": [],
+            "probe": {
+                "wrong_attempts": max(1, round_index - 1),
+                "questions": [question],
+                "target_misconception": UNKNOWN_MISCONCEPTION,
+            },
+            "model": "deterministic-evidence-fallback",
+            "latency_ms": 0,
+            "token_usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            },
+            "timestamp": self._clock().isoformat(),
+        }
+        profile_ref = current_task.get("student_profile_ref")
+        if isinstance(profile_ref, str) and profile_ref.strip():
+            product["student_profile_ref"] = profile_ref
+        return FollowUpTurn(
+            assessment="unknown",
+            diagnosed_misconception=UNKNOWN_MISCONCEPTION,
+            next_target_misconception=UNKNOWN_MISCONCEPTION,
+            route_support_points=(),
+            product=product,
+            model="deterministic-evidence-fallback",
+            latency_ms=0,
+            token_usage={
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            },
+        )
+
     def generate(
         self,
         *,
@@ -313,6 +579,7 @@ class FollowUpAgent:
         current_task: Mapping[str, Any],
         task_agent: TaskAgent,
         round_index: int,
+        current_question: str | None = None,
         max_rounds: int = MAX_FOLLOW_UP_ROUNDS,
         probed_misconceptions: Sequence[str] = (),
         covered_relation_points: Sequence[str] = (),
@@ -362,6 +629,17 @@ class FollowUpAgent:
 
         current_content = _payload_content(current_task)
         current_evidence = _evidence_items(current_task)
+        active_question = (
+            current_question.strip()
+            if isinstance(current_question, str) and current_question.strip()
+            else str(
+                current_content.get("question")
+                or current_content.get("standard_stem")
+                or ""
+            ).strip()
+        )
+        if not active_question or contains_engineering_text(active_question):
+            raise FollowUpGenerationError("current follow-up question is invalid")
         responsibility_scope = _responsibility_scope(current_content)
         relation_index = default_relation_index(tuple(allowed_targets))
         allowed_route_points = default_relation_support_points(
@@ -394,6 +672,7 @@ class FollowUpAgent:
                 user=json.dumps(
                     {
                         "student_answer": answer,
+                        "current_question": active_question,
                         "current_task": {
                             key: current_content.get(key)
                             for key in (
@@ -407,6 +686,9 @@ class FollowUpAgent:
                         },
                         "current_evidence_summary": list(
                             _expected_points(current_evidence)
+                        ),
+                        "current_evidence_rows": list(
+                            _expected_rows(current_evidence)
                         ),
                         "candidates": candidate_summary,
                         "allowed_targets": [
@@ -459,16 +741,36 @@ class FollowUpAgent:
 
         assessment = str(result.data["assessment"])
         diagnosed = str(result.data["diagnosed_misconception"])
+        if assessment == "unknown" and _matches_reviewed_completion_extreme(
+            question=active_question,
+            answer=answer,
+            evidence=current_evidence,
+        ):
+            assessment = "mastered"
+            diagnosed = UNKNOWN_MISCONCEPTION
         proposed_next = (
             None
             if result.data["next_target_misconception"] == NO_NEXT_TARGET
             else str(result.data["next_target_misconception"])
         )
-        if (assessment == "unknown") != (
-            diagnosed == UNKNOWN_MISCONCEPTION
-        ):
+        if completion_allowed and assessment == "mastered":
+            return FollowUpTurn(
+                assessment=assessment,
+                diagnosed_misconception=diagnosed,
+                next_target_misconception=None,
+                route_support_points=(),
+                product=None,
+                model=result.model,
+                latency_ms=result.latency_ms,
+                token_usage=result.token_usage.as_dict(),
+            )
+        if assessment == "unknown" and diagnosed != UNKNOWN_MISCONCEPTION:
             raise FollowUpGenerationError(
                 "unknown assessment and diagnosis must be aligned"
+            )
+        if assessment == "needs_support" and diagnosed == UNKNOWN_MISCONCEPTION:
+            raise FollowUpGenerationError(
+                "support assessment requires a diagnosed misconception"
             )
         expected_next, route_support_points = deterministic_follow_up_route(
             assessment=assessment,

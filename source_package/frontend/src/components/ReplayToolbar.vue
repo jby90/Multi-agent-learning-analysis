@@ -27,8 +27,10 @@ withDefaults(defineProps<{
   entryMode: 'replay' | 'live'
   viewMode: 'student' | 'collaboration'
   canExport?: boolean
+  hasSession?: boolean
 }>(), {
   canExport: true,
+  hasSession: false,
 })
 
 const emit = defineEmits<{
@@ -74,21 +76,16 @@ function importDropped(event: DragEvent): void {
 
 <template>
   <div class="workshop-header">
-    <div class="workshop-status" aria-label="车间数据状态">
-      <span><b>船号</b> H2601</span>
-      <span><b>工序</b> YCL · 预处理</span>
-      <span><b>数据截至</b> 2025-07-31</span>
-      <span><b>会话模式</b> {{ entryMode === 'live' ? '实时实操' : '回放复盘' }}</span>
-    </div>
-
     <header class="replay-toolbar">
       <div class="product-mark">
-        <span class="product-kicker">岗位训练台</span>
-        <strong>船厂数字化岗位培训</strong>
-        <span>{{ entryMode === 'live' ? '真实生产数据实操' : '培养记录回放' }}</span>
+        <span class="product-symbol" aria-hidden="true">智</span>
+        <span class="product-copy">
+          <span class="product-kicker">智能岗位学习中心</span>
+          <strong>船厂数字化岗位培训</strong>
+        </span>
       </div>
 
-      <div class="entry-switch control-cluster" aria-label="训练进入方式">
+      <nav class="entry-switch control-cluster" aria-label="训练进入方式">
         <button
           type="button"
           :class="{ 'is-active': entryMode === 'live' }"
@@ -101,11 +98,99 @@ function importDropped(event: DragEvent): void {
           aria-label="进入会话回放"
           @click="emit('entry', 'replay')"
         >会话回放</button>
+      </nav>
+
+      <span class="toolbar-spacer" aria-hidden="true"></span>
+
+      <div v-if="entryMode === 'live'" class="live-session-context" aria-label="当前训练数据范围">
+        <span><i aria-hidden="true"></i><strong>H2601</strong> · YCL 预处理</span>
+        <small>实时实操 · 数据截至 2025-07-31</small>
       </div>
 
-      <template v-if="entryMode === 'replay'">
-        <div class="trace-selector control-cluster">
-          <label for="trace-select">回放会话</label>
+      <div v-if="entryMode === 'replay' && canCompare" class="view-switch control-cluster" aria-label="画像查看方式">
+        <button
+          type="button"
+          :class="{ 'is-active': !comparison }"
+          aria-label="单画像查看"
+          @click="emit('comparison', false)"
+        >
+          <UserRound :size="15" aria-hidden="true" />
+          单画像
+        </button>
+        <button
+          type="button"
+          :class="{ 'is-active': comparison }"
+          aria-label="三画像同屏"
+          @click="emit('comparison', true)"
+        >
+          <Users :size="15" aria-hidden="true" />
+          三画像
+        </button>
+      </div>
+
+      <div
+        v-if="entryMode === 'replay' || hasSession"
+        class="audience-switch control-cluster"
+        aria-label="页面查看方式"
+      >
+        <button
+          type="button"
+          :class="{ 'is-active': viewMode === 'student' }"
+          aria-label="切换到学员模式"
+          @click="emit('view', 'student')"
+        >学员模式</button>
+        <button
+          type="button"
+          :class="{ 'is-active': viewMode === 'collaboration' }"
+          aria-label="切换到协同视图"
+          @click="emit('view', 'collaboration')"
+        >协同视图</button>
+      </div>
+
+      <div
+        class="trace-transfer control-cluster"
+        data-testid="trace-transfer"
+        aria-label="导入或导出会话记录"
+        @dragover.prevent
+        @drop.prevent="importDropped"
+      >
+        <label class="trace-transfer-action" aria-label="选择要导入的会话记录">
+          <Upload :size="15" aria-hidden="true" />
+          <span>导入</span>
+          <input
+            class="visually-hidden"
+            type="file"
+            accept=".jsonl,application/x-ndjson,application/json"
+            aria-label="导入会话记录"
+            @change="importSelected"
+          />
+        </label>
+        <button
+          type="button"
+          class="trace-transfer-action"
+          aria-label="导出当前会话"
+          :disabled="!canExport"
+          @click="emit('export')"
+        >
+          <Download :size="15" aria-hidden="true" />
+          <span>导出</span>
+        </button>
+      </div>
+    </header>
+
+    <div v-if="entryMode === 'replay'" class="session-commandbar">
+      <div class="workshop-status" aria-label="车间数据状态">
+        <span><b>船号</b> H2601</span>
+        <span><b>工序</b> YCL · 预处理</span>
+        <span><b>数据截至</b> 2025-07-31</span>
+        <span class="session-mode-status">
+          <i aria-hidden="true"></i>
+          回放复盘
+        </span>
+      </div>
+
+      <div class="trace-selector control-cluster">
+          <label for="trace-select">当前会话</label>
           <select
             id="trace-select"
             :value="selectedFile"
@@ -116,9 +201,9 @@ function importDropped(event: DragEvent): void {
               {{ trace.label }}
             </option>
           </select>
-        </div>
+      </div>
 
-        <div class="playback-controls control-cluster" aria-label="回放控制">
+      <div class="playback-controls control-cluster" aria-label="回放控制">
           <button
             v-if="playing"
             type="button"
@@ -155,9 +240,9 @@ function importDropped(event: DragEvent): void {
             <option :value="2">2x</option>
             <option :value="5">5x</option>
           </select>
-        </div>
+      </div>
 
-        <div v-if="keyframes.length" class="bookmark-control control-cluster">
+      <div v-if="keyframes.length" class="bookmark-control control-cluster">
           <Bookmark :size="16" aria-hidden="true" />
           <select aria-label="跳到关键帧" value="" @change="selectKeyframe">
             <option value="" disabled>关键帧</option>
@@ -165,74 +250,7 @@ function importDropped(event: DragEvent): void {
               {{ frame.label }}
             </option>
           </select>
-        </div>
-
-        <div v-if="canCompare" class="view-switch control-cluster" aria-label="画像查看方式">
-          <button
-            type="button"
-            :class="{ 'is-active': !comparison }"
-            aria-label="单画像查看"
-            @click="emit('comparison', false)"
-          >
-            <UserRound :size="15" aria-hidden="true" />
-            单画像
-          </button>
-          <button
-            type="button"
-            :class="{ 'is-active': comparison }"
-            aria-label="三画像同屏"
-            @click="emit('comparison', true)"
-          >
-            <Users :size="15" aria-hidden="true" />
-            三画像
-          </button>
-        </div>
-      </template>
-
-      <div
-        class="trace-transfer control-cluster"
-        data-testid="trace-transfer"
-        aria-label="导入或导出会话记录"
-        @dragover.prevent
-        @drop.prevent="importDropped"
-      >
-        <label class="trace-transfer-action" aria-label="选择要导入的会话记录">
-          <Upload :size="15" aria-hidden="true" />
-          <span>导入</span>
-          <input
-            class="visually-hidden"
-            type="file"
-            accept=".jsonl,application/x-ndjson,application/json"
-            aria-label="导入会话记录"
-            @change="importSelected"
-          />
-        </label>
-        <button
-          type="button"
-          class="trace-transfer-action"
-          aria-label="导出当前会话"
-          :disabled="!canExport"
-          @click="emit('export')"
-        >
-          <Download :size="15" aria-hidden="true" />
-          <span>导出</span>
-        </button>
       </div>
-
-      <div class="audience-switch control-cluster" aria-label="页面查看方式">
-        <button
-          type="button"
-          :class="{ 'is-active': viewMode === 'student' }"
-          aria-label="切换到学员模式"
-          @click="emit('view', 'student')"
-        >学员模式</button>
-        <button
-          type="button"
-          :class="{ 'is-active': viewMode === 'collaboration' }"
-          aria-label="切换到协同视图"
-          @click="emit('view', 'collaboration')"
-        >协同视图</button>
-      </div>
-    </header>
+    </div>
   </div>
 </template>

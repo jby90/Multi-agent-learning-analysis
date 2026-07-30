@@ -8,6 +8,7 @@ import type {
 } from '../lib/interactiveApi'
 import { InteractiveApiError } from '../lib/interactiveApi'
 import { isLearnerSafeText } from '../lib/tracePresentation'
+import type { TraceMessage } from '../types/trace'
 import LivePractice from './LivePractice.vue'
 
 
@@ -68,14 +69,131 @@ describe('LivePractice', () => {
     vi.useRealTimers()
   })
 
+  it('shows progressive teacher hints without revealing a complete SQL answer', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S4_VERIFY',
+      awaiting: 'sql',
+      messages: [{
+        agent: 'task',
+        payload: { content: {
+          contextualized_stem: '按工序比较三道工序完成率',
+          knowledge_point: '三道工序与传导关系',
+          difficulty: 'basic',
+          query_authority: {
+            output_columns: ['process_code', 'completion_rate'],
+            filter_columns: ['ship_no', 'period_date'],
+            group_by_columns: ['process_code'],
+            time_values: ['2025-05'],
+          },
+        } },
+      }],
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('查询输错时会留在本题')
+    await wrapper.get('.sql-teacher-hint button').trigger('click')
+    await wrapper.get('.sql-teacher-hint button').trigger('click')
+    expect(wrapper.get('.sql-teacher-hint').text()).toContain('工序、完成率')
+    expect(wrapper.get('.sql-teacher-hint').text()).not.toContain('SELECT process_code')
+  })
+
+  it('shows answer feedback and the reason before advancing', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S9_PATH_UPDATE',
+      awaiting: 'advance',
+      interaction: {
+        kind: 'next_learning_step',
+        message: '正在安排下一步训练。',
+        feedback: '回答有效：已经引用查询数据。',
+        next_step_reason: '完成两轮核对并达到当前要求。',
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    expect(wrapper.get('.answer-feedback-card').text()).toContain('回答有效')
+    expect(wrapper.get('.answer-feedback-card').text()).toContain('进入下一步的理由')
+  })
+
+  it('renders a deterministic report after the round is completed', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S10_DONE',
+      awaiting: 'done',
+      outcome: 'completed',
+      training_report: {
+        title: '本轮训练报告',
+        knowledge_point: '三道工序与传导关系',
+        query_count: 2,
+        follow_up_rounds: 3,
+        completed_correction: true,
+        achievement: '完成了数据实操、证据核对和结论修正。',
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    expect(wrapper.get('.training-report').text()).toContain('三道工序与传导关系')
+    expect(wrapper.get('.training-report').text()).toContain('2 次')
+    expect(wrapper.get('.training-report').text()).toContain('3 轮')
+    expect(wrapper.get('.training-report').text()).toContain('已完成')
+  })
+
+  it('keeps the latest verified query result inside the task station', async () => {
+    const api = fakeApi()
+    api.createSession = vi.fn(async () => sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+    }))
+    const sqlResult: TraceMessage = {
+      msgId: 'sql-result-1',
+      traceId: 'interactive-session-live',
+      step: 8,
+      agent: 'verification',
+      role: 'produce',
+      payloadType: 'sql_result',
+      content: {
+        question: '按工序查询完成率',
+        columns: ['process_code', 'complete_rate'],
+        rows: [{ process_code: 'YCL', complete_rate: '0.6236' }],
+      },
+      evidence: [],
+      claims: [],
+      timestamp: '2026-07-30T00:00:00Z',
+      rejectedByBus: false,
+      busErrors: [],
+    }
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, sqlResult },
+    })
+
+    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.task-inline-result').text()).toContain('按工序查询完成率')
+    expect(wrapper.get('.task-inline-result').text()).toContain('YCL')
+    expect(wrapper.classes()).toContain('has-inline-result')
+  })
+
   it('binds profile cards to approved human-facing profile data only', () => {
     const wrapper = mount(LivePractice, {
       props: { api: fakeApi(), pollIntervalMs: 0 },
     })
 
+    expect(wrapper.get('#profile-picker-title').text())
+      .toBe('从你的岗位出发，建立真正用得上的数字化能力')
+    expect(wrapper.findAll('.profile-choice')).toHaveLength(3)
     expect(wrapper.text()).toContain('计算机/信息类背景校招生，会SQL和数据分析工具，不懂船舶工序与口径')
     expect(wrapper.text()).toContain('船舶工艺背景转数字化岗，精通预处理/托盘工艺，不会数据工具')
     expect(wrapper.text()).toContain('高职毕业一线班组长，现场熟，理论与数据双弱')
+    expect(wrapper.text()).toContain('SQL基础')
+    expect(wrapper.text()).toContain('现场生产经验')
     expect(wrapper.text()).not.toContain('重讲工序与口径、少讲SQL')
     expect(wrapper.text()).not.toContain('步骤化短句、每步带检查点')
     expect(wrapper.text()).not.toContain('重点补足')
@@ -90,9 +208,13 @@ describe('LivePractice', () => {
     await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.findAll('fieldset.pretest-question')).toHaveLength(5)
-    for (const question of questions) {
+    expect(wrapper.findAll('fieldset.pretest-question')).toHaveLength(1)
+    expect(wrapper.text()).toContain('1/ 5')
+    for (const [index, question] of questions.entries()) {
       await wrapper.get(`input[name="${question.question_id}"][value="B"]`).setValue(true)
+      if (index < questions.length - 1) {
+        await wrapper.get('.pretest-page-actions .primary-action').trigger('click')
+      }
     }
     await wrapper.get('button[type="submit"]').trigger('submit')
     await flushPromises()
@@ -139,6 +261,26 @@ describe('LivePractice', () => {
     expect(firstQuestion.findAll('.option-copy')).toHaveLength(4)
     expect(firstQuestion.get('.option-copy').text())
       .toBe('完成数据当月每日完成率的平均值')
+  })
+
+  it('moves through the pretest one question at a time without a page-length form', async () => {
+    const api = fakeApi()
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+
+    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('fieldset.pretest-question')).toHaveLength(1)
+    expect(wrapper.get('fieldset.pretest-question').text()).toContain('第1题')
+    expect(wrapper.get('.pretest-page-actions .primary-action').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('input[name="PT-1"][value="B"]').setValue(true)
+    await wrapper.get('.pretest-page-actions .primary-action').trigger('click')
+
+    expect(wrapper.get('fieldset.pretest-question').text()).toContain('第2题')
+    expect(wrapper.get('.pretest-progress-copy').text()).toContain('2/ 5')
   })
 
   it('ignores a repeated advance click while the first request is running', async () => {
@@ -268,8 +410,11 @@ describe('LivePractice', () => {
     })
     await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
     await flushPromises()
-    for (const question of questions) {
+    for (const [index, question] of questions.entries()) {
       await wrapper.get(`input[name="${question.question_id}"][value="B"]`).setValue(true)
+      if (index < questions.length - 1) {
+        await wrapper.get('.pretest-page-actions .primary-action').trigger('click')
+      }
     }
     await wrapper.get('button[type="submit"]').trigger('submit')
     await flushPromises()
@@ -376,6 +521,32 @@ describe('LivePractice', () => {
     expect(wrapper.get('[data-testid="learning-notice"]').text())
       .toBe('根据本次作答表现，已为你提高一档难度。')
     expect(isLearnerSafeText(wrapper.text())).toBe(true)
+  })
+
+  it('keeps the approved task prompt visible above the SQL editor', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+      messages: [{
+        agent: 'task',
+        payload: {
+          type: 'quiz_set',
+          content: {
+            contextualized_stem: '查询H2601船2025年5月YCL工序的计划量与实际完成量。',
+          },
+        },
+      }],
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.sql-task-brief').text())
+      .toContain('查询H2601船2025年5月YCL工序的计划量与实际完成量。')
+    wrapper.get('textarea[aria-label="输入查询语句"]')
   })
 
   it('guards a difficulty notice received from the interactive service', async () => {
@@ -940,6 +1111,134 @@ describe('LivePractice', () => {
     expect(wrapper.get('[role="alert"]').text())
       .toBe('请用业务或学习语言描述你的判断。')
     expect(isLearnerSafeText(wrapper.text())).toBe(true)
+  })
+
+  it('asks for evidence instead of submitting a bare yes-or-no answer', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '哪一道工序完成率最低，你依据的数值是什么？',
+        round: 1,
+        max_rounds: 4,
+        turns: [],
+      },
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    await wrapper.get('textarea[aria-label="输入你的判断"]').setValue('是的')
+
+    const button = wrapper.get('button[aria-label="提交本轮判断"]')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.follow-up-actions small').text())
+      .toContain('不能只回答“是/否”')
+    expect(api.submitFollowUp).not.toHaveBeenCalled()
+  })
+
+  it('collapses completed rounds so the next prompt and input remain visible', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S8_PROBE',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '查询结果中AZTP和ZZTP的完成率分别是多少？',
+        round: 3,
+        max_rounds: 4,
+        feedback: '回答已经引用YCL和0.6236。',
+        next_step_reason: '继续核对另外两道工序。',
+        turns: [
+          {
+            round: 1,
+            question: '哪一道工序完成率最低？',
+            answer: 'YCL最低。',
+            feedback: '请补充完成率数值。',
+          },
+          {
+            round: 2,
+            question: 'YCL的完成率是多少？',
+            answer: 'YCL完成率最低 0.6236。',
+            feedback: '回答已经引用YCL和0.6236。',
+          },
+        ],
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    const toggle = wrapper.get('.follow-up-history-toggle')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.follow-up-history').exists()).toBe(false)
+    expect(wrapper.get('.follow-up-latest-summary').text())
+      .toContain('YCL完成率最低 0.6236')
+    expect(wrapper.get('.follow-up-current').text())
+      .toContain('AZTP和ZZTP的完成率')
+    expect(wrapper.get('textarea[aria-label="输入你的判断"]')).toBeDefined()
+
+    await toggle.trigger('click')
+
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('.follow-up-history li')).toHaveLength(2)
+    expect(wrapper.get('.follow-up-current').text())
+      .toContain('AZTP和ZZTP的完成率')
+  })
+
+  it('reconciles a follow-up that completed after its response failed', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const before = sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '哪一道工序完成率最低，你依据的数值是什么？',
+        round: 1,
+        max_rounds: 4,
+        turns: [],
+      },
+    })
+    const recovered = sessionState({
+      state: 'S8_PROBE',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '为什么不能只凭工序先后判断传导？',
+        round: 2,
+        max_rounds: 4,
+        turns: [{
+          round: 1,
+          question: '哪一道工序完成率最低，你依据的数值是什么？',
+          answer: 'YCL最低，完成率为62.36%。',
+        }],
+      },
+    })
+    vi.mocked(api.getState)
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(recovered)
+    vi.mocked(api.submitFollowUp).mockRejectedValue(new InteractiveApiError(
+      '服务暂时不可用，请稍后再试。',
+      'external_unavailable',
+    ))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0 },
+    })
+    await flushPromises()
+
+    await wrapper.get('textarea[aria-label="输入你的判断"]')
+      .setValue('YCL最低，完成率为62.36%。')
+    await wrapper.get('button[aria-label="提交本轮判断"]').trigger('click')
+    await flushPromises()
+
+    expect(api.getState).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('第 2 / 最多 4 轮')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
   it('keeps the draft and client turn id stable when submission is retried', async () => {
