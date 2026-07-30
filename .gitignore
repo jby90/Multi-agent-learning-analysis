@@ -2,6 +2,7 @@
 **/.env
 !.env.example
 **/*.local
+deploy/server/.deployed-commit
 
 # Python caches and local environments
 **/__pycache__/
