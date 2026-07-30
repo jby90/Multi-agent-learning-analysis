@@ -32,7 +32,7 @@ cd /opt/multiagent/Multi-agent-learning-analysis
 .\deploy\server\publish.ps1
 ```
 
-该脚本只上传服务器当前提交之后的增量 Git bundle，再触发同一套构建、健康检查和回滚流程。
+该脚本只上传服务器当前提交之后的增量 Git bundle，并在开发机使用 Docker 缓存构建前后端镜像，再通过 SSH 加载、健康检查和切换。该通道不依赖服务器访问 GitHub 或 Docker Hub。
 
 ## 查看状态与日志
 

@@ -25,7 +25,7 @@ if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
   exit 1
 fi
 
-previous_commit="$(git rev-parse HEAD)"
+previous_commit="${DEPLOY_PREVIOUS_COMMIT:-$(git rev-parse HEAD)}"
 if [[ "${SKIP_GIT_FETCH:-0}" != "1" ]]; then
   git fetch origin "${branch}"
   git checkout "${branch}"
@@ -33,30 +33,46 @@ if [[ "${SKIP_GIT_FETCH:-0}" != "1" ]]; then
 fi
 target_commit="$(git rev-parse HEAD)"
 
-if docker image inspect "${backend_image}" >/dev/null 2>&1; then
-  docker tag "${backend_image}" "${backend_rollback}"
-fi
-if docker image inspect "${frontend_image}" >/dev/null 2>&1; then
-  docker tag "${frontend_image}" "${frontend_rollback}"
+if [[ "${SKIP_IMAGE_BACKUP:-0}" != "1" ]]; then
+  if docker image inspect "${backend_image}" >/dev/null 2>&1; then
+    docker tag "${backend_image}" "${backend_rollback}"
+  fi
+  if docker image inspect "${frontend_image}" >/dev/null 2>&1; then
+    docker tag "${frontend_image}" "${frontend_rollback}"
+  fi
 fi
 
 rollback() {
   rc=$?
   echo "deployment failed; restoring previous images and commit ${previous_commit}" >&2
+  restored=0
   if docker image inspect "${backend_rollback}" >/dev/null 2>&1; then
     docker tag "${backend_rollback}" "${backend_image}"
+    restored=1
   fi
   if docker image inspect "${frontend_rollback}" >/dev/null 2>&1; then
     docker tag "${frontend_rollback}" "${frontend_image}"
+    restored=1
   fi
-  git checkout --detach "${previous_commit}" >/dev/null 2>&1 || true
-  docker compose --env-file "${env_file}" --file "${compose_file}" up --detach --wait --wait-timeout 180 || true
+  if [[ "${restored}" == "1" ]]; then
+    git checkout --detach "${previous_commit}" >/dev/null 2>&1 || true
+    docker compose --env-file "${env_file}" --file "${compose_file}" up --detach --no-build --wait --wait-timeout 180 || true
+  else
+    echo "no previous application images exist; nothing to restore" >&2
+  fi
   exit "${rc}"
 }
 trap rollback ERR
 
-docker compose --env-file "${env_file}" --file "${compose_file}" build backend frontend
-docker compose --env-file "${env_file}" --file "${compose_file}" up --detach --wait --wait-timeout 240
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+  docker compose --env-file "${env_file}" --file "${compose_file}" build backend frontend
+  up_build_args=()
+else
+  docker image inspect "${backend_image}" >/dev/null
+  docker image inspect "${frontend_image}" >/dev/null
+  up_build_args=(--no-build)
+fi
+docker compose --env-file "${env_file}" --file "${compose_file}" up --detach "${up_build_args[@]}" --wait --wait-timeout 240
 
 trap - ERR
 printf '%s\n' "${target_commit}" > "${repo_root}/deploy/server/.deployed-commit"
