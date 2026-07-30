@@ -364,6 +364,11 @@ def test_follow_up_model_receives_the_active_question_and_reviewed_rows() -> Non
         {"complete_rate": "0.6236", "process_code": "YCL"},
         {"complete_rate": "1.0249", "process_code": "ZZTP"},
     ]
+    assert request["answer_requirements"] == {
+        "operation": "compare_entities",
+        "required_fields": ["process_code", "complete_rate"],
+        "required_reasoning": ["comparison"],
+    }
     assert turn.assessment == "mastered"
     assert turn.diagnosed_misconception == "UNKNOWN"
     assert turn.next_target_misconception is None
@@ -446,6 +451,50 @@ def test_reviewed_extreme_guard_does_not_accept_incomplete_or_mismatched_evidenc
     assert turn.assessment == "unknown"
 
 
+def test_reviewed_completion_interpretation_overrides_an_unknown_false_negative() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "unknown",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "UNKNOWN",
+            "question": "请再说明这个完成率与计划目标之间的关系？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer="0.6236，说明完成率低了。",
+        current_task=_current_task(task_agent, "T-02"),
+        task_agent=task_agent,
+        current_question=(
+            "根据刚才的查询结果，该工序的完成率是多少，"
+            "这个数值说明了怎样的完成情况？"
+        ),
+        round_index=2,
+        max_rounds=4,
+    )
+
+    assert turn.assessment == "mastered"
+    assert turn.diagnosed_misconception == "UNKNOWN"
+
+
+def test_generic_fallback_uses_the_task_family_instead_of_an_unresolved_reference() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=_current_task(task_agent, "T-02"),
+        round_index=2,
+    )
+
+    assert turn.product is not None
+    question = turn.product["payload"]["content"]["question"]
+    assert "题目中的问题" not in question
+    assert "完成率" in question
+    assert "计划" in question
+
+
 def test_reviewed_ship_extreme_is_preserved_when_the_model_is_unavailable() -> None:
     task_agent = _task_agent()
     agent = FollowUpAgent("trace-production_progress")
@@ -496,7 +545,7 @@ def test_advanced_delay_fallback_uses_template_specific_questions() -> None:
 
     assert questions == [
         "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
-        "根据当前查询结果，你会怎样回答题目中的问题？",
+        "三道工序的完成率低点分别出现在哪个月？",
         "只依据当前月度表，四态候选应归为哪一种状态？",
     ]
 

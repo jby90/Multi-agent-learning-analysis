@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, ChartNoAxesCombined, Network } from '@lucide/vue'
+import { Activity, ArrowDown, ChartNoAxesCombined, Network, Workflow } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import type {
@@ -11,6 +11,7 @@ import type {
 } from '../lib/interactiveApi'
 import type { TraceView } from '../types/trace'
 import AgentStage from './AgentStage.vue'
+import AgentTopology from './AgentTopology.vue'
 import EvaluationEvidencePanel from './EvaluationEvidencePanel.vue'
 import TracePanel from './TracePanel.vue'
 
@@ -22,15 +23,17 @@ const props = withDefaults(defineProps<{
   evidenceBundle?: InteractiveEvidenceBundle
   resourceBundle?: InteractiveResourceBundle
   coordinationEvidence?: InteractiveCoordinationEvidence | null
+  learnerWorkspaceTarget?: string
 }>(), {
   events: () => [],
   contract: undefined,
   evidenceBundle: undefined,
   resourceBundle: undefined,
   coordinationEvidence: undefined,
+  learnerWorkspaceTarget: undefined,
 })
 
-type WorkspacePage = 'stage' | 'evidence' | 'records'
+type WorkspacePage = 'stage' | 'topology' | 'evidence' | 'records'
 const page = ref<WorkspacePage>('stage')
 
 const pages = computed(() => [
@@ -39,6 +42,12 @@ const pages = computed(() => [
     label: '实时协同',
     detail: '查看 Agent 分工与接力',
     icon: Network,
+  },
+  {
+    id: 'topology' as const,
+    label: '运行拓扑',
+    detail: '查看模块调用与实时输出',
+    icon: Workflow,
   },
   {
     id: 'evidence' as const,
@@ -76,6 +85,14 @@ const pages = computed(() => [
           <span><b>{{ item.label }}</b><small>{{ item.detail }}</small></span>
         </button>
       </nav>
+      <a
+        v-if="learnerWorkspaceTarget"
+        class="collaboration-learner-jump"
+        :href="learnerWorkspaceTarget"
+      >
+        <span><b>学员操作台</b><small>操作会实时驱动拓扑</small></span>
+        <ArrowDown :size="14" aria-hidden="true" />
+      </a>
     </header>
 
     <div class="collaboration-page-stack">
@@ -87,6 +104,12 @@ const pages = computed(() => [
         :contract="contract"
         :evidence-bundle="evidenceBundle"
         :resource-bundle="resourceBundle"
+      />
+      <AgentTopology
+        v-show="page === 'topology'"
+        class="collaboration-page is-topology"
+        :view="view"
+        :events="events"
       />
       <EvaluationEvidencePanel
         v-show="page === 'evidence'"

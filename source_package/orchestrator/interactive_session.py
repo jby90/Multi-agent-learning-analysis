@@ -125,6 +125,15 @@ _INITIAL_FOLLOW_UP_QUESTIONS = {
     "Q6": "根据刚才的三道工序结果，哪一道工序完成率最低，你依据的数值是什么？",
     "Q7": "根据刚才的责任单元对比，哪个责任单元完成率最低，你依据的数值是什么？",
 }
+_FOLLOW_UP_FOCUS = {
+    "Q1": "核对实际完成量及其业务含义",
+    "Q2": "区分计划量与实际完成量",
+    "Q3": "解释完成率与计划目标的关系",
+    "Q4": "识别月份、完成率和变化趋势",
+    "Q5": "核对船号与完成率的对应关系",
+    "Q6": "核对工序与完成率的对应关系",
+    "Q7": "核对责任单元与完成率的对应关系",
+}
 
 
 def _initial_follow_up_question(task: Mapping[str, Any]) -> str:
@@ -137,6 +146,34 @@ def _initial_follow_up_question(task: Mapping[str, Any]) -> str:
         if question is not None:
             return question
     return "根据刚才的查询结果，你能引用至少一项数据说明自己的判断吗？"
+
+
+def _follow_up_task_context(task: Mapping[str, Any] | None) -> dict[str, str]:
+    if task is None:
+        return {}
+    content = _payload_content(task)
+    prompt = next(
+        (
+            str(content.get(field)).strip()
+            for field in ("contextualized_stem", "question", "standard_stem")
+            if isinstance(content.get(field), str) and str(content.get(field)).strip()
+        ),
+        "",
+    )
+    family = str(content.get("family") or "").strip()
+    context: dict[str, str] = {}
+    if prompt:
+        context["task_prompt"] = prompt
+    focus = _FOLLOW_UP_FOCUS.get(family)
+    if focus:
+        context["focus"] = focus
+    knowledge_point = content.get("knowledge_point")
+    if isinstance(knowledge_point, str) and knowledge_point.strip():
+        context["task_knowledge_point"] = knowledge_point.strip()
+    difficulty = content.get("difficulty")
+    if isinstance(difficulty, str) and difficulty.strip():
+        context["task_difficulty"] = difficulty.strip()
+    return context
 
 
 def _is_vacuous_follow_up_answer(value: str) -> bool:
@@ -1659,6 +1696,7 @@ class InteractiveSessionManager:
         next_round = submitted_round + 1
         next_interaction = {
             "kind": "free_text_follow_up",
+            **_follow_up_task_context(session.learning_task or session.active_task),
             "prompt": question,
             "round": next_round,
             "max_rounds": MAX_FOLLOW_UP_ROUNDS,
@@ -2918,6 +2956,7 @@ class InteractiveSessionManager:
     ) -> dict[str, Any]:
         return {
             "kind": "free_text_follow_up",
+            **_follow_up_task_context(session.learning_task or session.active_task),
             "prompt": session.follow_up_question,
             "round": session.follow_up_round,
             "max_rounds": MAX_FOLLOW_UP_ROUNDS,

@@ -407,8 +407,41 @@
 
 .collaboration-workbench-heading nav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(132px, 1fr));
   gap: 5px;
+}
+
+.collaboration-learner-jump {
+  min-width: 126px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  color: #075fb9;
+  text-decoration: none;
+  background: rgba(0, 113, 227, 0.07);
+  border: 1px solid rgba(0, 113, 227, 0.13);
+  border-radius: 10px;
+}
+
+.collaboration-learner-jump span {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.collaboration-learner-jump b {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.collaboration-learner-jump small {
+  overflow: hidden;
+  color: #6e8ba7;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collaboration-workbench-heading button {
@@ -469,6 +502,22 @@
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+@media (min-width: 981px) {
+  /* The records panel now lives inside CollaborationWorkspace. Reclaim the
+     legacy empty audit column so every collaboration page uses the canvas. */
+  .workspace-grid.is-collaboration-view:not(.live-workspace) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "path"
+      "trace"
+      "resource";
+  }
+
+  .workspace-grid.is-collaboration-view:not(.live-workspace) > .profile-panel {
+    display: none;
+  }
 }
 
 .collaboration-workbench .stage-activity-feed {
@@ -567,6 +616,14 @@
     overflow: hidden;
   }
 
+  .app-shell.has-live-session.is-collaboration-mode {
+    height: auto;
+    min-height: 100dvh;
+    padding-bottom: 36px;
+    overflow: visible;
+    scroll-behavior: smooth;
+  }
+
   .app-shell.has-live-session .workshop-header {
     margin-bottom: 14px;
   }
@@ -588,14 +645,33 @@
 
   .live-workspace.is-collaboration-view {
     grid-template-columns: minmax(0, 1fr) 300px;
-    grid-template-rows: 96px minmax(0, 1fr);
+    grid-template-rows: 96px minmax(620px, calc(100dvh - 210px)) minmax(680px, calc(100dvh - 54px));
     grid-template-areas:
       "path path"
-      "trace profile";
+      "trace profile"
+      "resource resource";
+    height: auto;
+    min-height: calc(200dvh - 114px);
+    align-items: stretch;
   }
 
   .live-workspace.is-collaboration-view > .live-training-stage {
-    display: none;
+    grid-area: resource;
+    display: grid;
+    min-height: 680px;
+    height: calc(100dvh - 54px);
+    scroll-margin-top: 18px;
+  }
+
+  .live-workspace.is-collaboration-view > .collaboration-workbench {
+    min-height: 620px;
+    height: calc(100dvh - 210px);
+    scroll-margin-top: 18px;
+  }
+
+  .live-workspace.is-collaboration-view > .profile-panel {
+    min-height: 620px;
+    height: calc(100dvh - 210px);
   }
 
   .live-workspace > .learning-path {
@@ -715,6 +791,24 @@
     border: 1px solid rgba(29, 29, 31, 0.09);
     border-radius: 20px;
     box-shadow: var(--panel-shadow);
+  }
+
+  .collaboration-operation-note {
+    display: block;
+    margin-top: 1px;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 450;
+  }
+
+  .return-to-topology {
+    padding: 5px 8px;
+    color: #075fb9;
+    font-size: 9px;
+    font-weight: 650;
+    text-decoration: none;
+    background: rgba(0, 113, 227, 0.06);
+    border-radius: 8px;
   }
 
   .live-workspace .training-workbench-body,
@@ -1334,11 +1428,15 @@ body:has(.sql-result.is-focus-mode) {
   }
 
   .collaboration-workbench-heading nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .collaboration-workbench-heading button small {
     display: none;
+  }
+
+  .collaboration-learner-jump {
+    align-self: flex-end;
   }
 }
 

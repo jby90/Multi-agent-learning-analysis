@@ -36,10 +36,84 @@ MAX_QUESTION_LENGTH = 180
 UNKNOWN_MISCONCEPTION = "UNKNOWN"
 NO_NEXT_TARGET = "NO_NEXT_TARGET"
 _DEFAULT_FALLBACK_QUESTIONS = (
-    "根据当前查询结果，你会怎样回答题目中的问题？",
-    "请引用当前查询结果中的字段和值说明你的判断？",
-    "只依据当前查询结果，你能够确认什么？",
+    "为回答“{standard_stem}”，查询结果中最关键的字段和值是什么？",
+    "请依据查询结果说明“{standard_stem}”可以得到什么结论？",
+    "围绕“{standard_stem}”，当前结果能够确认什么、还不能确认什么？",
 )
+_FAMILY_FALLBACK_QUESTIONS = {
+    "Q1": (
+        "查询结果中的实际完成量是多少，它代表计划目标还是实际已完成数量？",
+        "实际完成量与计划量分别表示什么，两者为什么不能混用？",
+        "请引用实际完成量字段和值说明当前完成情况？",
+    ),
+    "Q2": (
+        "查询结果中的计划量与实际完成量分别是多少，哪一个表示已经完成的数量？",
+        "计划量和实际完成量在业务含义上有什么区别？",
+        "请引用计划量和实际完成量的字段与数值说明判断？",
+    ),
+    "Q3": (
+        "该工序完成率是多少，换算为百分比后是否达到计划目标？",
+        "当前完成率说明实际完成量与计划量是什么关系？",
+        "请引用完成率字段和值完整说明当前完成情况？",
+    ),
+    "Q4": (
+        "月度结果中哪个月的完成率变化最明显，你依据的月份和值是什么？",
+        "相邻月份的完成率如何变化，这属于单期变化还是持续趋势？",
+        "请引用月份和完成率说明当前序列能确认什么？",
+    ),
+    "Q5": (
+        "船号对比中哪艘船的完成率最低，你依据的船号和值是什么？",
+        "其他船号的完成率分别是多少，它们与最低值有何差异？",
+        "请引用船号和完成率说明当前比较结论？",
+    ),
+    "Q6": (
+        "三道工序中哪一道完成率最低，你依据的工序和值是什么？",
+        "另外两道工序的完成率分别是多少？",
+        "按完成率从低到高，三道工序应怎样排序？",
+    ),
+    "Q7": (
+        "责任单元对比中哪个单元完成率最低，你依据的单元和值是什么？",
+        "其他责任单元的完成率分别是多少？",
+        "请引用责任单元和完成率说明当前比较结论？",
+    ),
+}
+_FAMILY_ANSWER_REQUIREMENTS = {
+    "Q1": {
+        "operation": "identify_and_interpret",
+        "required_fields": ["actual_qty"],
+        "required_reasoning": ["actual_completed_quantity"],
+    },
+    "Q2": {
+        "operation": "distinguish",
+        "required_fields": ["plan_qty", "actual_qty"],
+        "required_reasoning": ["plan_and_actual_are_not_interchangeable"],
+    },
+    "Q3": {
+        "operation": "interpret_completion_rate",
+        "required_fields": ["complete_rate"],
+        "required_reasoning": ["relationship_to_plan_target"],
+    },
+    "Q4": {
+        "operation": "compare_over_time",
+        "required_fields": ["month_label", "complete_rate"],
+        "required_reasoning": ["change_or_trend"],
+    },
+    "Q5": {
+        "operation": "compare_entities",
+        "required_fields": ["ship_no", "complete_rate"],
+        "required_reasoning": ["comparison"],
+    },
+    "Q6": {
+        "operation": "compare_entities",
+        "required_fields": ["process_code", "complete_rate"],
+        "required_reasoning": ["comparison"],
+    },
+    "Q7": {
+        "operation": "compare_entities",
+        "required_fields": ["workshop_code", "complete_rate"],
+        "required_reasoning": ["comparison"],
+    },
+}
 _TEMPLATE_FALLBACK_QUESTIONS = {
     "T-03": (
         "查询结果中AZTP和ZZTP的完成率分别是多少？",
@@ -53,7 +127,7 @@ _TEMPLATE_FALLBACK_QUESTIONS = {
     ),
     "T-07-B": (
         "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
-        "根据当前查询结果，你会怎样回答题目中的问题？",
+        "三道工序的完成率低点分别出现在哪个月？",
         "只依据当前月度表，四态候选应归为哪一种状态？",
     ),
 }
@@ -80,6 +154,12 @@ _ENGINEERING_PATTERNS = (
 _ANSWER_LEAK_PATTERNS = (
     re.compile(r"(?:答案|正确结论)\s*(?:是|为|：|:)"),
     re.compile(r"(?:直接记住|标准答案)"),
+)
+_UNRESOLVED_REFERENCE_PATTERNS = (
+    re.compile(r"题目中的问题"),
+    re.compile(r"你会怎样回答"),
+    re.compile(r"根据(?:上述|以上)内容(?:回答|判断)"),
+    re.compile(r"(?:该|这个|上述)数据说明了什么"),
 )
 
 
@@ -297,6 +377,28 @@ def _expected_rows(
     return tuple(values)
 
 
+def _answer_requirements(
+    content: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    family = str(content.get("family") or "").strip()
+    configured = _FAMILY_ANSWER_REQUIREMENTS.get(family)
+    if configured is not None:
+        return deepcopy(configured)
+    available_fields = tuple(
+        dict.fromkeys(
+            key
+            for row in _expected_rows(evidence)
+            for key in row
+        )
+    )
+    return {
+        "operation": "answer_current_question",
+        "required_fields": list(available_fields),
+        "required_reasoning": [],
+    }
+
+
 def _decimal_scalar(value: Any) -> Decimal | None:
     if isinstance(value, bool) or value is None:
         return None
@@ -391,6 +493,109 @@ def _matches_reviewed_completion_extreme(
     return any(identifier in normalized_answer for identifier in identifiers)
 
 
+def _answer_cites_reviewed_value(answer: str, value: Decimal) -> bool:
+    normalized = unicodedata.normalize("NFKC", answer).casefold()
+    if value in _numbers_in(normalized):
+        return True
+    percent_values = {
+        Decimal(token)
+        for token in re.findall(r"([-+]?\d+(?:\.\d+)?)\s*%", normalized)
+    }
+    return value * Decimal("100") in percent_values
+
+
+def _matches_reviewed_completion_interpretation(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Confirm a scalar completion-rate value plus its plan interpretation.
+
+    This positive-only guard covers the common false negative where the learner
+    cites the exact reviewed completion rate and states the correct direction in
+    plain language.  It deliberately refuses multi-row questions and never
+    derives a value from unreviewed text.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    if "完成率" not in normalized_question or not any(
+        token in normalized_question
+        for token in ("完成情况", "说明", "计划", "达到")
+    ):
+        return False
+    rows = _expected_rows(evidence)
+    if len(rows) != 1:
+        return False
+    row = rows[0]
+    metric_keys = [
+        key
+        for key in row
+        if _match_key(key) in {
+            "completerate",
+            "completionrate",
+            _match_key("完成率"),
+        }
+    ]
+    if len(metric_keys) != 1:
+        return False
+    value = _decimal_scalar(row.get(metric_keys[0]))
+    if value is None or not _answer_cites_reviewed_value(normalized_answer, value):
+        return False
+
+    if value < Decimal("1"):
+        return any(
+            phrase in normalized_answer
+            for phrase in (
+                "完成率低",
+                "完成率偏低",
+                "未完成计划",
+                "没有完成计划",
+                "未达计划",
+                "低于计划",
+                "低于100%",
+                "低于100％",
+                "只完成",
+                "完成不足",
+                "尚未完成",
+            )
+        )
+    if value > Decimal("1"):
+        return any(
+            phrase in normalized_answer
+            for phrase in (
+                "超过计划",
+                "超出计划",
+                "超额完成",
+                "高于计划",
+                "超过100%",
+                "超过100％",
+            )
+        )
+    return any(
+        phrase in normalized_answer
+        for phrase in ("完成计划", "达到计划", "正好完成", "等于100%", "等于100％")
+    )
+
+
+def _matches_reviewed_answer(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    return _matches_reviewed_completion_extreme(
+        question=question,
+        answer=answer,
+        evidence=evidence,
+    ) or _matches_reviewed_completion_interpretation(
+        question=question,
+        answer=answer,
+        evidence=evidence,
+    )
+
+
 def _match_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return "".join(character for character in normalized if character.isalnum())
@@ -410,6 +615,8 @@ def _validate_question(
         raise FollowUpGenerationError("question length is invalid")
     if contains_engineering_text(normalized):
         raise FollowUpGenerationError("question contains engineering text")
+    if any(pattern.search(normalized) for pattern in _UNRESOLVED_REFERENCE_PATTERNS):
+        raise FollowUpGenerationError("question contains an unresolved reference")
     if len(re.findall(r"[?？]", normalized)) != 1 or not normalized.endswith(("?", "？")):
         raise FollowUpGenerationError("question must contain exactly one question")
     allowed_source = standard_stem + json.dumps(
@@ -473,7 +680,7 @@ class FollowUpAgent:
         reviewed_mastery = bool(
             student_answer
             and current_question
-            and _matches_reviewed_completion_extreme(
+            and _matches_reviewed_answer(
                 question=current_question,
                 answer=student_answer,
                 evidence=evidence,
@@ -511,16 +718,20 @@ class FollowUpAgent:
             raise FollowUpGenerationError("follow-up evidence has no standard stem")
         template_id = str(current_content.get("template_id") or "").strip()
         template_questions = _TEMPLATE_FALLBACK_QUESTIONS.get(template_id)
+        family = str(current_content.get("family") or "").strip()
+        family_questions = _FAMILY_FALLBACK_QUESTIONS.get(family)
         standard_stem = source_standard_stem
         fallback_questions = (
-            template_questions or _DEFAULT_FALLBACK_QUESTIONS
+            template_questions or family_questions or _DEFAULT_FALLBACK_QUESTIONS
         )
         question_index = min(
             max(round_index - MIN_FOLLOW_UP_ROUNDS, 0),
             len(fallback_questions) - 1,
         )
         question = _validate_question(
-            fallback_questions[question_index],
+            fallback_questions[question_index].format(
+                standard_stem=source_standard_stem.rstrip("。？！?!"),
+            ),
             standard_stem=source_standard_stem,
             evidence=evidence,
         )
@@ -707,6 +918,10 @@ class FollowUpAgent:
                         "current_evidence_rows": list(
                             _expected_rows(current_evidence)
                         ),
+                        "answer_requirements": _answer_requirements(
+                            current_content,
+                            current_evidence,
+                        ),
                         "candidates": candidate_summary,
                         "allowed_targets": [
                             *allowed_targets,
@@ -758,7 +973,7 @@ class FollowUpAgent:
 
         assessment = str(result.data["assessment"])
         diagnosed = str(result.data["diagnosed_misconception"])
-        if assessment == "unknown" and _matches_reviewed_completion_extreme(
+        if assessment != "mastered" and _matches_reviewed_answer(
             question=active_question,
             answer=answer,
             evidence=current_evidence,

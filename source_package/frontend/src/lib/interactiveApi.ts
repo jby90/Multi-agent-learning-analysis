@@ -132,6 +132,10 @@ export type InteractiveInteraction =
   | (InteractiveFeedback & {
       kind: 'free_text_follow_up'
       prompt: string
+      task_prompt?: string
+      focus?: string
+      task_knowledge_point?: string
+      task_difficulty?: string
       round: number
       max_rounds: number
       turns: InteractiveFollowUpTurn[]

@@ -405,6 +405,7 @@ onMounted(loadTraces)
     >
       <ProfilePanel v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />
       <div
+        id="collaboration-learner-workspace"
         class="live-training-stage"
         :class="{
           'is-empty': !liveView,
@@ -412,13 +413,23 @@ onMounted(loadTraces)
       >
         <header v-if="liveState" class="training-workbench-heading">
           <div>
-            <span class="section-kicker">当前学习阶段</span>
+            <span class="section-kicker">
+              {{ viewMode === 'collaboration' ? '协同操作区 · 当前学习阶段' : '当前学习阶段' }}
+            </span>
             <strong>{{ liveWorkbenchTitle }}</strong>
+            <small v-if="viewMode === 'collaboration'" class="collaboration-operation-note">
+              与上方拓扑使用同一会话，本区操作会实时触发 Agent
+            </small>
           </div>
           <div class="training-workbench-actions">
             <span class="training-workbench-status">
               {{ liveWorkbenchStatus }}
             </span>
+            <a
+              v-if="viewMode === 'collaboration'"
+              class="return-to-topology"
+              href="#collaboration-topology-workspace"
+            >返回拓扑 ↑</a>
             <button
               type="button"
               class="restart-training"
@@ -475,12 +486,14 @@ onMounted(loadTraces)
       </div>
       <CollaborationWorkspace
         v-if="viewMode === 'collaboration' && liveView"
+        id="collaboration-topology-workspace"
         :view="liveView"
         :events="liveAgentEvents"
         :contract="liveState?.learning_contract ?? undefined"
         :evidence-bundle="liveState?.evidence_bundle ?? undefined"
         :resource-bundle="liveState?.resource_bundle ?? undefined"
         :coordination-evidence="liveState?.coordination_evidence"
+        learner-workspace-target="#collaboration-learner-workspace"
       />
       <LearningPath v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />
       <FloatingAgentAssistant

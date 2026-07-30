@@ -1243,6 +1243,52 @@ describe('LivePractice', () => {
       .toContain('AZTP和ZZTP的完成率')
   })
 
+  it('keeps the original task visible while a reviewed follow-up is active', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S8_PROBE',
+      awaiting: 'follow_up',
+      messages: [
+        {
+          agent: 'task',
+          role: 'produce',
+          payload: { content: {
+            contextualized_stem: '查询2025年5月至7月三道工序月完成率，筛查疑似传导。',
+            knowledge_point: '传导时滞分析',
+            difficulty: 'advanced',
+          } },
+        },
+        {
+          agent: 'task',
+          role: 'probe',
+          payload: { content: {
+            event: 'follow_up_question_ready',
+            question: '根据当前查询结果，你会怎样回答题目中的问题？',
+          } },
+        },
+      ],
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '三道工序的最低完成率分别出现在哪个月？',
+        task_prompt: '查询2025年5月至7月三道工序月完成率，筛查疑似传导。',
+        focus: '识别工序、月份和完成率之间的对应关系',
+        round: 2,
+        max_rounds: 4,
+        turns: [],
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    expect(wrapper.get('.follow-up-task-anchor').text())
+      .toContain('查询2025年5月至7月三道工序月完成率')
+    expect(wrapper.get('.follow-up-task-anchor').text())
+      .not.toContain('题目中的问题')
+    expect(wrapper.get('.follow-up-current').text())
+      .toContain('三道工序的最低完成率分别出现在哪个月')
+  })
+
   it('reconciles a follow-up that completed after its response failed', async () => {
     sessionStorage.setItem('ref-interactive-session', 'session-live')
     const api = fakeApi()

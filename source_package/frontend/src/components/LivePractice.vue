@@ -170,7 +170,9 @@ const activeTaskContent = computed<Record<string, unknown> | undefined>(() => {
     if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) continue
     const content = (payload as Record<string, unknown>).content
     if (typeof content !== 'object' || content === null || Array.isArray(content)) continue
-    return content as Record<string, unknown>
+    const contentRecord = content as Record<string, unknown>
+    if (message.role === 'probe' || contentRecord.event === 'follow_up_question_ready') continue
+    return contentRecord
   }
   return undefined
 })
@@ -261,6 +263,19 @@ const followUpTurns = computed(() => {
 const latestFollowUpTurn = computed(() => {
   const turns = followUpTurns.value
   return turns.length ? turns[turns.length - 1] : undefined
+})
+const followUpTaskPrompt = computed(() => {
+  const interaction = session.value?.interaction
+  if (interaction?.kind === 'free_text_follow_up' && interaction.task_prompt?.trim()) {
+    return learnerText(interaction.task_prompt)
+  }
+  return activeTaskPrompt.value
+})
+const followUpFocus = computed(() => {
+  const interaction = session.value?.interaction
+  return interaction?.kind === 'free_text_follow_up' && interaction.focus?.trim()
+    ? learnerText(interaction.focus)
+    : undefined
 })
 
 watch(
@@ -795,6 +810,16 @@ onBeforeUnmount(() => {
         </div>
         <p>结合刚才的数据，用自己的话说明判断依据。</p>
       </header>
+
+      <article v-if="followUpTaskPrompt" class="follow-up-task-anchor">
+        <div>
+          <span>原始实操任务</span>
+          <h3>{{ followUpTaskPrompt }}</h3>
+        </div>
+        <small v-if="followUpFocus">
+          当前核对目标：{{ followUpFocus }}
+        </small>
+      </article>
 
       <section
         v-if="followUpTurns.length"

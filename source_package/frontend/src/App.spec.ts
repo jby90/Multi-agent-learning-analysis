@@ -171,6 +171,48 @@ describe('App', () => {
     expect(wrapper.text()).not.toContain('训练步骤')
   })
 
+  it('keeps the complete learner operation workspace inside live collaboration mode', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-collaboration-operation', 'planner_new', '新入职生产计划员',
+      '先理解工序链。', '1156.87',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, unknown>)
+    const state: InteractiveState = {
+      session_id: 'session-collaboration-operation',
+      trace_id: 'interactive-collaboration-operation',
+      trace_path: 'traces/interactive-collaboration-operation.jsonl',
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages,
+      artifact: null,
+      interaction: null,
+    }
+    const practice = wrapper.getComponent(LivePractice)
+    practice.vm.$emit('state', state)
+    await flushPromises()
+    await wrapper.get('button[aria-label="切换到协同视图"]').trigger('click')
+
+    expect(wrapper.get('.live-workspace').classes()).toContain('is-collaboration-view')
+    expect(wrapper.get('#collaboration-topology-workspace').attributes('id'))
+      .toBe('collaboration-topology-workspace')
+    expect(wrapper.get('#collaboration-learner-workspace').isVisible()).toBe(true)
+    expect(practice.isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="学习与实操指南"]').isVisible()).toBe(true)
+    expect(wrapper.get('.collaboration-learner-jump').attributes('href'))
+      .toBe('#collaboration-learner-workspace')
+    expect(wrapper.get('.return-to-topology').attributes('href'))
+      .toBe('#collaboration-topology-workspace')
+    expect(wrapper.get('.training-workbench-heading').text()).toContain('操作会实时触发 Agent')
+  })
+
   it('uses a focused lesson and switches to a split guide-operation workspace for practice', async () => {
     installFetch()
     const wrapper = mount(App, {
