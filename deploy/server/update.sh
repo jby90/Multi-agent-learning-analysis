@@ -26,9 +26,11 @@ if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
 fi
 
 previous_commit="$(git rev-parse HEAD)"
-git fetch origin "${branch}"
-git checkout "${branch}"
-git merge --ff-only "origin/${branch}"
+if [[ "${SKIP_GIT_FETCH:-0}" != "1" ]]; then
+  git fetch origin "${branch}"
+  git checkout "${branch}"
+  git merge --ff-only "origin/${branch}"
+fi
 target_commit="$(git rev-parse HEAD)"
 
 if docker image inspect "${backend_image}" >/dev/null 2>&1; then
