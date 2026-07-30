@@ -44,8 +44,8 @@ try {
     $remoteCommand = @"
 set -Eeuo pipefail
 cd '$remoteRepo'
-git fetch '$remoteBundle' 'refs/heads/$Branch:refs/remotes/upload/$Branch'
-git merge --ff-only 'refs/remotes/upload/$Branch'
+git fetch '$remoteBundle' 'refs/heads/${Branch}:refs/remotes/upload/${Branch}'
+git merge --ff-only 'refs/remotes/upload/${Branch}'
 rm -f '$remoteBundle'
 SKIP_GIT_FETCH=1 ./deploy/server/update.sh
 "@
