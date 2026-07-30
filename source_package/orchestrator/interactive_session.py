@@ -1519,6 +1519,9 @@ class InteractiveSessionManager:
                     current_task=current_task,
                     round_index=generation_round,
                     max_rounds=MAX_FOLLOW_UP_ROUNDS,
+                    student_answer=answer_text,
+                    current_question=session.follow_up_question,
+                    completion_allowed=submitted_round >= 2,
                     terminal_round=terminal_round,
                 )
             reviewed_product: dict[str, Any] | None = None

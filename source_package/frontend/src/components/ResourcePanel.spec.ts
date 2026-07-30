@@ -69,6 +69,102 @@ describe('ResourcePanel', () => {
     expect(wrapper.get('.lesson-page-heading h3').text()).not.toBe(before)
   })
 
+  it('reports lesson page state so the shell can change layout on the practice page', async () => {
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: taskView('practice_guide', {
+          difficulty: 'basic',
+          question: '查询本月三道工序完成率。',
+          guide_intro: '先确认月份和工序。',
+          guide_steps: ['确认月份。', '选择三道工序。', '核对完成率。'],
+          completion_criteria: ['结果包含三道工序。'],
+        }),
+        lessonPager: true,
+      },
+    })
+
+    expect(wrapper.emitted('pageState')?.at(-1)?.[0]).toMatchObject({ kind: 'metrics' })
+    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
+    while (next.attributes('disabled') === undefined) await next.trigger('click')
+
+    expect(wrapper.emitted('pageState')?.at(-1)?.[0]).toMatchObject({
+      kind: 'task',
+      isLast: true,
+    })
+  })
+
+  it('uses the expanded lesson space for a navigable content overview', async () => {
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: resourceView(
+          '# 岗位微课\n\n#### 学习目标\n\n理解计划量与实际量。\n\n#### 业务判断\n\n根据完成率识别计划偏差。',
+          '根据完成率识别计划偏差。',
+        ),
+        lessonPager: true,
+      },
+    })
+
+    expect(wrapper.find('[aria-label="本节内容概览"]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="最大化微课"]').trigger('click')
+    const overview = wrapper.get('[aria-label="本节内容概览"]')
+    expect(overview.text()).toContain('学习目标')
+    expect(overview.text()).toContain('业务判断')
+
+    await overview.findAll('button')[1]!.trigger('click')
+    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('业务判断')
+  })
+
+  it('does not create an empty lesson page for a standalone document heading', async () => {
+    const view = taskView('practice_guide', {
+      difficulty: 'basic',
+      question: '查询三道工序完成率。',
+      guide_intro: '先确认口径。',
+      guide_steps: ['确认月份。'],
+      completion_criteria: ['返回工序和完成率。'],
+    })
+    if (!view.lecture) throw new Error('fixture must include a lecture')
+    view.lecture.content.lecture_md = '# 微课总标题\n## 学习目标\n掌握三道工序关系。'
+
+    const wrapper = mount(ResourcePanel, {
+      props: { view, lessonPager: true },
+    })
+
+    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('本节关键数据')
+    await wrapper.get('button[aria-label="下一张微课卡片"]').trigger('click')
+    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('学习目标')
+    expect(wrapper.get('.lesson-page-copy').text()).toContain('掌握三道工序关系')
+  })
+
+  it('places progressive hints and the round summary inside the practice guide', async () => {
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: taskView('practice_guide', {
+          difficulty: 'applied',
+          question: '按工序查询三道工序完成率。',
+          guide_intro: '先明确查询范围。',
+          guide_steps: ['确认船号。', '确认月份。', '按工序汇总。'],
+          completion_criteria: ['结果包含工序和完成率。'],
+          query_authority: {
+            output_columns: ['process_code', 'completion_rate'],
+            filter_columns: ['ship_no', 'period_date'],
+            group_by_columns: ['process_code'],
+            time_values: ['2025-05'],
+          },
+        }),
+        lessonPager: true,
+        guidanceFeedback: '字段和值已经能够支撑判断。',
+        guidanceNextStepReason: '可以进入结果解释。',
+      },
+    })
+    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
+    while (next.attributes('disabled') === undefined) await next.trigger('click')
+
+    await wrapper.get('.practice-coaching-heading button').trigger('click')
+    expect(wrapper.get('.practice-coaching').text()).toContain('先确认题目对象')
+    expect(wrapper.get('.practice-round-summary').text()).toContain('字段和值已经能够支撑判断')
+    expect(wrapper.get('.practice-round-summary').text()).toContain('进入下一步的理由')
+  })
+
   it('keeps the current lesson card while entering and leaving focus mode', async () => {
     const wrapper = mount(ResourcePanel, {
       props: {

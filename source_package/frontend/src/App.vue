@@ -31,6 +31,15 @@ const entryMode = ref<'replay' | 'live'>(
 const viewMode = ref<'student' | 'collaboration'>('student')
 const liveDocument = ref<TraceDocument>()
 const liveState = ref<InteractiveState>()
+const livePracticeRef = ref<InstanceType<typeof LivePractice>>()
+type LiveTrainingLayout = 'assessment' | 'transition' | 'lesson' | 'practice' | 'report'
+type LessonPageState = {
+  index: number
+  total: number
+  kind?: 'metrics' | 'section' | 'evidence' | 'task'
+  isLast: boolean
+}
+const liveLessonPage = ref<LessonPageState>({ index: 0, total: 0, isLast: false })
 const {
   events: liveAgentEvents,
   receive: receiveAgentEvent,
@@ -60,6 +69,38 @@ const liveView = computed(() => liveDocument.value
 const liveHasResource = computed(() => Boolean(
   liveView.value?.lecture || liveView.value?.task || liveView.value?.sqlResult,
 ))
+const liveTrainingLayout = computed<LiveTrainingLayout>(() => {
+  const state = liveState.value
+  if (!state || state.awaiting === 'pretest') return 'assessment'
+  if (state.awaiting === 'done') return 'report'
+  if (state.awaiting === 'sql' || state.awaiting === 'follow_up') return 'practice'
+  if (state.state === 'S2_KNOWLEDGE') return 'transition'
+  if (liveView.value?.task && liveLessonPage.value.kind === 'task') return 'practice'
+  if (state.state === 'S3_TASK' && state.awaiting === 'advance' && liveLessonPage.value.isLast) {
+    return 'practice'
+  }
+  if (liveView.value?.lecture) return 'lesson'
+  return 'transition'
+})
+const liveWorkbenchTitle = computed(() => ({
+  assessment: '岗前评测',
+  transition: '训练准备',
+  lesson: '岗位微课',
+  practice: '实操工作台',
+  report: '本轮训练报告',
+})[liveTrainingLayout.value])
+const liveWorkbenchStatus = computed(() => {
+  if (liveTrainingLayout.value === 'lesson') {
+    const page = liveLessonPage.value
+    return page.total ? `学习进度 ${page.index + 1}/${page.total}` : '微课已就绪'
+  }
+  if (liveTrainingLayout.value === 'practice') return '指南与操作同步'
+  if (liveTrainingLayout.value === 'assessment') return '专注完成诊断'
+  if (liveTrainingLayout.value === 'report') return '训练已完成'
+  return liveHasResource.value ? '内容已就绪' : '正在准备'
+})
+const liveFeedback = computed(() => liveState.value?.interaction?.feedback)
+const liveNextStepReason = computed(() => liveState.value?.interaction?.next_step_reason)
 const activeCollision = computed<DataCollision | undefined>(() => {
   if (entryMode.value === 'replay') return replayCollision.value
   return liveCollision.value
@@ -156,6 +197,7 @@ function resetLiveState(): void {
   liveCollision.value = undefined
   liveCollisionKey.value = ''
   dismissedLiveCollision.value = ''
+  liveLessonPage.value = { index: 0, total: 0, isLast: false }
   resetAgentEventPlayback()
 }
 
@@ -370,28 +412,47 @@ onMounted(loadTraces)
       >
         <header v-if="liveState" class="training-workbench-heading">
           <div>
-            <span class="section-kicker">单屏训练台</span>
-            <strong>任务与微课同步工作台</strong>
+            <span class="section-kicker">当前学习阶段</span>
+            <strong>{{ liveWorkbenchTitle }}</strong>
           </div>
-          <span class="training-workbench-status">
-            {{ liveHasResource ? '微课已就绪' : '微课准备中' }}
-          </span>
+          <div class="training-workbench-actions">
+            <span class="training-workbench-status">
+              {{ liveWorkbenchStatus }}
+            </span>
+            <button
+              type="button"
+              class="restart-training"
+              aria-label="重新开始训练"
+              @click="livePracticeRef?.resetSession()"
+            >重新开始</button>
+          </div>
         </header>
         <div
           class="training-workbench-body"
           :class="{
             'has-learning-resource': liveHasResource,
             'is-profile-selection': !liveState,
+            [`is-${liveTrainingLayout}-layout`]: Boolean(liveState),
           }"
         >
           <LivePractice
+            ref="livePracticeRef"
             :class="{ 'training-task-station': Boolean(liveState) }"
+            :style="{
+              display: liveState && liveTrainingLayout === 'lesson' ? 'none' : 'grid',
+            }"
             :sql-result="liveView?.sqlResult"
+            :operation-only="Boolean(liveState)"
             @state="updateLiveState"
             @agent-event="receiveAgentEvent"
             @reset="resetLiveState"
           />
-          <aside v-if="liveState" class="training-lesson-station" aria-label="常驻微课">
+          <aside
+            v-if="liveState"
+            v-show="liveTrainingLayout === 'lesson' || liveTrainingLayout === 'practice'"
+            class="training-lesson-station"
+            aria-label="学习与实操指南"
+          >
             <ResourceBundleStrip
               v-if="liveState.resource_bundle"
               :bundle="liveState.resource_bundle"
@@ -400,6 +461,9 @@ onMounted(loadTraces)
               v-if="liveView && liveHasResource"
               :view="liveView"
               lesson-pager
+              :guidance-feedback="liveFeedback"
+              :guidance-next-step-reason="liveNextStepReason"
+              @page-state="liveLessonPage = $event"
             />
             <section v-else class="lesson-station-placeholder">
               <span>微课</span>

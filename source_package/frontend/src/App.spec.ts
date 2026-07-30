@@ -103,6 +103,7 @@ describe('App', () => {
     await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
 
     expect(wrapper.find('[aria-label="岗位实操通道"]').exists()).toBe(true)
+    expect(wrapper.getComponent(LivePractice).attributes('style')).toContain('display: grid')
     expect(wrapper.find('select[aria-label="选择回放会话"]').exists()).toBe(false)
 
     await wrapper.get('button[aria-label="进入会话回放"]').trigger('click')
@@ -160,13 +161,17 @@ describe('App', () => {
 
     expect(wrapper.find('[data-testid="live-step-guide"]').exists()).toBe(false)
     expect(wrapper.find('[aria-label="切换训练内容"]').exists()).toBe(false)
-    expect(wrapper.get('.training-workbench-body')).toBeTruthy()
-    expect(wrapper.get('[aria-label="常驻微课"]').text()).toContain('完成岗前诊断后生成')
+    expect(wrapper.get('.training-workbench-body').classes()).toContain('is-assessment-layout')
+    expect(wrapper.get('.training-workbench-heading').text()).toContain('岗前评测')
+    expect(wrapper.find('.live-practice-heading').exists()).toBe(false)
+    expect(wrapper.get('.training-workbench-heading .restart-training').text()).toBe('重新开始')
+    expect(wrapper.get('[aria-label="岗位实操通道"]').isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="学习与实操指南"]').isVisible()).toBe(false)
     expect(wrapper.get('.learning-path').text()).toContain('培养路径')
     expect(wrapper.text()).not.toContain('训练步骤')
   })
 
-  it('keeps the current task and paged lesson visible in one persistent workbench', async () => {
+  it('uses a focused lesson and switches to a split guide-operation workspace for practice', async () => {
     installFetch()
     const wrapper = mount(App, {
       global: { stubs: { DiagnosisRadar: true } },
@@ -196,15 +201,102 @@ describe('App', () => {
 
     expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
     expect(practice.isVisible()).toBe(true)
-    expect(wrapper.get('[aria-label="常驻微课"]').isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="学习与实操指南"]').isVisible()).toBe(true)
     expect(wrapper.get('[aria-label="微课分页阅读"]').isVisible()).toBe(true)
-    expect(wrapper.get('.training-workbench-heading').text()).toContain('任务与微课同步工作台')
+    expect(wrapper.get('.training-workbench-body').classes()).toContain('is-practice-layout')
+    expect(wrapper.get('.training-workbench-heading').text()).toContain('实操工作台')
 
     practice.vm.$emit('state', { ...state, messages: [...messages] })
     await flushPromises()
 
     expect(practice.isVisible()).toBe(true)
-    expect(wrapper.get('[aria-label="常驻微课"]').isVisible()).toBe(true)
+    expect(wrapper.get('[aria-label="学习与实操指南"]').isVisible()).toBe(true)
+  })
+
+  it('shows the microcourse full-width until its final practice page', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-lesson', 'planner_new', '新入职生产计划员',
+      '先理解工序链。', '1156.87',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, unknown>)
+    const state: InteractiveState = {
+      session_id: 'session-lesson',
+      trace_id: 'interactive-lesson',
+      trace_path: 'traces/interactive-lesson.jsonl',
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages,
+      artifact: null,
+      interaction: null,
+    }
+    wrapper.getComponent(LivePractice).vm.$emit('state', state)
+    await flushPromises()
+
+    const workbench = wrapper.get('.training-workbench-body')
+    expect(workbench.classes()).toContain('is-lesson-layout')
+    expect(wrapper.getComponent(LivePractice).attributes('style')).toContain('display: none')
+    expect(wrapper.get('[aria-label="微课分页阅读"]').isVisible()).toBe(true)
+
+    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
+    while (next.attributes('disabled') === undefined) {
+      await next.trigger('click')
+      await flushPromises()
+    }
+
+    expect(workbench.classes()).toContain('is-practice-layout')
+    expect(wrapper.getComponent(LivePractice).attributes('style')).toContain('display: grid')
+    expect(wrapper.get('.lesson-page-heading h3').text()).toMatch(/实操指南|练习题/)
+  })
+
+  it('reveals the task action on the last lesson page before the guide has been generated', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-lesson-handoff',
+      'planner_new',
+      '新入职生产计划员',
+      '## 要点一\n先理解三道工序。\n## 要点二\n再核对传导关系。',
+      '1156.87',
+    ).split('\n').slice(0, 5).map((line) => JSON.parse(line) as Record<string, unknown>)
+    const state: InteractiveState = {
+      session_id: 'session-lesson-handoff',
+      trace_id: 'interactive-lesson-handoff',
+      trace_path: 'traces/interactive-lesson-handoff.jsonl',
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages,
+      artifact: null,
+      interaction: null,
+    }
+    wrapper.getComponent(LivePractice).vm.$emit('state', state)
+    await flushPromises()
+
+    const workbench = wrapper.get('.training-workbench-body')
+    expect(workbench.classes()).toContain('is-lesson-layout')
+    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
+    while (next.attributes('disabled') === undefined) {
+      await next.trigger('click')
+      await flushPromises()
+    }
+
+    expect(workbench.classes()).toContain('is-practice-layout')
+    expect(wrapper.getComponent(LivePractice).attributes('style')).toContain('display: grid')
+    expect(next.attributes('disabled')).toBeDefined()
   })
 
   it('clears restored live panels when the learner restarts', async () => {

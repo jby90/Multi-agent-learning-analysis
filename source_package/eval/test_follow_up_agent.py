@@ -370,7 +370,17 @@ def test_follow_up_model_receives_the_active_question_and_reviewed_rows() -> Non
     assert turn.product is None
 
 
-def test_reviewed_extreme_field_and_value_override_an_unknown_false_negative() -> None:
+@pytest.mark.parametrize(
+    "student_answer",
+    (
+        "YCL完成率最低 0.6236",
+        "YCL 0.6236",
+        "YCL 62.36%",
+    ),
+)
+def test_reviewed_extreme_field_and_value_override_an_unknown_false_negative(
+    student_answer: str,
+) -> None:
     llm = FollowUpLLM(
         {
             "assessment": "unknown",
@@ -383,7 +393,7 @@ def test_reviewed_extreme_field_and_value_override_an_unknown_false_negative() -
     agent = FollowUpAgent("trace-production_progress", llm_call=llm)
 
     turn = agent.generate(
-        student_answer="YCL完成率最低 0.6236",
+        student_answer=student_answer,
         current_task=_current_task(task_agent, "T-03"),
         task_agent=task_agent,
         current_question=(
@@ -434,6 +444,36 @@ def test_reviewed_extreme_guard_does_not_accept_incomplete_or_mismatched_evidenc
     )
 
     assert turn.assessment == "unknown"
+
+
+def test_reviewed_ship_extreme_is_preserved_when_the_model_is_unavailable() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress")
+    current_task = _current_task(task_agent, "T-01-A")
+    question = (
+        "根据刚才的船号对比，哪一艘船的完成率最低，"
+        "你依据的数值是什么？"
+    )
+
+    continued = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+        student_answer="H2601 0.6236",
+        current_question=question,
+    )
+    assert continued.assessment == "mastered"
+    assert continued.product is not None
+    assert continued.model == "deterministic-reviewed-answer"
+
+    completed = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=3,
+        student_answer="H2601 62.36%",
+        current_question=question,
+        completion_allowed=True,
+    )
+    assert completed.assessment == "mastered"
+    assert completed.product is None
 
 
 def test_advanced_delay_fallback_uses_template_specific_questions() -> None:

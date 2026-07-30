@@ -27,8 +27,10 @@ const props = withDefaults(defineProps<{
   api?: InteractiveApi
   pollIntervalMs?: number
   sqlResult?: TraceMessage
+  operationOnly?: boolean
 }>(), {
   pollIntervalMs: 1500,
+  operationOnly: false,
 })
 
 const emit = defineEmits<{
@@ -67,6 +69,12 @@ const currentPretestAnswered = computed(() => {
   return Boolean(question && answers.value[question.question_id])
 })
 const isLastPretestPage = computed(() => pretestPage.value >= questions.value.length - 1)
+const stationTitle = computed(() => {
+  if (session.value?.awaiting === 'pretest') return '岗前评测'
+  if (session.value?.awaiting === 'done') return '训练报告'
+  if (session.value?.state === 'S2_KNOWLEDGE') return '微课准备'
+  return '实操'
+})
 
 const advanceAction = computed(() => {
   const value = session.value
@@ -97,12 +105,15 @@ const completionMessage = computed(() => {
 })
 
 const nextKnowledgePoint = computed(() => {
-  const interaction = session.value?.interaction
+  const value = session.value
+  const interaction = value?.interaction
   if (
-    session.value?.awaiting !== 'done'
-    || session.value.outcome !== 'completed'
-    || interaction?.kind !== 'next_learning_step'
+    value?.awaiting !== 'done'
+    || value.outcome !== 'completed'
   ) return undefined
+  const reportNext = value.training_report?.next_knowledge_point
+  if (typeof reportNext === 'string' && reportNext.trim()) return reportNext.trim()
+  if (interaction?.kind !== 'next_learning_step') return undefined
   return interaction.knowledge_point
     || interaction.message.replace(/^下一知识点[：:]\s*/u, '').trim()
 })
@@ -506,6 +517,8 @@ function resetSession(): void {
   emit('reset')
 }
 
+defineExpose({ resetSession })
+
 onMounted(async () => {
   const storedSession = sessionStorage.getItem(sessionStorageKey)
   if (storedSession) {
@@ -534,14 +547,14 @@ onBeforeUnmount(() => {
     class="live-practice panel"
     :class="{
       'is-profile-picker': !session,
-      'has-inline-result': Boolean(session && sqlResult),
+      'has-inline-result': Boolean(session && session.awaiting !== 'done' && sqlResult),
     }"
     aria-label="岗位实操通道"
   >
-    <header v-if="session" class="live-practice-heading">
+    <header v-if="session && !operationOnly" class="live-practice-heading">
       <div>
         <span class="section-kicker">当前任务</span>
-        <h2>实操</h2>
+        <h2>{{ stationTitle }}</h2>
       </div>
       <button
         type="button"
@@ -553,7 +566,7 @@ onBeforeUnmount(() => {
     </header>
 
     <SqlResultTable
-      v-if="session && sqlResult"
+      v-if="session && session.awaiting !== 'done' && sqlResult"
       class="task-inline-result"
       title="拖动右下角可调整查询结果高度"
       :message="sqlResult"
@@ -680,7 +693,7 @@ onBeforeUnmount(() => {
 
     <div v-else-if="advanceAction" class="live-action-block">
       <section
-        v-if="session.interaction?.feedback || session.interaction?.next_step_reason"
+        v-if="!operationOnly && (session.interaction?.feedback || session.interaction?.next_step_reason)"
         class="answer-feedback-card"
         aria-live="polite"
       >
@@ -711,14 +724,14 @@ onBeforeUnmount(() => {
       <header>
         <span>数据实操</span>
       </header>
-      <article v-if="activeTaskPrompt" class="sql-task-brief">
+      <article v-if="!operationOnly && activeTaskPrompt" class="sql-task-brief">
         <span>本题任务</span>
         <h3>{{ activeTaskPrompt }}</h3>
         <small v-if="activeTaskKnowledgePoint || activeTaskDifficulty">
           {{ [activeTaskKnowledgePoint, activeTaskDifficulty && `${activeTaskDifficulty}难度`].filter(Boolean).join(' · ') }}
         </small>
       </article>
-      <section class="sql-teacher-hint" aria-label="实操老师提示">
+      <section v-if="!operationOnly" class="sql-teacher-hint" aria-label="实操老师提示">
         <div>
           <strong>实操老师提示</strong>
           <button
@@ -731,7 +744,7 @@ onBeforeUnmount(() => {
           <li v-for="hint in sqlHints.slice(0, sqlHintLevel)" :key="hint">{{ hint }}</li>
         </ol>
       </section>
-      <p class="sql-safety-note">
+      <p v-if="!operationOnly" class="sql-safety-note">
         查询输错时会留在本题并提示修改；系统只会读取数据，修改数据或越权语句会在进入数据库前被拦截。
       </p>
       <p
@@ -820,18 +833,18 @@ onBeforeUnmount(() => {
             <b>你的回答</b>
             {{ learnerText(latestFollowUpTurn.answer) }}
           </p>
-          <p v-if="session.interaction.feedback || latestFollowUpTurn.feedback">
+          <p v-if="!operationOnly && (session.interaction.feedback || latestFollowUpTurn.feedback)">
             <b>老师评价</b>
             {{ learnerText(session.interaction.feedback || latestFollowUpTurn.feedback || '') }}
           </p>
-          <small v-if="session.interaction.next_step_reason">
+          <small v-if="!operationOnly && session.interaction.next_step_reason">
             继续本知识点：{{ learnerText(session.interaction.next_step_reason) }}
           </small>
         </article>
       </section>
 
       <section
-        v-else-if="session.interaction.feedback || session.interaction.next_step_reason"
+        v-else-if="!operationOnly && (session.interaction.feedback || session.interaction.next_step_reason)"
         class="answer-feedback-card is-compact"
         aria-live="polite"
       >
@@ -890,7 +903,7 @@ onBeforeUnmount(() => {
         </header>
         <div class="training-report-metrics">
           <article v-if="session.training_report.pretest_score">
-            <span>岗前测评</span>
+            <span>岗前评测正确</span>
             <strong>
               {{ session.training_report.pretest_score.correct }}/{{ session.training_report.pretest_score.total }}
             </strong>
@@ -914,7 +927,7 @@ onBeforeUnmount(() => {
         </div>
         <p>{{ learnerText(session.training_report.achievement) }}</p>
       </section>
-      <template v-if="nextKnowledgePoint">
+      <section v-if="nextKnowledgePoint" class="training-report-next">
         <p>本知识点已经达标，下一知识点：{{ learnerText(nextKnowledgePoint) }}</p>
         <button
           type="button"
@@ -923,7 +936,7 @@ onBeforeUnmount(() => {
           :disabled="busy"
           @click="continueLearning"
         >{{ busy ? '正在衔接…' : '开始下一知识点' }}</button>
-      </template>
+      </section>
     </div>
 
     <p v-if="errorMessage" class="live-error" role="alert">{{ errorMessage }}</p>

@@ -315,23 +315,20 @@ def _matches_reviewed_completion_extreme(
     """Confirm one narrow, fully reproducible completion-rate extrema answer.
 
     This is intentionally a positive-only guard for model false negatives.  It
-    requires the learner to state the metric, the requested extrema direction,
-    one reviewed row identifier, and that row's exact reviewed value.  It never
-    infers correctness from keywords or from unreviewed model output.
+    requires the question to state the metric and extrema direction, while the
+    learner must cite one reviewed row identifier and that row's exact reviewed
+    value.  The learner does not need to repeat wording already supplied by the
+    question.  It never infers correctness from keywords or unreviewed output.
     """
 
     normalized_question = unicodedata.normalize("NFKC", question).casefold()
     normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
-    if "完成率" not in normalized_question or "完成率" not in normalized_answer:
+    if "完成率" not in normalized_question:
         return False
     if any(token in normalized_question for token in ("最低", "最小")):
         direction = "min"
-        if not any(token in normalized_answer for token in ("最低", "最小")):
-            return False
     elif any(token in normalized_question for token in ("最高", "最大")):
         direction = "max"
-        if not any(token in normalized_answer for token in ("最高", "最大")):
-            return False
     else:
         return False
 
@@ -458,23 +455,45 @@ class FollowUpAgent:
         current_task: Mapping[str, Any],
         round_index: int,
         max_rounds: int = MAX_FOLLOW_UP_ROUNDS,
+        student_answer: str | None = None,
+        current_question: str | None = None,
+        completion_allowed: bool = False,
         terminal_round: bool = False,
     ) -> FollowUpTurn:
         """Build one evidence-bound probe when model output fails hard gates.
 
-        The fallback deliberately does not infer mastery or a misconception.  It
-        keeps the learner in the reviewed follow-up loop and asks for one more
-        item already present in the approved task evidence.
+        The fallback does not infer mastery from free-form semantics.  It may
+        confirm one narrow extrema answer when the identifier and exact value
+        match reviewed rows; otherwise it keeps the learner in the reviewed
+        follow-up loop and asks for another approved evidence item.
         """
 
-        if terminal_round:
+        current_content = _payload_content(current_task)
+        evidence = _evidence_items(current_task)
+        reviewed_mastery = bool(
+            student_answer
+            and current_question
+            and _matches_reviewed_completion_extreme(
+                question=current_question,
+                answer=student_answer,
+                evidence=evidence,
+            )
+        )
+        assessment = "mastered" if reviewed_mastery else "unknown"
+        model = (
+            "deterministic-reviewed-answer"
+            if reviewed_mastery
+            else "deterministic-evidence-fallback"
+        )
+
+        if terminal_round or (completion_allowed and reviewed_mastery):
             return FollowUpTurn(
-                assessment="unknown",
+                assessment=assessment,
                 diagnosed_misconception=UNKNOWN_MISCONCEPTION,
                 next_target_misconception=None,
                 route_support_points=(),
                 product=None,
-                model="deterministic-evidence-fallback",
+                model=model,
                 latency_ms=0,
                 token_usage={
                     "prompt_tokens": 0,
@@ -483,8 +502,6 @@ class FollowUpAgent:
                 },
             )
 
-        current_content = _payload_content(current_task)
-        evidence = _evidence_items(current_task)
         source_standard_stem = str(
             current_content.get("standard_stem")
             or current_content.get("question")
@@ -518,7 +535,7 @@ class FollowUpAgent:
                 }
             ],
             "standard_stem": standard_stem,
-            "assessment": "unknown",
+            "assessment": assessment,
             "target_misconception": UNKNOWN_MISCONCEPTION,
             "follow_up_round": round_index,
             "max_follow_up_rounds": max_rounds,
@@ -545,7 +562,7 @@ class FollowUpAgent:
                 "questions": [question],
                 "target_misconception": UNKNOWN_MISCONCEPTION,
             },
-            "model": "deterministic-evidence-fallback",
+            "model": model,
             "latency_ms": 0,
             "token_usage": {
                 "prompt_tokens": 0,
@@ -558,12 +575,12 @@ class FollowUpAgent:
         if isinstance(profile_ref, str) and profile_ref.strip():
             product["student_profile_ref"] = profile_ref
         return FollowUpTurn(
-            assessment="unknown",
+            assessment=assessment,
             diagnosed_misconception=UNKNOWN_MISCONCEPTION,
             next_target_misconception=UNKNOWN_MISCONCEPTION,
             route_support_points=(),
             product=product,
-            model="deterministic-evidence-fallback",
+            model=model,
             latency_ms=0,
             token_usage={
                 "prompt_tokens": 0,

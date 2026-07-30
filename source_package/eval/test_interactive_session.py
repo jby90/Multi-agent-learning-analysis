@@ -1514,7 +1514,8 @@ def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
     assert continued["interaction"]["prompt"] == (
         "查询结果中AZTP和ZZTP的完成率分别是多少？"
     )
-    assert continued["artifact"]["model"] == "deterministic-evidence-fallback"
+    assert continued["artifact"]["model"] == "deterministic-reviewed-answer"
+    assert continued["interaction"]["feedback"].startswith("回答有效")
 
     continued = manager.submit_follow_up(
         session_id,
@@ -1522,7 +1523,7 @@ def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
         "fallback-turn-2",
     )
 
-    assert continued["state"] == "S8_PROBE"
+    assert continued["state"] == "S7_STUDENT"
     assert continued["awaiting"] == "follow_up"
     assert continued["interaction"]["round"] == 3
     assert len(continued["interaction"]["turns"]) == 2

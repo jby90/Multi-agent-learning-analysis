@@ -16,10 +16,21 @@ import SqlResultTable from './SqlResultTable.vue'
 const props = withDefaults(defineProps<{
   view: TraceView
   lessonPager?: boolean
+  guidanceFeedback?: string
+  guidanceNextStepReason?: string
 }>(), {
   lessonPager: false,
 })
+const emit = defineEmits<{
+  pageState: [value: {
+    index: number
+    total: number
+    kind?: 'metrics' | 'section' | 'evidence' | 'task'
+    isLast: boolean
+  }]
+}>()
 const focusMode = ref(false)
+const guidanceHintLevel = ref(0)
 
 function toggleFocusMode(): void {
   focusMode.value = !focusMode.value
@@ -192,7 +203,7 @@ const lectureSections = computed<LectureSection[]>(() => {
     }
     current.blocks.push(block)
   }
-  return sections
+  return sections.filter((section) => section.blocks.length > 0)
 })
 
 const lessonPageIndex = ref(0)
@@ -222,6 +233,15 @@ const lessonPages = computed<LessonPage[]>(() => {
   return pages
 })
 const currentLessonPage = computed(() => lessonPages.value[lessonPageIndex.value])
+const lessonPanelKicker = computed(() => currentLessonPage.value?.kind === 'task'
+  ? '实操准备'
+  : '分页微课')
+const lessonPanelTitle = computed(() => currentLessonPage.value?.kind === 'task'
+  ? '实操指南'
+  : '知识卡片')
+const lessonFocusLabel = computed(() => currentLessonPage.value?.kind === 'task'
+  ? '专注查看指南'
+  : '专注学习')
 
 const lectureMetrics = computed<KeyMetric[]>(() => {
   const metrics: KeyMetric[] = []
@@ -285,10 +305,28 @@ watch(
   () => { lessonPageIndex.value = 0 },
 )
 watch(
+  () => props.view.task?.msgId,
+  (taskMessageId) => {
+    if (props.lessonPager && taskMessageId) {
+      lessonPageIndex.value = Math.max(0, lessonPages.value.length - 1)
+    }
+  },
+)
+watch(
   () => lessonPages.value.length,
   (length) => {
     lessonPageIndex.value = Math.min(lessonPageIndex.value, Math.max(0, length - 1))
   },
+)
+watch(
+  [lessonPageIndex, () => lessonPages.value.length, () => currentLessonPage.value?.kind],
+  () => emit('pageState', {
+    index: lessonPageIndex.value,
+    total: lessonPages.value.length,
+    kind: currentLessonPage.value?.kind,
+    isLast: lessonPageIndex.value === Math.max(0, lessonPages.value.length - 1),
+  }),
+  { immediate: true },
 )
 
 function previousLessonPage(): void {
@@ -297,6 +335,19 @@ function previousLessonPage(): void {
 
 function nextLessonPage(): void {
   lessonPageIndex.value = Math.min(lessonPages.value.length - 1, lessonPageIndex.value + 1)
+}
+
+function lessonSectionPreview(section: LectureSection): string {
+  return section.blocks
+    .slice(0, 2)
+    .map((block) => learnerText(block.text))
+    .join(' ')
+    .slice(0, 120)
+}
+
+function openLessonSection(sectionIndex: number): void {
+  const pageIndex = lessonPages.value.findIndex((page) => page.key === `section-${sectionIndex}`)
+  if (pageIndex >= 0) lessonPageIndex.value = pageIndex
 }
 
 const lectureKnowledgePoint = computed(() => {
@@ -426,6 +477,34 @@ const guideCriteria = computed(() => {
   ))
 })
 
+function guideStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    : []
+}
+
+const practiceHints = computed(() => {
+  const authority = props.view.task?.content.query_authority
+  const record = typeof authority === 'object' && authority !== null && !Array.isArray(authority)
+    ? authority as Record<string, unknown>
+    : undefined
+  const outputs = guideStringList(record?.output_columns).map(dataFieldLabel)
+  const filters = guideStringList(record?.filter_columns).map(dataFieldLabel)
+  const groups = guideStringList(record?.group_by_columns).map(dataFieldLabel)
+  const timeValues = guideStringList(record?.time_values)
+  return [
+    '先确认题目对象、时间范围和需要比较的指标，再开始查询。',
+    outputs.length
+      ? `结果至少应包含：${outputs.join('、')}。`
+      : '查询结果中的字段应能直接回答题目。',
+    [
+      filters.length ? `筛选条件要覆盖${filters.join('、')}` : '',
+      timeValues.length ? `时间范围要包含${timeValues.join('、')}` : '',
+      groups.length ? `结果需要按${groups.join('、')}进行比较` : '',
+    ].filter(Boolean).join('；') || '提交前核对结果行数、单位和统计口径。',
+  ]
+})
+
 const taskMisconception = computed(() => {
   const value = props.view.task?.content.misconception
   return typeof value === 'string' ? misconceptionLabel(value) : undefined
@@ -457,8 +536,8 @@ function claimsFor(message: TraceMessage, text: string) {
   >
     <header class="panel-heading resource-heading">
       <div>
-        <span v-if="lessonPager" class="section-kicker">常驻微课</span>
-        <h2>{{ lessonPager ? '知识卡片' : '微课 / 实操' }}</h2>
+        <span v-if="lessonPager" class="section-kicker">{{ lessonPanelKicker }}</span>
+        <h2>{{ lessonPager ? lessonPanelTitle : '微课 / 实操' }}</h2>
       </div>
       <div class="resource-heading-status">
         <span v-if="hasApprovedResource" class="professional-review-badge">
@@ -468,13 +547,13 @@ function claimsFor(message: TraceMessage, text: string) {
         <button
           type="button"
           class="content-focus-toggle"
-          :aria-label="focusMode ? '退出微课专注模式' : '最大化微课'"
-          :title="focusMode ? '退出专注模式（Esc）' : '最大化微课'"
+          :aria-label="focusMode ? currentLessonPage?.kind === 'task' ? '退出实操指南专注模式' : '退出微课专注模式' : currentLessonPage?.kind === 'task' ? '最大化实操指南' : '最大化微课'"
+          :title="focusMode ? '退出专注模式（Esc）' : currentLessonPage?.kind === 'task' ? '最大化实操指南' : '最大化微课'"
           @click="toggleFocusMode"
         >
           <Minimize2 v-if="focusMode" :size="16" aria-hidden="true" />
           <Maximize2 v-else :size="16" aria-hidden="true" />
-          <span>{{ focusMode ? '还原' : '专注学习' }}</span>
+          <span>{{ focusMode ? '还原' : lessonFocusLabel }}</span>
         </button>
       </div>
     </header>
@@ -495,6 +574,35 @@ function claimsFor(message: TraceMessage, text: string) {
             <strong class="instrument-number">{{ metric.value }}</strong>
           </article>
         </div>
+
+        <section
+          v-if="focusMode && currentLessonPage.kind === 'metrics' && lectureSections.length"
+          class="lesson-page-overview"
+          aria-label="本节内容概览"
+        >
+          <header>
+            <div>
+              <span>本节内容概览</span>
+              <strong>从关键数据进入业务理解</strong>
+            </div>
+            <small>共 {{ lectureSections.length }} 个知识模块</small>
+          </header>
+          <div class="lesson-overview-grid">
+            <button
+              v-for="(section, index) in lectureSections"
+              :key="`${index}-${section.title ?? '知识卡片'}`"
+              type="button"
+              @click="openLessonSection(index)"
+            >
+              <b>{{ String(index + 1).padStart(2, '0') }}</b>
+              <span>
+                <strong>{{ section.title || `知识卡片 ${index + 1}` }}</strong>
+                <small>{{ lessonSectionPreview(section) }}</small>
+              </span>
+              <i aria-hidden="true">→</i>
+            </button>
+          </div>
+        </section>
 
         <div
           v-else-if="currentLessonPage.kind === 'section' && currentLessonPage.section"
@@ -553,10 +661,45 @@ function claimsFor(message: TraceMessage, text: string) {
           </div>
           <h3 :class="{ 'guide-question': isPracticeGuide }">{{ taskQuestion }}</h3>
           <p v-if="isPracticeGuide && hasGuideStructure" class="guide-intro">{{ guideIntro }}</p>
+          <div v-if="isPracticeGuide && hasGuideStructure" class="lesson-guide-sections">
+            <section class="guide-section" aria-label="操作步骤">
+              <h4>操作步骤</h4>
+              <ol class="guide-steps">
+                <li v-for="(step, index) in guideSteps" :key="`${index}-${step}`">{{ step }}</li>
+              </ol>
+            </section>
+            <section class="guide-section" aria-label="完成标准">
+              <h4>完成标准</h4>
+              <ul class="guide-criteria">
+                <li v-for="(criterion, index) in guideCriteria" :key="`${index}-${criterion}`">
+                  {{ criterion }}
+                </li>
+              </ul>
+            </section>
+          </div>
           <p v-if="taskMisconception" class="probe-notice">
             <CircleAlert :size="15" aria-hidden="true" />
             本题针对：{{ taskMisconception }}
           </p>
+          <section class="practice-coaching" aria-label="实操辅助信息">
+            <div class="practice-coaching-heading">
+              <strong>实操老师提示</strong>
+              <button
+                type="button"
+                @click="guidanceHintLevel = guidanceHintLevel >= practiceHints.length ? 0 : guidanceHintLevel + 1"
+              >{{ guidanceHintLevel >= practiceHints.length ? '收起提示' : `查看提示 ${guidanceHintLevel + 1}/${practiceHints.length}` }}</button>
+            </div>
+            <ol v-if="guidanceHintLevel">
+              <li v-for="hint in practiceHints.slice(0, guidanceHintLevel)" :key="hint">{{ hint }}</li>
+            </ol>
+            <article v-if="guidanceFeedback || guidanceNextStepReason" class="practice-round-summary">
+              <strong>本轮小结</strong>
+              <p v-if="guidanceFeedback">{{ learnerText(guidanceFeedback) }}</p>
+              <small v-if="guidanceNextStepReason">
+                进入下一步的理由：{{ learnerText(guidanceNextStepReason) }}
+              </small>
+            </article>
+          </section>
         </section>
 
         <ul v-else class="lesson-page-evidence">
@@ -859,6 +1002,99 @@ function claimsFor(message: TraceMessage, text: string) {
   font-size: 18px;
 }
 
+.lesson-page-overview {
+  display: grid;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.lesson-page-overview > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lesson-page-overview > header div {
+  display: grid;
+  gap: 4px;
+}
+
+.lesson-page-overview > header span,
+.lesson-page-overview > header small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.lesson-page-overview > header strong {
+  color: var(--text);
+  font-size: 17px;
+}
+
+.lesson-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.lesson-overview-grid button {
+  min-width: 0;
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 15px;
+  color: inherit;
+  text-align: left;
+  background: #f7f8fa;
+  border: 1px solid rgba(22, 43, 74, 0.08);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.lesson-overview-grid button:hover {
+  border-color: rgba(0, 113, 227, 0.28);
+  box-shadow: 0 10px 26px rgba(22, 43, 74, 0.08);
+  transform: translateY(-1px);
+}
+
+.lesson-overview-grid button > b {
+  color: var(--blue);
+  font-size: 11px;
+}
+
+.lesson-overview-grid button > span {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.lesson-overview-grid button span > strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-overview-grid button span > small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.lesson-overview-grid button > i {
+  color: var(--blue);
+  font-size: 14px;
+  font-style: normal;
+}
+
 .lesson-page-copy {
   display: grid;
   gap: 12px;
@@ -982,5 +1218,85 @@ function claimsFor(message: TraceMessage, text: string) {
 
 .guide-criteria li::marker {
   color: var(--paper-green);
+}
+
+.lesson-guide-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 14px;
+}
+
+.lesson-guide-sections .guide-section {
+  min-width: 0;
+  padding: 12px 14px;
+  background: #f7f7f9;
+  border-radius: 12px;
+}
+
+.lesson-guide-sections .guide-section + .guide-section {
+  margin-top: 0;
+}
+
+.practice-coaching {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(0, 113, 227, 0.055);
+  border: 1px solid rgba(0, 113, 227, 0.13);
+  border-radius: 12px;
+}
+
+.practice-coaching-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.practice-coaching-heading strong,
+.practice-round-summary strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.practice-coaching-heading button {
+  padding: 0;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 650;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.practice-coaching > ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.practice-round-summary {
+  display: grid;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 113, 227, 0.12);
+}
+
+.practice-round-summary p,
+.practice-round-summary small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .lesson-guide-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

@@ -62,6 +62,27 @@ function fakeApi(): InteractiveApi {
   }
 }
 
+function sqlResultMessage(): TraceMessage {
+  return {
+    msgId: 'sql-result-report',
+    traceId: 'interactive-session-live',
+    step: 8,
+    agent: 'verification',
+    role: 'produce',
+    payloadType: 'sql_result',
+    content: {
+      question: '按工序查询完成率',
+      columns: ['process_code', 'complete_rate'],
+      rows: [{ process_code: 'YCL', complete_rate: '0.6236' }],
+    },
+    evidence: [],
+    claims: [],
+    timestamp: '2026-07-30T00:00:00Z',
+    rejectedByBus: false,
+    busErrors: [],
+  }
+}
+
 
 describe('LivePractice', () => {
   afterEach(() => {
@@ -143,6 +164,38 @@ describe('LivePractice', () => {
     expect(wrapper.get('.training-report').text()).toContain('2 次')
     expect(wrapper.get('.training-report').text()).toContain('3 轮')
     expect(wrapper.get('.training-report').text()).toContain('已完成')
+  })
+
+  it('keeps the report focused and exposes the next knowledge point from the report', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S10_DONE',
+      awaiting: 'done',
+      outcome: 'completed',
+      interaction: null,
+      training_report: {
+        title: '本轮训练报告',
+        knowledge_point: '三道工序与传导关系',
+        pretest_score: { correct: 3, total: 5, rate: 0.6 },
+        query_count: 2,
+        follow_up_rounds: 2,
+        completed_correction: true,
+        achievement: '本轮训练已经完成。',
+        next_knowledge_point: '计划量与实际量口径',
+      },
+    }))
+    const sqlResult = sqlResultMessage()
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, sqlResult },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.task-inline-result').exists()).toBe(false)
+    expect(wrapper.get('.training-report-metrics').text()).toContain('岗前评测正确')
+    expect(wrapper.get('.training-report-metrics').text()).toContain('3/5')
+    expect(wrapper.get('.training-report-next').text()).toContain('计划量与实际量口径')
+    expect(wrapper.find('button[aria-label="开始下一知识点"]').exists()).toBe(true)
   })
 
   it('keeps the latest verified query result inside the task station', async () => {
@@ -227,7 +280,7 @@ describe('LivePractice', () => {
       'PT-5': 'B',
     })
     expect(wrapper.text()).toContain('打开岗位微课')
-    expect(wrapper.get('.live-practice-heading h2').text()).toBe('实操')
+    expect(wrapper.get('.live-practice-heading h2').text()).toBe('微课准备')
     expect(wrapper.find('.live-practice-heading p').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('每一步由你亲自完成')
     expect(wrapper.emitted('state')?.at(-1)?.[0]).toMatchObject({
