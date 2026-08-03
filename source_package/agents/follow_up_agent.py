@@ -493,6 +493,109 @@ def _matches_reviewed_completion_extreme(
     return any(identifier in normalized_answer for identifier in identifiers)
 
 
+def reviewed_answer_correction(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> str | None:
+    """Return one evidence-bounded correction for a contradicted extreme.
+
+    The correction is intentionally narrower than answer assessment.  It only
+    fires when the current question asks for a completion-rate minimum or
+    maximum and the learner explicitly cites a reviewed losing row or value.
+    Merely omitting the value remains a request for more evidence, not an
+    incorrect-answer accusation.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    if "完成率" not in normalized_question:
+        return None
+    if any(token in normalized_question for token in ("最低", "最小")):
+        direction = "min"
+        direction_label = "最低值"
+    elif any(token in normalized_question for token in ("最高", "最大")):
+        direction = "max"
+        direction_label = "最高值"
+    else:
+        return None
+
+    rows = _expected_rows(evidence)
+    if len(rows) < 2:
+        return None
+    common_keys = set(rows[0])
+    for row in rows[1:]:
+        common_keys.intersection_update(row)
+    metric_keys = [
+        key
+        for key in common_keys
+        if _match_key(key)
+        in {"completerate", "completionrate", _match_key("完成率")}
+    ]
+    if len(metric_keys) != 1:
+        return None
+    metric_key = metric_keys[0]
+    reviewed: list[tuple[Mapping[str, Any], Decimal]] = []
+    for row in rows:
+        value = _decimal_scalar(row.get(metric_key))
+        if value is None:
+            return None
+        reviewed.append((row, value))
+    extreme_value = (
+        min(value for _, value in reviewed)
+        if direction == "min"
+        else max(value for _, value in reviewed)
+    )
+    winners = [row for row, value in reviewed if value == extreme_value]
+    if len(winners) != 1:
+        return None
+    winner = winners[0]
+
+    def identifiers(row: Mapping[str, Any]) -> tuple[str, ...]:
+        return tuple(
+            unicodedata.normalize("NFKC", str(value)).strip()
+            for key, value in row.items()
+            if key != metric_key
+            and isinstance(value, str)
+            and value.strip()
+            and _decimal_scalar(value) is None
+        )
+
+    winner_identifiers = identifiers(winner)
+    if not winner_identifiers:
+        return None
+    if (
+        any(item.casefold() in normalized_answer for item in winner_identifiers)
+        and _answer_cites_reviewed_value(answer, extreme_value)
+    ):
+        return None
+
+    contradicted: tuple[Mapping[str, Any], Decimal] | None = None
+    for row, value in reviewed:
+        if row is winner:
+            continue
+        row_identifiers = identifiers(row)
+        if any(item.casefold() in normalized_answer for item in row_identifiers):
+            contradicted = (row, value)
+            break
+        if _answer_cites_reviewed_value(answer, value):
+            contradicted = (row, value)
+            break
+    if contradicted is None:
+        return None
+
+    wrong_row, wrong_value = contradicted
+    wrong_identifiers = identifiers(wrong_row)
+    if not wrong_identifiers:
+        return None
+    return (
+        f"需要纠正：查询结果显示 {winner_identifiers[0]} 的完成率为 "
+        f"{winner[metric_key]}，是{direction_label}；你回答中的 "
+        f"{wrong_identifiers[0]} 为 {wrong_row[metric_key]}，不是{direction_label}。"
+    )
+
+
 def _answer_cites_reviewed_value(answer: str, value: Decimal) -> bool:
     normalized = unicodedata.normalize("NFKC", answer).casefold()
     if value in _numbers_in(normalized):
@@ -666,6 +769,7 @@ class FollowUpAgent:
         current_question: str | None = None,
         completion_allowed: bool = False,
         terminal_round: bool = False,
+        previous_questions: Sequence[str] = (),
     ) -> FollowUpTurn:
         """Build one evidence-bound probe when model output fails hard gates.
 
@@ -724,17 +828,35 @@ class FollowUpAgent:
         fallback_questions = (
             template_questions or family_questions or _DEFAULT_FALLBACK_QUESTIONS
         )
-        question_index = min(
+        previous_keys = {
+            _match_key(item)
+            for item in previous_questions
+            if isinstance(item, str) and item.strip()
+        }
+        start_index = min(
             max(round_index - MIN_FOLLOW_UP_ROUNDS, 0),
             len(fallback_questions) - 1,
         )
-        question = _validate_question(
-            fallback_questions[question_index].format(
-                standard_stem=source_standard_stem.rstrip("。？！?!"),
-            ),
-            standard_stem=source_standard_stem,
-            evidence=evidence,
+        ordered_questions = (
+            *fallback_questions[start_index:],
+            *fallback_questions[:start_index],
         )
+        question = ""
+        for template in ordered_questions:
+            candidate = _validate_question(
+                template.format(
+                    standard_stem=source_standard_stem.rstrip("。？！?!"),
+                ),
+                standard_stem=source_standard_stem,
+                evidence=evidence,
+            )
+            if _match_key(candidate) not in previous_keys:
+                question = candidate
+                break
+        if not question:
+            raise FollowUpGenerationError(
+                "no unused evidence-bound fallback question remains"
+            )
         evidence_refs = [str(item["ref"]) for item in evidence]
         content: dict[str, Any] = {
             "event": "follow_up_question_ready",
@@ -815,6 +937,7 @@ class FollowUpAgent:
         review_feedback: Sequence[str] = (),
         completion_allowed: bool = False,
         terminal_round: bool = False,
+        previous_questions: Sequence[str] = (),
     ) -> FollowUpTurn:
         answer = normalize_learner_input(student_answer)
         if (
@@ -901,6 +1024,11 @@ class FollowUpAgent:
                     {
                         "student_answer": answer,
                         "current_question": active_question,
+                        "previous_questions": [
+                            item
+                            for item in previous_questions
+                            if isinstance(item, str) and item.strip()
+                        ],
                         "current_task": {
                             key: current_content.get(key)
                             for key in (
@@ -1067,6 +1195,13 @@ class FollowUpAgent:
             standard_stem=standard_stem,
             evidence=evidence,
         )
+        previous_keys = {
+            _match_key(item)
+            for item in previous_questions
+            if isinstance(item, str) and item.strip()
+        }
+        if _match_key(question) in previous_keys:
+            raise FollowUpGenerationError("follow-up question repeats history")
         evidence_refs = [str(item["ref"]) for item in evidence]
         content: dict[str, Any] = {
             "event": "follow_up_question_ready",

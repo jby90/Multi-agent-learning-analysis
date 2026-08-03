@@ -85,11 +85,15 @@ export interface InteractivePretestQuestion {
 
 export type InteractiveOutcome =
   | 'completed'
+  | 'completed_with_deferred'
   | 'safe_rejected'
   | 'external_unavailable'
   | 'system_error'
 
-export type InteractiveFailureOutcome = Exclude<InteractiveOutcome, 'completed'>
+export type InteractiveFailureOutcome = Exclude<
+  InteractiveOutcome,
+  'completed' | 'completed_with_deferred'
+>
 
 export class InteractiveApiError extends Error {
   readonly outcome?: InteractiveFailureOutcome
@@ -108,6 +112,9 @@ export interface InteractiveFollowUpTurn {
   question: string
   answer: string
   feedback?: string
+  assessment?: string
+  diagnosed_misconception?: string
+  target_misconception?: string | null
 }
 
 export interface InteractiveTrainingReport {
@@ -121,6 +128,7 @@ export interface InteractiveTrainingReport {
   completed_correction: boolean
   achievement: string
   next_knowledge_point?: string | null
+  deferred_knowledge_points?: string[]
 }
 
 type InteractiveFeedback = {
@@ -139,6 +147,8 @@ export type InteractiveInteraction =
       round: number
       max_rounds: number
       turns: InteractiveFollowUpTurn[]
+      correction_required?: boolean
+      unresolved_misconceptions?: string[]
     })
   | (InteractiveFeedback & {
       kind: 'data_collision'
@@ -178,6 +188,18 @@ export interface InteractiveState {
   artifact: Record<string, unknown> | null
   interaction: InteractiveInteraction | null
   training_report?: InteractiveTrainingReport | null
+  remediation_status?: {
+    unresolved_misconceptions: string[]
+    attempts: Record<string, number>
+    deferred_knowledge_points: string[]
+    context?: Record<string, unknown> | null
+  }
+  sql_support?: {
+    attempt: number
+    level: 'self_correction' | 'structured_hint' | 'partial_template' | 'step_down'
+    hint: string
+    will_step_down: boolean
+  } | null
   outcome?: InteractiveOutcome | null
 }
 

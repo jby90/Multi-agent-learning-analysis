@@ -2279,6 +2279,7 @@ def test_task_constructor_exposes_optional_llm_dependency() -> None:
     assert signature.parameters["llm_call"].default is None
 
 
+@pytest.mark.live
 def test_live_p4_5_three_profile_tasks_and_one_counter_preserve_parameters() -> None:
     module = _task_module()
     from agents.diagnosis_agent import load_profiles
@@ -2343,6 +2344,7 @@ def test_live_p4_5_three_profile_tasks_and_one_counter_preserve_parameters() -> 
     )
 
 
+@pytest.mark.live
 def test_live_catalog_sqls_match_every_stored_result() -> None:
     catalog = _task_module().load_task_catalog()
     executor = ReadOnlyExecutor(DatabaseSettings.from_environment())

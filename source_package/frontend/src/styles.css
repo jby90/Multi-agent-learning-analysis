@@ -3125,6 +3125,33 @@ p {
   font-size: 14px;
 }
 
+.follow-up-round-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sql-progressive-support {
+  padding: 12px 14px;
+  border: 1px solid #b9d8ff;
+  border-radius: 12px;
+  background: #f1f7ff;
+  color: #24486f;
+}
+
+.sql-progressive-support strong,
+.sql-progressive-support p {
+  display: block;
+  margin: 0;
+}
+
+.sql-progressive-support p {
+  margin-top: 6px;
+  line-height: 1.6;
+}
+
 .follow-up-heading p {
   max-width: 280px;
   margin: 0;
@@ -3302,6 +3329,11 @@ p {
 }
 
 @media (max-width: 720px) {
+  .follow-up-round-label {
+    gap: 0.3rem;
+    font-size: 0.86rem;
+  }
+
   .follow-up-heading {
     align-items: start;
     flex-direction: column;

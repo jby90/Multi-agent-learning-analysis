@@ -1281,6 +1281,7 @@ def test_canonical_sentence_anchor_uses_current_loader_sentence(chunk_id: str) -
     }
 
 
+@pytest.mark.live
 def test_live_knowledge_matrix_and_refusal() -> None:
     chunks = require_valid_chunks(CHUNK_DIR)
     retriever = BM25Retriever(chunks)

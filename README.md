@@ -110,7 +110,7 @@ docker compose `
 ```powershell
 Set-Location source_package
 python -m pip install -r requirements.txt
-python -m pytest eval -k "not live" -q
+python -m pytest eval -m "not live" -q
 ```
 
 前端：

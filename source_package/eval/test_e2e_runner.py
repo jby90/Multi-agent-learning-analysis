@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -268,6 +269,50 @@ def test_runner_does_not_learn_from_approve_with_fix(
     )
 
     assert runtime.learned_knowledge_points == []
+
+
+def test_runner_projects_grounded_lecture_after_r04_preflight_exhaustion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _EvaluationRuntime(
+        _case("direct_correct"),
+        trace_id="p7-r04-projection-a01",
+        paths=RunPaths.under(tmp_path),
+        dependencies=_dependencies(),
+    )
+    candidate = _grounded_lecture(runtime)
+    candidate["payload"]["content"]["lecture_md"] += "\n\n未经绑定的连接性说明"
+
+    monkeypatch.setattr(
+        runtime.knowledge,
+        "generate",
+        lambda **_kwargs: deepcopy(candidate),
+    )
+
+    def semantic_preflight(product: dict[str, Any]) -> dict[str, str] | None:
+        content = product["payload"]["content"]
+        if content.get("generated_by") == "evidence_projection_fallback":
+            return None
+        return {"rule_id": "R-04", "reason": "连接性说明缺少证据"}
+
+    monkeypatch.setattr(runtime.review, "preflight_r04", semantic_preflight)
+    diagnosis = {
+        "payload": {
+            "content": {
+                "difficulty": "basic",
+                "blind_spots": ["计划量与实际量口径"],
+            }
+        }
+    }
+
+    lecture = runtime._lecture_draft(runtime.case.knowledge_point, diagnosis)
+
+    content = lecture["payload"]["content"]
+    assert content["generated_by"] == "evidence_projection_fallback"
+    assert content["fallback_reason"] == "lecture_preflight_exhausted"
+    assert content["discarded_rule_ids"] == ["R-04"]
+    assert lecture["claims"] == candidate["claims"]
 
 
 @pytest.mark.parametrize(

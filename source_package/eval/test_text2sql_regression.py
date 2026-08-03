@@ -187,6 +187,7 @@ def test_latency_summary_rejects_empty_samples() -> None:
         summarize_latencies(())
 
 
+@pytest.mark.live
 def test_all_standard_sql_matches_stored_live_results() -> None:
     executor = ReadOnlyExecutor(DatabaseSettings.from_environment())
 
@@ -722,6 +723,7 @@ def _live_answer(case: object, run_index: int) -> dict:
     return draft
 
 
+@pytest.mark.live
 def test_live_text2sql_regression_three_runs() -> None:
     cases = load_cases(CASE_PATH)
 

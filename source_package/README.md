@@ -42,10 +42,16 @@ Docker 交付物会在首次启动数据库容器时自动完成同一批数据�
 ```powershell
 python -m pip install -r requirements.txt
 $env:FIRST_SEGMENT_RAW_ROOT = "<获授权的第一域和第二域测试数据根目录>"
-python -m pytest eval -k "not live" -q
+python -m pytest eval -m "not live" -q
 ```
 
 `FIRST_SEGMENT_RAW_ROOT` 只用于运行需要受控测试数据的用例。不得把未授权原始数据复制进源码包，也不得用临时数据替代后声称完成全量门禁。
+
+`pytest.ini` 默认排除需要真实模型或数据库的 `live` 测试。只有在正式密钥、只读数据库和运行窗口均已准备好时，才显式运行：
+
+```powershell
+python -m pytest eval -m live -q
+```
 
 ## 前端测试与构建
 

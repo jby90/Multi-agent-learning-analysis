@@ -33,6 +33,7 @@ from eval.trace_dataset import (
 )
 from orchestrator.bus import MessageBus
 from orchestrator.demo_cache import DemoLLMCache
+from orchestrator.demo_session import DemoSessionError, evidence_projection_lecture
 from orchestrator.engine import OrchestratorEngine
 from orchestrator.llm import LLMResult, call_llm
 from orchestrator.outcomes import Outcome, OutcomeError, verification_outcome
@@ -402,6 +403,7 @@ class _EvaluationRuntime:
         )
         generation_difficulty = None if fallback else requested_difficulty
         last_hits: tuple[dict[str, str], ...] = ()
+        last_draft: dict[str, Any] | None = None
         for _ in range(MAX_LECTURE_ATTEMPTS):
             draft = self.knowledge.generate(
                 knowledge_point=knowledge_point,
@@ -421,6 +423,7 @@ class _EvaluationRuntime:
                 draft = deepcopy(draft)
                 content = draft["payload"]["content"]
                 content["difficulty_fallback"] = True
+            last_draft = draft
             hard_hits = evaluate_hard_rules(draft)
             if hard_hits:
                 last_hits = hard_hits
@@ -429,6 +432,16 @@ class _EvaluationRuntime:
             if semantic_hit is None:
                 return draft
             last_hits = (semantic_hit,)
+        if last_draft is not None:
+            try:
+                projected = evidence_projection_lecture(last_draft, last_hits)
+            except DemoSessionError:
+                projected = None
+            if projected is not None:
+                projected_hard_hits = evaluate_hard_rules(projected)
+                projected_semantic_hit = self.review.preflight_r04(projected)
+                if not projected_hard_hits and projected_semantic_hit is None:
+                    return projected
         labels = ",".join(hit["rule_id"] for hit in last_hits)
         raise EvaluationRunError(
             f"lecture failed review preflight after {MAX_LECTURE_ATTEMPTS}: {labels}"

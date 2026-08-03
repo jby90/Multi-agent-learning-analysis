@@ -325,6 +325,7 @@ class LearningContract:
         # Later learning-path updates intentionally carry a changing difficulty.
         if (
             payload_type == "profile_assessment"
+            and self.revision == 1
             and content.get("difficulty") != self.difficulty
         ):
             raise ValueError("review difficulty does not match learning contract")

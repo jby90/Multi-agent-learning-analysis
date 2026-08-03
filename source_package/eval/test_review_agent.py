@@ -2229,6 +2229,7 @@ def test_live_r01_three_attacks_blocked_and_three_correct_accepted() -> None:
     )
 
 
+@pytest.mark.live
 def test_live_r02_three_non_entailing_rejected_and_three_entailing_accepted() -> None:
     # Keep one invalid ref to exercise the deterministic no-LLM R-02 path;
     # semantic cases use byte-exact slices from the approved catalog.
@@ -2331,6 +2332,7 @@ def _live_r03_product(
     return product
 
 
+@pytest.mark.live
 def test_live_r03_three_explicit_cross_level_mismatches_rejected() -> None:
     cases = [
         (

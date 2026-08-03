@@ -5,6 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import sqlglot
+import pytest
 
 from agents.domain_config import load_domain_config
 from agents.sandbox import DatabaseSettings, ReadOnlyExecutor, validate_and_rewrite
@@ -305,6 +306,7 @@ def test_prompt_contains_metric_rule_and_output_alias_contracts() -> None:
     assert "OUT_OF_SCOPE" in prompt
 
 
+@pytest.mark.live
 def test_all_fifteen_few_shots_pass_sandbox_and_match_live_database() -> None:
     examples = extract_few_shot_examples(PROMPT_PATH.read_text(encoding="utf-8"))
     executor = ReadOnlyExecutor(DatabaseSettings.from_environment())

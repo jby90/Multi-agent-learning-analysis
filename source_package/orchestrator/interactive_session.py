@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -26,6 +26,7 @@ from agents.follow_up_agent import (
     contains_engineering_text,
     deterministic_follow_up_route,
     normalize_learner_input,
+    reviewed_answer_correction,
 )
 from agents.misconception_relations import (
     RelationIntegrityError,
@@ -193,6 +194,40 @@ def _is_vacuous_follow_up_answer(value: str) -> bool:
         "不同意",
         "知道",
         "不知道",
+        "不会",
+        "不清楚",
+        "不知道怎么回答",
+        "不知道如何回答",
+        "没学过",
+        "无法判断",
+        "不晓得",
+        "不懂",
+    }
+
+
+def _follow_up_match_key(value: str) -> str:
+    """Return a punctuation-insensitive key for copy/repetition gates."""
+
+    return "".join(
+        character.casefold()
+        for character in value
+        if character.isalnum()
+    )
+
+
+def _is_obviously_unrelated_follow_up_answer(value: str) -> bool:
+    compact = _follow_up_match_key(value)
+    return compact in {
+        _follow_up_match_key(item)
+        for item in (
+            "今天天气不错",
+            "随便写写",
+            "和题目无关",
+            "不相关",
+            "测试一下",
+            "asdfgh",
+            "abcdef",
+        )
     }
 
 
@@ -299,6 +334,11 @@ class _InteractiveSession:
     follow_up_question: str = ""
     follow_up_turns: list[dict[str, Any]] = field(default_factory=list)
     follow_up_target: str | None = None
+    unresolved_misconceptions: set[str] = field(default_factory=set)
+    remediation_attempts: dict[str, int] = field(default_factory=dict)
+    deferred_knowledge_points: list[str] = field(default_factory=list)
+    remediation_excluded_chunk_ids: set[str] = field(default_factory=set)
+    remediation_context: dict[str, Any] | None = None
     probed_misconceptions: set[str] = field(default_factory=set)
     covered_relation_points: set[str] = field(default_factory=set)
     follow_up_had_support: bool = False
@@ -308,6 +348,8 @@ class _InteractiveSession:
     advance_lock: Any = field(default_factory=RLock, repr=False)
     follow_up_lock: Any = field(default_factory=RLock, repr=False)
     query_count: int = 0
+    sql_failure_count: int = 0
+    sql_support: dict[str, Any] | None = None
     outcome: str | None = None
     events: AgentEventStream | None = None
     prefetched_task: dict[str, Any] | None = None
@@ -863,7 +905,7 @@ class InteractiveSessionManager:
             raise InteractiveSessionError("学习契约缺失，无法准备统一证据包。")
         runtime = session.runtime
         knowledge_point = str(blind_spots[0])
-        difficulty = str(diagnosis_content.get("difficulty"))
+        difficulty = session.learning_contract.difficulty
         keywords = tuple(str(item) for item in blind_spots[:3])
 
         def retrieve_knowledge() -> dict[str, Any]:
@@ -879,12 +921,25 @@ class InteractiveSessionManager:
                     None,
                     keywords,
                 )
+            original_chunks = tuple(chunks)
+            if session.remediation_excluded_chunk_ids:
+                alternatives = tuple(
+                    chunk
+                    for chunk in original_chunks
+                    if chunk.chunk_id not in session.remediation_excluded_chunk_ids
+                )
+                if alternatives:
+                    chunks = alternatives
             return {
                 "chunks": chunks,
                 "summary": {
                     "chunk_ids": [chunk.chunk_id for chunk in chunks],
                     "chunk_count": len(chunks),
                     "difficulty_fallback": difficulty_fallback,
+                    "remediation_refresh": bool(session.remediation_context),
+                    "excluded_previous_chunks": sorted(
+                        session.remediation_excluded_chunk_ids
+                    ),
                 },
             }
 
@@ -901,6 +956,11 @@ class InteractiveSessionManager:
                 "lecture_style": str(runtime.profile["lecture_style"]),
                 "difficulty": difficulty,
                 "misconceptions": list(session.learning_contract.misconceptions),
+                "remediation": (
+                    dict(session.remediation_context)
+                    if session.remediation_context is not None
+                    else None
+                ),
             }
 
         evidence_result = self._evidence_stage_executor.execute(
@@ -949,8 +1009,44 @@ class InteractiveSessionManager:
             if session.diagnosis is None:
                 raise InteractiveSessionError("岗前测评结果缺失。")
             diagnosis_content = _payload_content(session.diagnosis)
-            blind_spots = diagnosis_content.get("blind_spots")
-            if not isinstance(blind_spots, list) or not blind_spots:
+            blind_spots = self._effective_blind_spots(session)
+            if not blind_spots:
+                diagnosis_content = _payload_content(session.diagnosis)
+                score = diagnosis_content.get("pretest_score")
+                session.training_report = {
+                    "title": "本轮训练报告",
+                    "knowledge_point": (
+                        session.deferred_knowledge_points[-1]
+                        if session.deferred_knowledge_points
+                        else "本轮知识点"
+                    ),
+                    "initial_difficulty": diagnosis_content.get("difficulty"),
+                    "final_difficulty": (
+                        session.learning_contract.difficulty
+                        if session.learning_contract is not None
+                        else diagnosis_content.get("difficulty")
+                    ),
+                    "pretest_score": (
+                        dict(score) if isinstance(score, Mapping) else None
+                    ),
+                    "query_count": session.query_count,
+                    "follow_up_rounds": session.follow_up_submission_count,
+                    "completed_correction": False,
+                    "achievement": "已完成一次降阶补学；未掌握内容已安全转入后续补学清单。",
+                    "next_knowledge_point": None,
+                    "deferred_knowledge_points": list(
+                        session.deferred_knowledge_points
+                    ),
+                }
+                session.awaiting = "done"
+                session.outcome = "completed_with_deferred"
+                session.interaction = {
+                    "kind": "learning_notice",
+                    "message": "本知识点已转入后续补学清单，本轮学习安全结束。",
+                    "next_step_reason": "同一知识点已经完成一次补学，继续重复不会增加有效证据。",
+                }
+                return self.get_state(session_id)
+            if not isinstance(blind_spots, list):
                 raise InteractiveSessionError("岗前测评没有产生知识盲区。")
             evidence_bundle, evidence_chunks = self._prepare_evidence_bundle(
                 session,
@@ -1099,8 +1195,8 @@ class InteractiveSessionManager:
             if session.diagnosis is None:
                 raise InteractiveSessionError("岗前测评结果缺失。")
             diagnosis_content = _payload_content(session.diagnosis)
-            blind_spots = diagnosis_content.get("blind_spots")
-            if not isinstance(blind_spots, list) or not blind_spots:
+            blind_spots = self._effective_blind_spots(session)
+            if not blind_spots:
                 raise InteractiveSessionError("岗前测评没有产生知识盲区。")
             def produce_task() -> dict[str, Any]:
                 try:
@@ -1388,7 +1484,7 @@ class InteractiveSessionManager:
         return self.get_state(session.session_id)
 
     @staticmethod
-    def _remaining_blind_spots(session: _InteractiveSession) -> list[str]:
+    def _effective_blind_spots(session: _InteractiveSession) -> list[str]:
         if session.diagnosis is None:
             return []
         blind_spots = [
@@ -1396,11 +1492,29 @@ class InteractiveSessionManager:
             for item in _payload_content(session.diagnosis).get("blind_spots", [])
             if isinstance(item, str) and item.strip()
         ]
+        deferred = set(session.deferred_knowledge_points)
+        return [item for item in blind_spots if item not in deferred]
+
+    @staticmethod
+    def _current_knowledge_point(session: _InteractiveSession) -> str | None:
+        for product in (
+            session.learning_task,
+            session.active_task,
+            session.lecture,
+        ):
+            value = _payload_content(product or {}).get("knowledge_point")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        if session.evidence_bundle is not None:
+            return session.evidence_bundle.knowledge_point
+        return None
+
+    @staticmethod
+    def _remaining_blind_spots(session: _InteractiveSession) -> list[str]:
+        blind_spots = InteractiveSessionManager._effective_blind_spots(session)
         if not blind_spots:
             return []
-        current = _payload_content(
-            session.learning_task or session.lecture or {}
-        ).get("knowledge_point")
+        current = InteractiveSessionManager._current_knowledge_point(session)
         remaining = [item for item in blind_spots if item != current]
         if len(remaining) == len(blind_spots):
             return blind_spots[1:]
@@ -1494,10 +1608,22 @@ class InteractiveSessionManager:
             ) from exc
         if _is_vacuous_follow_up_answer(answer_text):
             raise InteractiveSessionError(
-                "请引用查询结果或业务依据说明判断，不能只回答“是”或“否”。"
+                "不会也没关系。请先查看实操老师提示，再引用查询结果中的字段和值说明判断；"
+                "不能只回答“是/否/不会”。"
             )
         if not session.follow_up_question:
             raise InteractiveSessionError("当前理解核对内容不完整，请稍后重试。")
+        if (
+            _follow_up_match_key(answer_text)
+            == _follow_up_match_key(session.follow_up_question)
+        ):
+            raise InteractiveSessionError(
+                "你提交的是题目本身。请引用查询结果中的字段和值作答。"
+            )
+        if _is_obviously_unrelated_follow_up_answer(answer_text):
+            raise InteractiveSessionError(
+                "这段回答与当前问题无关。请引用查询结果中的字段和值作答。"
+            )
 
         session.outcome = None
         runtime = session.runtime
@@ -1529,12 +1655,28 @@ class InteractiveSessionManager:
             )
             session.recorded_turn_ids.add(client_turn_id)
         terminal_round = submitted_round >= MAX_FOLLOW_UP_ROUNDS
+        unresolved_elsewhere = set(session.unresolved_misconceptions)
+        if session.follow_up_target:
+            unresolved_elsewhere.discard(session.follow_up_target)
+        correction_gate_open = not unresolved_elsewhere
+        completion_allowed = submitted_round >= 2 and correction_gate_open
         generation_round = min(
             submitted_round + 1,
             MAX_FOLLOW_UP_ROUNDS,
         )
         probed_snapshot = tuple(sorted(session.probed_misconceptions))
         covered_snapshot = tuple(sorted(session.covered_relation_points))
+        previous_questions = tuple(
+            dict.fromkeys(
+                [
+                    *(
+                        str(turn.get("question", "")).strip()
+                        for turn in session.follow_up_turns
+                    ),
+                    session.follow_up_question,
+                ]
+            )
+        )
         approved_route_support_points: tuple[str, ...] = ()
         try:
             try:
@@ -1548,8 +1690,9 @@ class InteractiveSessionManager:
                     probed_misconceptions=probed_snapshot,
                     covered_relation_points=covered_snapshot,
                     routing_policy=self._routing_policy,
-                    completion_allowed=submitted_round >= 2,
+                    completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
+                    previous_questions=previous_questions,
                 )
             except FollowUpGenerationError:
                 generated = session.follow_up_agent.deterministic_fallback(
@@ -1558,8 +1701,9 @@ class InteractiveSessionManager:
                     max_rounds=MAX_FOLLOW_UP_ROUNDS,
                     student_answer=answer_text,
                     current_question=session.follow_up_question,
-                    completion_allowed=submitted_round >= 2,
+                    completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
+                    previous_questions=previous_questions,
                 )
             reviewed_product: dict[str, Any] | None = None
             if generated.product is not None:
@@ -1568,7 +1712,7 @@ class InteractiveSessionManager:
                     answer_text=answer_text,
                     current_task=current_task,
                     round_index=generation_round,
-                    completion_allowed=submitted_round >= 2,
+                    completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
                     initial=generated,
                     probed_snapshot=probed_snapshot,
@@ -1583,7 +1727,7 @@ class InteractiveSessionManager:
                     diagnosed_misconception=(
                         generated.diagnosed_misconception
                     ),
-                    completion_allowed=submitted_round >= 2,
+                    completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
                     probed_misconceptions=probed_snapshot,
                     covered_relation_points=covered_snapshot,
@@ -1638,14 +1782,50 @@ class InteractiveSessionManager:
                 submitted_round,
             )
         )
+        reviewed_evidence = tuple(
+            item
+            for item in current_task.get("evidence", [])
+            if isinstance(item, Mapping)
+        )
         turn_record = {
             "round": submitted_round,
             "question": session.follow_up_question,
             "answer": text.strip(),
-            "feedback": self._follow_up_feedback(generated.assessment),
+            "feedback": self._follow_up_feedback(
+                generated.assessment,
+                question=session.follow_up_question,
+                answer=text.strip(),
+                evidence=reviewed_evidence,
+            ),
+            "assessment": generated.assessment,
+            "diagnosed_misconception": generated.diagnosed_misconception,
+            "target_misconception": session.follow_up_target,
         }
         session.follow_up_submission_count += 1
-        if generated.assessment == "mastered" and submitted_round >= 2:
+        if generated.assessment == "mastered":
+            resolved_target = session.follow_up_target
+            if resolved_target:
+                session.unresolved_misconceptions.discard(resolved_target)
+            if resolved_target == UNKNOWN_MISCONCEPTION:
+                session.unresolved_misconceptions.discard(UNKNOWN_MISCONCEPTION)
+        else:
+            diagnosed = generated.diagnosed_misconception
+            if diagnosed and diagnosed != UNKNOWN_MISCONCEPTION:
+                session.unresolved_misconceptions.discard(
+                    UNKNOWN_MISCONCEPTION
+                )
+            unresolved = (
+                diagnosed
+                if diagnosed and diagnosed != UNKNOWN_MISCONCEPTION
+                else session.follow_up_target or UNKNOWN_MISCONCEPTION
+            )
+            session.unresolved_misconceptions.add(unresolved)
+
+        if (
+            generated.assessment == "mastered"
+            and submitted_round >= 2
+            and not session.unresolved_misconceptions
+        ):
             session.follow_up_turns.append(turn_record)
             answer = self._finish_mastered_follow_up(
                 session,
@@ -1709,6 +1889,10 @@ class InteractiveSessionManager:
                 else "当前回答的证据或解释还不完整，因此继续留在本知识点，"
                 "用下一问补齐判断依据。"
             ),
+            "correction_required": bool(session.unresolved_misconceptions),
+            "unresolved_misconceptions": sorted(
+                session.unresolved_misconceptions
+            ),
         }
 
         session.follow_up_round = next_round
@@ -1758,6 +1942,17 @@ class InteractiveSessionManager:
                     probed_misconceptions=probed_snapshot,
                     covered_relation_points=covered_snapshot,
                     routing_policy=self._routing_policy,
+                    previous_questions=tuple(
+                        dict.fromkeys(
+                            [
+                                *(
+                                    str(turn.get("question", "")).strip()
+                                    for turn in session.follow_up_turns
+                                ),
+                                session.follow_up_question,
+                            ]
+                        )
+                    ),
                     review_feedback=last_feedback,
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
@@ -2146,12 +2341,25 @@ class InteractiveSessionManager:
             raise InteractiveSessionError("当前理解核对进度无法继续。")
 
     @staticmethod
-    def _follow_up_feedback(assessment: str) -> str:
+    def _follow_up_feedback(
+        assessment: str,
+        *,
+        question: str = "",
+        answer: str = "",
+        evidence: tuple[Mapping[str, Any], ...] = (),
+    ) -> str:
         if assessment == "mastered":
             return "回答有效：你已经引用了与问题对应的数据，并给出了可由当前证据支持的判断。"
         if assessment == "needs_support":
-            return "回答部分有效：方向基本相关，但关键数值、比较对象或因果依据仍不完整。"
-        return "暂时无法确认掌握：当前回答还不足以和查询证据建立稳定对应，请明确引用结果中的字段和值。"
+            feedback = "回答部分有效：方向基本相关，但关键数值、比较对象或因果依据仍不完整。"
+        else:
+            feedback = "暂时无法确认掌握：当前回答还不足以和查询证据建立稳定对应，请明确引用结果中的字段和值。"
+        correction = reviewed_answer_correction(
+            question=question,
+            answer=answer,
+            evidence=evidence,
+        )
+        return f"{correction} {feedback}" if correction else feedback
 
     def _finish_mastered_follow_up(
         self,
@@ -2237,22 +2445,110 @@ class InteractiveSessionManager:
         except DemoSessionError:
             self._finish_system_error(session)
             return None
+        self._apply_t17_remediation(session, feedback=feedback)
+        return answer
+
+    def _apply_t17_remediation(
+        self,
+        session: _InteractiveSession,
+        *,
+        feedback: str,
+    ) -> None:
+        """Apply T17 teaching remediation without changing the state graph.
+
+        The first T17 creates a new immutable contract revision and lowers one
+        difficulty band where possible.  A second T17 defers the knowledge
+        point so the existing S2 resource branch can continue with the next
+        point.  This caps repetition while preserving T17 and all 21 published
+        transitions.
+        """
+
+        current_point = self._current_knowledge_point(session) or "当前知识点"
+        attempt = session.remediation_attempts.get(current_point, 0) + 1
+        session.remediation_attempts[current_point] = attempt
+        old_contract = session.learning_contract
+        old_difficulty = old_contract.difficulty if old_contract else "basic"
+        lower_difficulty = {
+            "advanced": "applied",
+            "applied": "basic",
+            "basic": "basic",
+        }[old_difficulty]
+        previous_chunks = {
+            chunk.chunk_id for chunk in session.evidence_chunks
+        }
+
+        deferred = attempt >= 2
+        if deferred and current_point not in session.deferred_knowledge_points:
+            session.deferred_knowledge_points.append(current_point)
+        remaining = self._effective_blind_spots(session)
+        target_points = tuple(remaining) or (
+            old_contract.target_knowledge_points if old_contract else (current_point,)
+        )
+        if old_contract is not None:
+            revised_contract = replace(
+                old_contract,
+                difficulty=lower_difficulty,
+                target_knowledge_points=target_points,
+                revision=old_contract.revision + 1,
+            )
+            session.runtime.audit(
+                revised_contract.control_draft(session.runtime.options.trace_id)
+            )
+            session.learning_contract = revised_contract
+
+        session.remediation_excluded_chunk_ids = previous_chunks
+        session.remediation_context = {
+            "knowledge_point": current_point,
+            "attempt": attempt,
+            "action": "deferred" if deferred else (
+                "step_down" if lower_difficulty != old_difficulty else "refresh"
+            ),
+            "from_difficulty": old_difficulty,
+            "to_difficulty": lower_difficulty,
+            "exposed_misconceptions": sorted(
+                session.unresolved_misconceptions
+            ),
+        }
         session.interaction = {
             "kind": "learning_notice",
-            "message": "这个判断还需要再巩固。我们先回顾一个关键点，再重新练习。",
+            "message": (
+                "这个知识点已转入后续补学清单，先继续学习下一个知识点。"
+                if deferred
+                else (
+                    f"已从{old_difficulty}档调整为{lower_difficulty}档，"
+                    "并更换证据与讲解角度后重新练习。"
+                    if lower_difficulty != old_difficulty
+                    else "当前已是基础档，系统将更换证据与讲解角度后再练习一次。"
+                )
+            ),
             "feedback": feedback,
             "next_step_reason": (
-                "本轮已达到四次核对上限，但回答仍未形成完整的证据化判断；"
-                "为避免带着误解继续进阶，系统安排回看微课并重新练习。"
+                "同一知识点已完成一次补学仍未掌握；为防止重复循环，"
+                "本轮将其标记为延后学习，并在训练报告中保留。"
+                if deferred
+                else "本轮已达到四次核对上限，但历史错误尚未纠正；"
+                "因此先降低难度或更换内容，而不是直接升档。"
             ),
         }
         session.active_task = None
         session.learning_task = None
+        session.lecture = None
+        session.evidence_bundle = None
+        session.evidence_chunks = ()
+        session.resource_bundle = None
+        session.prefetched_task = None
+        session.prefetched_task_generator = None
+        session.prefetched_assessment = None
+        session.prefetched_assessment_generator = None
         session.task_phase = "initial"
         session.pending_learning_action = None
         session.completed_correction = False
+        session.follow_up_turns.clear()
+        session.follow_up_target = None
+        session.unresolved_misconceptions.clear()
+        session.probed_misconceptions.clear()
+        session.covered_relation_points.clear()
         session.awaiting = "advance"
-        return answer
 
     def submit_sql(self, session_id: str, sql: str) -> dict[str, Any]:
         session = self._get_session(session_id)
@@ -2405,6 +2701,8 @@ class InteractiveSessionManager:
             if sql_result is None:
                 return self.get_state(session_id)
             session.sql_result = sql_result
+            session.sql_failure_count = 0
+            session.sql_support = None
             session.awaiting = "advance"
             session.artifact = sql_result
             return self.get_state(session_id)
@@ -2464,6 +2762,13 @@ class InteractiveSessionManager:
             },
         )
         session.artifact = failure
+        self._register_sql_failure(
+            session,
+            student_message=str(
+                _payload_content(failure).get("student_message")
+                or "查询未通过校验，请修改后重试。"
+            ),
+        )
         return self.get_state(session.session_id)
 
     def _record_query_failure(
@@ -2517,7 +2822,91 @@ class InteractiveSessionManager:
             },
         )
         session.artifact = failure
+        self._register_sql_failure(
+            session,
+            student_message=student_message,
+        )
         return self.get_state(session.session_id)
+
+    def _register_sql_failure(
+        self,
+        session: _InteractiveSession,
+        *,
+        student_message: str,
+    ) -> None:
+        session.sql_failure_count += 1
+        attempt = session.sql_failure_count
+        authority = _payload_content(session.active_task or {}).get(
+            "query_authority"
+        )
+        authority = authority if isinstance(authority, Mapping) else {}
+        output_fields = [
+            str(item)
+            for item in authority.get("output_columns", [])
+            if isinstance(item, str)
+        ]
+        filter_fields = [
+            str(item)
+            for item in authority.get("filter_columns", [])
+            if isinstance(item, str)
+        ]
+        group_fields = [
+            str(item)
+            for item in authority.get("group_by_columns", [])
+            if isinstance(item, str)
+        ]
+        if attempt <= 2:
+            level = "self_correction"
+            hint = student_message
+        elif attempt == 3:
+            level = "structured_hint"
+            hint = (
+                "先缩小排查范围：核对输出字段、筛选条件和分组维度。"
+                f"本题输出字段为 {', '.join(output_fields) or '题目要求的指标'}；"
+                f"筛选字段为 {', '.join(filter_fields) or '题目中的对象与时间'}；"
+                f"分组字段为 {', '.join(group_fields) or '无需额外分组'}。"
+            )
+        elif attempt == 4:
+            level = "partial_template"
+            hint = (
+                "可按这个框架补全，但系统不会直接给出答案："
+                "SELECT <任务要求的字段或聚合> FROM <任务授权表> "
+                "WHERE <对象与时间条件> GROUP BY <需要比较的维度>。"
+            )
+        else:
+            level = "step_down"
+            hint = "连续五次未通过，系统将降低一档或更换内容后重新练习。"
+        session.sql_support = {
+            "attempt": attempt,
+            "level": level,
+            "hint": hint,
+            "will_step_down": attempt >= 5,
+        }
+        if attempt < 5:
+            return
+        runtime = session.runtime
+        try:
+            if runtime.engine.state is State.S7_STUDENT:
+                runtime.transition(
+                    self._student_answer_draft(
+                        session,
+                        answer_result="wrong",
+                    ),
+                    "T15",
+                )
+            if runtime.engine.state is not State.S8_PROBE:
+                raise InteractiveSessionError("当前实操补学进度无法继续。")
+            runtime.transition(
+                self._probe_outcome_draft(
+                    session,
+                    answer_result="wrong",
+                ),
+                "T17",
+            )
+        except DemoSessionError:
+            self._finish_system_error(session)
+            return
+        self._apply_t17_remediation(session, feedback=hint)
 
     @staticmethod
     def _record_verification_failure(
@@ -2579,6 +2968,25 @@ class InteractiveSessionManager:
             "artifact": session.artifact,
             "interaction": session.interaction,
             "training_report": session.training_report,
+            "remediation_status": {
+                "unresolved_misconceptions": sorted(
+                    session.unresolved_misconceptions
+                ),
+                "attempts": dict(session.remediation_attempts),
+                "deferred_knowledge_points": list(
+                    session.deferred_knowledge_points
+                ),
+                "context": (
+                    dict(session.remediation_context)
+                    if session.remediation_context is not None
+                    else None
+                ),
+            },
+            "sql_support": (
+                dict(session.sql_support)
+                if session.sql_support is not None
+                else None
+            ),
         }
 
     def get_agent_events(
@@ -2940,6 +3348,7 @@ class InteractiveSessionManager:
         session.follow_up_question = question
         session.follow_up_turns.clear()
         session.follow_up_target = None
+        session.unresolved_misconceptions.clear()
         session.probed_misconceptions.clear()
         session.covered_relation_points.clear()
         session.follow_up_had_support = False

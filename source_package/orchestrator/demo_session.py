@@ -484,7 +484,7 @@ def _produce_reviewed_product(
         raise DemoSessionError("review flow could not complete safely") from exc
 
 
-def _evidence_projection_lecture(
+def evidence_projection_lecture(
     candidate: Mapping[str, Any],
     rule_hits: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -631,7 +631,7 @@ def _generate_reviewable_lecture(
             return lecture
         hard_hits = (semantic_hit,)
     if last_lecture is not None:
-        projected = _evidence_projection_lecture(last_lecture, hard_hits)
+        projected = evidence_projection_lecture(last_lecture, hard_hits)
         projected_hard_hits = evaluate_hard_rules(projected)
         projected_semantic_hit = runtime.review.preflight_r04(projected)
         if not projected_hard_hits and projected_semantic_hit is None:

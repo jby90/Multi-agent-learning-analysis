@@ -11,6 +11,7 @@ from agents.follow_up_agent import (
     FollowUpAgent,
     FollowUpGenerationError,
     normalize_learner_input,
+    reviewed_answer_correction,
 )
 from agents.task_agent import TaskAgent, load_task_catalog
 from agents.validate_message import validate_message
@@ -451,6 +452,39 @@ def test_reviewed_extreme_guard_does_not_accept_incomplete_or_mismatched_evidenc
     assert turn.assessment == "unknown"
 
 
+def test_reviewed_extreme_correction_names_the_grounded_winner_and_wrong_row() -> None:
+    current_task = _current_task(_task_agent(), "T-03")
+
+    correction = reviewed_answer_correction(
+        question=(
+            "根据刚才的三道工序结果，哪一道工序完成率最低，"
+            "你依据的数值是什么？"
+        ),
+        answer="ZZTP完成率最低，完成率为1.0249。",
+        evidence=current_task["evidence"],
+    )
+
+    assert correction == (
+        "需要纠正：查询结果显示 YCL 的完成率为 0.6236，是最低值；"
+        "你回答中的 ZZTP 为 1.0249，不是最低值。"
+    )
+
+
+def test_reviewed_extreme_correction_does_not_turn_missing_evidence_into_an_error() -> None:
+    current_task = _current_task(_task_agent(), "T-03")
+
+    correction = reviewed_answer_correction(
+        question=(
+            "根据刚才的三道工序结果，哪一道工序完成率最低，"
+            "你依据的数值是什么？"
+        ),
+        answer="YCL最低。",
+        evidence=current_task["evidence"],
+    )
+
+    assert correction is None
+
+
 def test_reviewed_completion_interpretation_overrides_an_unknown_false_negative() -> None:
     llm = FollowUpLLM(
         {
@@ -493,6 +527,26 @@ def test_generic_fallback_uses_the_task_family_instead_of_an_unresolved_referenc
     assert "题目中的问题" not in question
     assert "完成率" in question
     assert "计划" in question
+
+
+def test_deterministic_fallback_skips_a_question_already_used_in_history() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress")
+    current_task = _current_task(task_agent, "T-02")
+    first = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+    )
+    assert first.product is not None
+    first_question = first.product["payload"]["content"]["question"]
+
+    second = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+        previous_questions=(first_question,),
+    )
+    assert second.product is not None
+    assert second.product["payload"]["content"]["question"] != first_question
 
 
 def test_reviewed_ship_extreme_is_preserved_when_the_model_is_unavailable() -> None:

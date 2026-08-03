@@ -1473,6 +1473,124 @@ def test_follow_up_rejects_a_bare_yes_without_calling_the_model(
     assert follow_up_llm.calls == []
 
 
+@pytest.mark.parametrize(
+    "answer",
+    ("不会", "不清楚", "不知道怎么回答", "没学过", "无法判断"),
+)
+def test_follow_up_treats_explicit_non_answers_as_teaching_signals(
+    tmp_path: Path,
+    answer: str,
+) -> None:
+    executor = CatalogExecutor()
+    follow_up_llm = FollowUpLLM()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=follow_up_llm,
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+    manager.advance(session_id)
+    task = manager.advance(session_id)
+    content = task["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[content["template_id"]].standard_sql,
+    )
+    before = manager.advance(session_id)
+
+    with pytest.raises(InteractiveSessionError, match="不会|依据|提示"):
+        manager.submit_follow_up(session_id, answer, f"non-answer-{answer}")
+
+    after = manager.get_state(session_id)
+    assert after["interaction"] == before["interaction"]
+    assert follow_up_llm.calls == []
+
+
+def test_follow_up_rejects_a_copied_question_before_model_assessment(
+    tmp_path: Path,
+) -> None:
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=FollowUpLLM(),
+    )
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task["template_id"]].standard_sql,
+    )
+    state = manager.advance(session_id)
+    prompt = state["interaction"]["prompt"]
+
+    with pytest.raises(InteractiveSessionError, match="题目|依据"):
+        manager.submit_follow_up(session_id, prompt, "copied-question")
+
+
+@pytest.mark.parametrize("answer", ("今天天气不错", "随便写写", "asdfgh"))
+def test_follow_up_rejects_obviously_unrelated_text_before_model_assessment(
+    tmp_path: Path,
+    answer: str,
+) -> None:
+    follow_up_llm = FollowUpLLM()
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+
+    with pytest.raises(InteractiveSessionError, match="无关|字段和值"):
+        manager.submit_follow_up(session_id, answer, f"unrelated-{answer}")
+    assert follow_up_llm.calls == []
+
+
+def test_unresolved_historical_error_blocks_an_unrelated_mastery_result(
+    tmp_path: Path,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response(
+            "mastered",
+            "请再用查询结果说明计划量与实际完成量的区别。",
+        ),
+    )
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+    internal = manager._get_session(session_id)
+    internal.follow_up_round = 2
+    internal.follow_up_target = "M-01"
+    internal.unresolved_misconceptions = {"M-04"}
+
+    state = manager.submit_follow_up(
+        session_id,
+        "YCL完成率为0.6236，数值来自查询结果。",
+        "unrelated-mastery",
+    )
+
+    assert state["awaiting"] == "follow_up"
+    assert state["interaction"]["round"] == 3
+    assert "M-04" in state["remediation_status"]["unresolved_misconceptions"]
+
+
 def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
     tmp_path: Path,
 ) -> None:
@@ -1831,6 +1949,158 @@ def test_four_unmastered_rounds_reenter_teaching_without_stale_follow_up_state(
     assert conclusion["state"] == "S7_STUDENT"
     assert conclusion["awaiting"] == "follow_up"
     assert conclusion["interaction"]["kind"] == "free_text_follow_up"
+
+
+def test_first_t17_creates_a_lower_difficulty_contract_revision(
+    tmp_path: Path,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response("needs_support", "三道工序中哪一道完成率最低？"),
+        follow_up_response("needs_support", "最低完成率对应的数值是多少？"),
+        follow_up_response("needs_support", "另外两道工序的完成率分别是多少？"),
+        follow_up_response("needs_support", ""),
+    )
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=follow_up_llm,
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    answers = {
+        "PT-1": "B",
+        "PT-2": "B",
+        "PT-3": "C",
+        "PT-4": "B",
+        "PT-5": "C",
+    }
+    manager.submit_pretest(session_id, answers)
+    manager.advance(session_id)
+    task = manager.advance(session_id)
+    task_content = task["artifact"]["payload"]["content"]
+    assert task_content["difficulty"] == "applied"
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task_content["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+    for index in range(1, 5):
+        state = manager.submit_follow_up(
+            session_id,
+            "我还不能根据结果完成判断。",
+            f"step-down-{index}",
+        )
+
+    assert state["state"] == "S2_KNOWLEDGE"
+    assert state["learning_contract"]["difficulty"] == "basic"
+    assert state["learning_contract"]["revision"] == 2
+    assert state["remediation_status"]["attempts"] == {
+        "三道工序与传导关系": 1
+    }
+    assert state["remediation_status"]["context"]["action"] == "step_down"
+
+    manager.advance(session_id)
+    relearned_task = manager.advance(session_id)
+    relearned_content = relearned_task["artifact"]["payload"]["content"]
+    assert relearned_content["difficulty"] == "basic"
+    assert relearned_content["template_id"] == "T-03"
+
+
+def test_second_t17_defers_the_point_instead_of_repeating_forever(
+    tmp_path: Path,
+) -> None:
+    responses = []
+    for cycle in range(2):
+        responses.extend(
+            (
+                follow_up_response(
+                    "needs_support",
+                    f"第{cycle + 1}次补学：哪项结果最需要继续核对？",
+                ),
+                follow_up_response(
+                    "needs_support",
+                    f"第{cycle + 1}次补学：对应的数值依据是什么？",
+                ),
+                follow_up_response(
+                    "needs_support",
+                    f"第{cycle + 1}次补学：另外两项结果如何比较？",
+                ),
+                follow_up_response("needs_support", ""),
+            )
+        )
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=FollowUpLLM(*responses),
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+
+    for cycle in range(2):
+        manager.advance(session_id)
+        task = manager.advance(session_id)
+        content = task["artifact"]["payload"]["content"]
+        manager.submit_sql(
+            session_id,
+            load_task_catalog().templates[content["template_id"]].standard_sql,
+        )
+        manager.advance(session_id)
+        for index in range(1, 5):
+            state = manager.submit_follow_up(
+                session_id,
+                "我仍然不能依据查询结果完成判断。",
+                f"defer-{cycle}-{index}",
+            )
+
+    assert state["awaiting"] == "advance"
+    assert state["remediation_status"]["attempts"][
+        "三道工序与传导关系"
+    ] == 2
+    assert state["remediation_status"]["deferred_knowledge_points"] == [
+        "三道工序与传导关系"
+    ]
+    assert state["remediation_status"]["context"]["action"] == "deferred"
+    assert "延后学习" in state["interaction"]["next_step_reason"]
+
+    next_lecture = manager.advance(session_id)
+    assert next_lecture["awaiting"] in {"advance", "done"}
+    if next_lecture["awaiting"] == "advance":
+        next_task = manager.advance(session_id)
+        assert (
+            next_task["artifact"]["payload"]["content"]["knowledge_point"]
+            != "三道工序与传导关系"
+        )
+
+
+def test_repeated_sql_failures_escalate_hints_and_step_down_on_fifth_attempt(
+    tmp_path: Path,
+) -> None:
+    manager, session_id = start_sql_session(tmp_path, CatalogExecutor())
+
+    levels = []
+    for attempt in range(1, 6):
+        state = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
+        levels.append(state["sql_support"]["level"])
+        assert state["sql_support"]["attempt"] == attempt
+
+    assert levels == [
+        "self_correction",
+        "self_correction",
+        "structured_hint",
+        "partial_template",
+        "step_down",
+    ]
+    assert state["state"] == "S2_KNOWLEDGE"
+    assert state["awaiting"] == "advance"
+    assert state["remediation_status"]["attempts"] == {
+        "计划量与实际量口径": 1
+    }
 
 
 def test_r04_exhaustion_after_follow_up_finishes_safely_and_idempotently(

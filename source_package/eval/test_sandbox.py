@@ -293,6 +293,7 @@ def test_database_settings_requires_reader_password(
         DatabaseSettings.from_environment()
 
 
+@pytest.mark.live
 def test_live_ref_reader_has_only_ref_select_permission() -> None:
     settings = DatabaseSettings.from_environment()
     connection = pymysql.connect(

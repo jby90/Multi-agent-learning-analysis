@@ -97,7 +97,8 @@ const completionMessage = computed(() => {
   const value = session.value
   if (
     value?.awaiting === 'done'
-    && value.interaction?.kind === 'review_notice'
+    && value.interaction
+    && 'message' in value.interaction
   ) {
     return learnerText(value.interaction.message)
   }
@@ -246,10 +247,19 @@ const followUpIsVacuous = computed(() => {
     .normalize('NFKC')
     .replace(/\s+/gu, '')
     .replace(/[。！!？?]+$/gu, '')
-  return [
+  if ([
     '是', '是的', '否', '不是', '不是的', '对', '对的', '不对',
-    '正确', '错误', '同意', '不同意', '知道', '不知道',
-  ].includes(compact)
+    '正确', '错误', '同意', '不同意', '知道', '不知道', '不会',
+    '不清楚', '不知道怎么回答', '不知道如何回答', '没学过', '无法判断',
+    '不晓得', '不懂',
+  ].includes(compact)) return true
+  const interaction = session.value?.interaction
+  if (interaction?.kind !== 'free_text_follow_up') return false
+  const matchKey = (value: string) => value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
+  return Boolean(compact) && matchKey(compact) === matchKey(interaction.prompt)
 })
 const canSubmitFollowUp = computed(
   () => followUpInputLength.value >= 2
@@ -776,6 +786,15 @@ onBeforeUnmount(() => {
         <strong>{{ sqlFeedback.title }}</strong>
         <p>{{ sqlFeedback.learnerMessage }}</p>
       </aside>
+      <aside
+        v-if="session.sql_support"
+        class="sql-progressive-support"
+        :data-level="session.sql_support.level"
+        aria-live="polite"
+      >
+        <strong>实操老师 · 第 {{ session.sql_support.attempt }} 次提示</strong>
+        <p>{{ learnerText(session.sql_support.hint) }}</p>
+      </aside>
       <textarea
         v-model="sqlText"
         aria-label="输入查询语句"
@@ -803,9 +822,8 @@ onBeforeUnmount(() => {
       <header class="follow-up-heading">
         <div>
           <span>理解核对</span>
-          <strong>
-            第 {{ session.interaction.round }} / 最多
-            {{ session.interaction.max_rounds }} 轮
+          <strong class="follow-up-round-label">
+            <span>第 {{ session.interaction.round }} / 最多 {{ session.interaction.max_rounds }} 轮</span>
           </strong>
         </div>
         <p>结合刚才的数据，用自己的话说明判断依据。</p>
@@ -901,7 +919,7 @@ onBeforeUnmount(() => {
       </label>
       <footer class="follow-up-actions">
         <small :class="{ 'needs-evidence': followUpIsVacuous }">
-          {{ followUpIsVacuous ? '请补充数据或业务依据，不能只回答“是/否”' : `${followUpInputLength} / 500 字` }}
+          {{ followUpIsVacuous ? '请用自己的话引用字段和值作答，不能只回答“是/否”，也不要回答“不会”或复述题目' : `${followUpInputLength} / 500 字` }}
         </small>
         <button
           type="button"
@@ -943,7 +961,7 @@ onBeforeUnmount(() => {
           </article>
           <article>
             <span>结论修正</span>
-            <strong>{{ session.training_report.completed_correction ? '已完成' : '无需修正' }}</strong>
+            <strong>{{ session.training_report.completed_correction ? '已完成' : (session.training_report.deferred_knowledge_points?.length ? '待后续补学' : '无需修正') }}</strong>
           </article>
           <article>
             <span>最终难度</span>
@@ -951,6 +969,9 @@ onBeforeUnmount(() => {
           </article>
         </div>
         <p>{{ learnerText(session.training_report.achievement) }}</p>
+        <p v-if="session.training_report.deferred_knowledge_points?.length" class="training-report-deferred">
+          后续补学：{{ session.training_report.deferred_knowledge_points.map(learnerText).join('、') }}
+        </p>
       </section>
       <section v-if="nextKnowledgePoint" class="training-report-next">
         <p>本知识点已经达标，下一知识点：{{ learnerText(nextKnowledgePoint) }}</p>

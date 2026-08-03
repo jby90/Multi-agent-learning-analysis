@@ -613,6 +613,7 @@ def _live_sql_fact_draft(trace_id: str) -> dict[str, Any]:
     return draft
 
 
+@pytest.mark.live
 def test_live_manual_false_r02_runs_real_235b_32b_and_persists_trace() -> None:
     trace_id = f"trace-live-debate-{uuid4().hex[:12]}"
     trace_dir = Path(__file__).resolve().parents[1] / "traces"

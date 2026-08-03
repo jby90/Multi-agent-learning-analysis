@@ -542,7 +542,8 @@ def test_router_out_of_scope_misclassification_uses_235b_q1_contract() -> None:
     assert content["routing_predicted_family"] == "OUT_OF_SCOPE"
     assert content["routing_final_family"] == "Q1"
     assert content["routing_fallback"] is False
-    assert content["routing_family_mismatch"] is True
+    assert content["routing_family_mismatch"] is False
+    assert content["routing_model_disagreement"] is True
     assert content["routing_few_shot_ids"] == [
         "FS-02",
         "FS-03",

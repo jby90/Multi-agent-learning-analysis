@@ -56,6 +56,7 @@ class Text2SQLGenerationResult:
     generation_latency_ms: int
     routing_token_usage: TokenUsage
     generation_token_usage: TokenUsage
+    routing_model_disagreement: bool = False
 
     def routing_content(self) -> dict[str, Any]:
         return {
@@ -64,6 +65,7 @@ class Text2SQLGenerationResult:
             "routing_final_family": self.routing_final_family,
             "routing_fallback": self.routing_fallback,
             "routing_family_mismatch": self.routing_family_mismatch,
+            "routing_model_disagreement": self.routing_model_disagreement,
             "routing_fallback_reason": self.routing_fallback_reason,
             "routing_prompt_profile": self.routing_prompt_profile,
             "routing_few_shot_ids": list(self.routing_few_shot_ids),
@@ -168,9 +170,14 @@ class Text2SQLGenerationCoordinator:
         )
         raw_family = str(generation.data["family"])
         final_family = authority.family if authority is not None else raw_family
-        family_mismatch = raw_family != final_family or (
-            predicted_family is not None and predicted_family != final_family
+        model_disagreement = (
+            predicted_family is not None and predicted_family != raw_family
         )
+        # A router/generator disagreement is diagnostic evidence, not an
+        # effective routing error: without template authority the validated
+        # generator result is the final route.  Authority disagreement remains
+        # a hard mismatch and is still rejected by downstream contracts.
+        family_mismatch = raw_family != final_family
         return Text2SQLGenerationResult(
             data=generation.data,
             model=generation.model,
@@ -188,4 +195,5 @@ class Text2SQLGenerationCoordinator:
             generation_latency_ms=generation.latency_ms,
             routing_token_usage=routing_token_usage,
             generation_token_usage=generation.token_usage,
+            routing_model_disagreement=model_disagreement,
         )

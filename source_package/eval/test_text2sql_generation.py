@@ -154,7 +154,7 @@ def test_q5_route_uses_exact_q5_q7_examples_and_aggregates_telemetry() -> None:
     assert content["generation_cached_tokens"] == 7
 
 
-def test_out_of_scope_prediction_mismatch_keeps_first_235b_q1_result() -> None:
+def test_router_generator_disagreement_keeps_generator_contract_without_effective_mismatch() -> None:
     generated = {
         "sql": "SELECT SUM(plan_qty) AS plan_qty FROM fact_production_progress",
         "family": "Q1",
@@ -199,9 +199,49 @@ def test_out_of_scope_prediction_mismatch_keeps_first_235b_q1_result() -> None:
         "FS-14",
     )
     assert result.routing_fallback is False
-    assert result.routing_family_mismatch is True
+    assert result.routing_family_mismatch is False
+    assert result.routing_model_disagreement is True
+    assert result.routing_content()["routing_model_disagreement"] is True
     assert result.routing_fallback_reason == "none"
     assert len(llm.calls) == 2
+
+
+def test_q7_router_disagreement_preserves_generator_out_of_scope_refusal() -> None:
+    generated = {
+        "sql": None,
+        "family": "OUT_OF_SCOPE",
+        "explanation": "跨粒度复合聚合不在当前查询契约内",
+    }
+    llm = SequentialLLM(
+        [
+            llm_result(
+                {"family": "Q7"},
+                model=ROUTER_MODEL,
+                latency_ms=15,
+                prompt_tokens=10,
+                completion_tokens=1,
+            ),
+            llm_result(
+                generated,
+                model=GENERATOR_MODEL,
+                latency_ms=60,
+                prompt_tokens=90,
+                completion_tokens=8,
+            ),
+        ]
+    )
+    coordinator = Text2SQLGenerationCoordinator(
+        llm_call=llm,
+        prompt_catalog=prompt_catalog(),
+    )
+
+    result = coordinator.generate("分别按船级与工序级聚合完成率，对比差异")
+
+    assert result.data is generated
+    assert result.routing_predicted_family == "Q7"
+    assert result.routing_final_family == "OUT_OF_SCOPE"
+    assert result.routing_family_mismatch is False
+    assert result.routing_model_disagreement is True
 
 
 def test_router_error_uses_full15_once_without_counting_mismatch() -> None:

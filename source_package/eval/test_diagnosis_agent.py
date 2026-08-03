@@ -411,6 +411,7 @@ def test_diagnosis_constructor_exposes_optional_llm_dependency() -> None:
     assert signature.parameters["llm_call"].default is None
 
 
+@pytest.mark.live
 def test_live_p4_5_three_profile_narratives_are_grounded_and_distinct() -> None:
     module = _diagnosis_module()
     narratives: dict[str, str] = {}
