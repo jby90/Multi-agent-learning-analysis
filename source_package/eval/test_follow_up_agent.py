@@ -11,6 +11,7 @@ from agents.follow_up_agent import (
     FollowUpAgent,
     FollowUpGenerationError,
     normalize_learner_input,
+    reviewed_answer_confirmation,
     reviewed_answer_correction,
 )
 from agents.task_agent import TaskAgent, load_task_catalog
@@ -412,6 +413,33 @@ def test_reviewed_extreme_field_and_value_override_an_unknown_false_negative(
 
     assert turn.assessment == "mastered"
     assert turn.diagnosed_misconception == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    ("student_answer", "expected_value"),
+    (
+        ("YCL 0.6236", "0.6236"),
+        ("YCL完成率为62.36%", "0.6236"),
+    ),
+)
+def test_reviewed_extreme_confirmation_explains_the_bound_field_and_value(
+    student_answer: str,
+    expected_value: str,
+) -> None:
+    current_task = _current_task(_task_agent(), "T-03")
+
+    confirmation = reviewed_answer_confirmation(
+        question=(
+            "根据刚才的三道工序结果，哪一道工序完成率最低，"
+            "你依据的数值是什么？"
+        ),
+        answer=student_answer,
+        evidence=current_task["evidence"],
+    )
+
+    assert confirmation == (
+        f"已核验：YCL 的完成率为 {expected_value}，与查询结果中的最低值一致。"
+    )
 
 
 @pytest.mark.parametrize(

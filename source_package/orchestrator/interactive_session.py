@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -22,10 +23,13 @@ from agents.follow_up_agent import (
     FollowUpGenerationError,
     FollowUpTurn,
     UNKNOWN_MISCONCEPTION,
+    _expected_points,
+    _expected_rows,
     _responsibility_scope,
     contains_engineering_text,
     deterministic_follow_up_route,
     normalize_learner_input,
+    reviewed_answer_confirmation,
     reviewed_answer_correction,
 )
 from agents.misconception_relations import (
@@ -175,6 +179,28 @@ def _follow_up_task_context(task: Mapping[str, Any] | None) -> dict[str, str]:
     if isinstance(difficulty, str) and difficulty.strip():
         context["task_difficulty"] = difficulty.strip()
     return context
+
+
+def _knowledge_point_initial_difficulty(
+    diagnosis_content: Mapping[str, Any],
+    knowledge_point: str,
+) -> str:
+    """Resolve one knowledge point's immutable starting difficulty."""
+
+    plan = diagnosis_content.get("knowledge_point_plan")
+    if isinstance(plan, list):
+        for item in plan:
+            if not isinstance(item, Mapping):
+                continue
+            if item.get("knowledge_point") != knowledge_point:
+                continue
+            difficulty = item.get("initial_difficulty")
+            if difficulty in {"basic", "applied", "advanced"}:
+                return str(difficulty)
+    fallback = diagnosis_content.get("difficulty")
+    if fallback in {"basic", "applied", "advanced"}:
+        return str(fallback)
+    raise InteractiveSessionError("缺少下一知识点的初始难度，请重新完成岗前测评。")
 
 
 def _is_vacuous_follow_up_answer(value: str) -> bool:
@@ -335,6 +361,7 @@ class _InteractiveSession:
     follow_up_turns: list[dict[str, Any]] = field(default_factory=list)
     follow_up_target: str | None = None
     unresolved_misconceptions: set[str] = field(default_factory=set)
+    correction_tickets: list[dict[str, Any]] = field(default_factory=list)
     remediation_attempts: dict[str, int] = field(default_factory=dict)
     deferred_knowledge_points: list[str] = field(default_factory=list)
     remediation_excluded_chunk_ids: set[str] = field(default_factory=set)
@@ -474,14 +501,17 @@ class InteractiveSessionManager:
         created = self.create_session(previous.runtime.options.profile_id)
         next_session = self._get_session(str(created["session_id"]))
         previous_content = _payload_content(previous.diagnosis)
-        current_difficulty = _payload_content(
-            previous.learning_task or previous.lecture or {}
-        ).get("difficulty")
+        next_knowledge_point = remaining[0]
+        next_difficulty = _knowledge_point_initial_difficulty(
+            previous_content,
+            next_knowledge_point,
+        )
         diagnosis_content = dict(previous_content)
         diagnosis_content.update(
             {
                 "event": "diagnosis_ready",
                 "blind_spots": remaining,
+                "difficulty": next_difficulty,
                 "diagnosis_narrative": "",
                 "suggestions": [],
                 "narrative_fallback": True,
@@ -489,8 +519,6 @@ class InteractiveSessionManager:
                 "llm_latency_ms": 0,
             }
         )
-        if current_difficulty in {"basic", "applied", "advanced"}:
-            diagnosis_content["difficulty"] = current_difficulty
         diagnosis = next_session.runtime.transition(
             {
                 "trace_id": next_session.runtime.options.trace_id,
@@ -907,6 +935,18 @@ class InteractiveSessionManager:
         knowledge_point = str(blind_spots[0])
         difficulty = session.learning_contract.difficulty
         keywords = tuple(str(item) for item in blind_spots[:3])
+        active_remediation = (
+            dict(session.remediation_context)
+            if session.remediation_context is not None
+            and session.remediation_context.get("knowledge_point") == knowledge_point
+            and session.remediation_context.get("action") != "deferred"
+            else None
+        )
+        excluded_chunk_ids = (
+            set(session.remediation_excluded_chunk_ids)
+            if active_remediation is not None
+            else set()
+        )
 
         def retrieve_knowledge() -> dict[str, Any]:
             chunks = runtime.retriever.retrieve(
@@ -922,11 +962,11 @@ class InteractiveSessionManager:
                     keywords,
                 )
             original_chunks = tuple(chunks)
-            if session.remediation_excluded_chunk_ids:
+            if excluded_chunk_ids:
                 alternatives = tuple(
                     chunk
                     for chunk in original_chunks
-                    if chunk.chunk_id not in session.remediation_excluded_chunk_ids
+                    if chunk.chunk_id not in excluded_chunk_ids
                 )
                 if alternatives:
                     chunks = alternatives
@@ -936,9 +976,9 @@ class InteractiveSessionManager:
                     "chunk_ids": [chunk.chunk_id for chunk in chunks],
                     "chunk_count": len(chunks),
                     "difficulty_fallback": difficulty_fallback,
-                    "remediation_refresh": bool(session.remediation_context),
+                    "remediation_refresh": active_remediation is not None,
                     "excluded_previous_chunks": sorted(
-                        session.remediation_excluded_chunk_ids
+                        excluded_chunk_ids
                     ),
                 },
             }
@@ -956,11 +996,7 @@ class InteractiveSessionManager:
                 "lecture_style": str(runtime.profile["lecture_style"]),
                 "difficulty": difficulty,
                 "misconceptions": list(session.learning_contract.misconceptions),
-                "remediation": (
-                    dict(session.remediation_context)
-                    if session.remediation_context is not None
-                    else None
-                ),
+                "remediation": active_remediation,
             }
 
         evidence_result = self._evidence_stage_executor.execute(
@@ -1417,25 +1453,44 @@ class InteractiveSessionManager:
         diagnosis_content = _payload_content(session.diagnosis)
         score = diagnosis_content.get("pretest_score")
         knowledge_point = current_content.get("knowledge_point")
+        resolved_knowledge_point = (
+            str(knowledge_point)
+            if isinstance(knowledge_point, str)
+            else "本轮知识点"
+        )
+        initial_difficulty = (
+            _knowledge_point_initial_difficulty(
+                diagnosis_content,
+                resolved_knowledge_point,
+            )
+            if isinstance(knowledge_point, str)
+            else diagnosis_content.get("difficulty")
+        )
+        deferred_points = list(session.deferred_knowledge_points)
+        achievement = (
+            "完成了数据实操、证据核对和结论修正。"
+            if session.completed_correction
+            else "完成了数据实操和多轮理解核对。"
+        )
+        if deferred_points:
+            achievement = (
+                achievement.rstrip("。")
+                + "；未掌握内容已转入后续补学清单。"
+            )
         session.training_report = {
             "title": "本轮训练报告",
-            "knowledge_point": (
-                str(knowledge_point) if isinstance(knowledge_point, str) else "本轮知识点"
-            ),
-            "initial_difficulty": diagnosis_content.get("difficulty"),
+            "knowledge_point": resolved_knowledge_point,
+            "initial_difficulty": initial_difficulty,
             "final_difficulty": current_content.get("difficulty"),
             "pretest_score": dict(score) if isinstance(score, Mapping) else None,
             "query_count": session.query_count,
             "follow_up_rounds": session.follow_up_submission_count,
             "completed_correction": session.completed_correction,
-            "achievement": (
-                "完成了数据实操、证据核对和结论修正。"
-                if session.completed_correction
-                else "完成了数据实操和多轮理解核对。"
-            ),
+            "achievement": achievement,
             "next_knowledge_point": (
                 remaining_blind_spots[0] if remaining_blind_spots else None
             ),
+            "deferred_knowledge_points": deferred_points,
         }
         path = runtime.transition(
             _path_update_draft(
@@ -1566,6 +1621,114 @@ class InteractiveSessionManager:
                 "暂时无法为你生成分阶测验，请稍后重试。"
             ) from exc
 
+    @staticmethod
+    def _active_follow_up_task(
+        session: _InteractiveSession,
+    ) -> Mapping[str, Any] | None:
+        artifact = session.artifact
+        if isinstance(artifact, Mapping):
+            content = _payload_content(artifact)
+            if (
+                content.get("event") == "follow_up_question_ready"
+                and str(content.get("question") or "").strip()
+                == session.follow_up_question.strip()
+            ):
+                return artifact
+        return session.learning_task or session.active_task
+
+    @staticmethod
+    def _correction_evidence_summary(
+        evidence: tuple[Mapping[str, Any], ...],
+    ) -> list[dict[str, Any]]:
+        points = list(_expected_points(evidence))
+        return [
+            {
+                "ref": str(item.get("ref") or "").strip(),
+                "expected_points": points,
+            }
+            for item in evidence
+            if str(item.get("ref") or "").strip()
+        ]
+
+    @staticmethod
+    def _missing_evidence_fields(
+        answer: str,
+        evidence: tuple[Mapping[str, Any], ...],
+    ) -> list[str]:
+        normalized = answer.casefold()
+        rows = _expected_rows(evidence)
+        fields: list[str] = []
+        for field_name in dict.fromkeys(
+            key for row in rows for key in row
+        ):
+            if field_name.casefold() in normalized:
+                continue
+            values = {
+                str(row.get(field_name)).strip().casefold()
+                for row in rows
+                if row.get(field_name) is not None
+            }
+            if values and any(value and value in normalized for value in values):
+                continue
+            fields.append(field_name)
+        return fields or ["判断依据"]
+
+    @classmethod
+    def _open_correction_ticket(
+        cls,
+        session: _InteractiveSession,
+        *,
+        misconception_id: str,
+        answer: str,
+        evidence: tuple[Mapping[str, Any], ...],
+        source_round: int,
+    ) -> None:
+        session.correction_tickets.append(
+            {
+                "source_round": source_round,
+                "learner_answer_digest": sha256(
+                    normalize_learner_input(answer).encode("utf-8")
+                ).hexdigest(),
+                "missing_evidence_fields": cls._missing_evidence_fields(
+                    answer,
+                    evidence,
+                ),
+                "misconception_id": misconception_id,
+                "knowledge_point": (
+                    InteractiveSessionManager._current_knowledge_point(session)
+                    or "当前知识点"
+                ),
+                "correction_evidence": cls._correction_evidence_summary(
+                    evidence
+                ),
+                "resolved": False,
+                "status": "open",
+            }
+        )
+
+    @classmethod
+    def _resolve_correction_tickets(
+        cls,
+        session: _InteractiveSession,
+        *,
+        misconception_id: str,
+        evidence: tuple[Mapping[str, Any], ...],
+        resolved_round: int,
+    ) -> bool:
+        resolved = False
+        resolution_evidence = cls._correction_evidence_summary(evidence)
+        for ticket in session.correction_tickets:
+            if (
+                not bool(ticket.get("resolved"))
+                and ticket.get("misconception_id") == misconception_id
+            ):
+                ticket["resolved"] = True
+                ticket["status"] = "resolved"
+                ticket["resolved_round"] = resolved_round
+                ticket["resolution_evidence"] = resolution_evidence
+                resolved = True
+        return resolved
+
     def submit_follow_up(
         self,
         session_id: str,
@@ -1632,7 +1795,7 @@ class InteractiveSessionManager:
         submitted_round = session.follow_up_round
         if not 1 <= submitted_round <= MAX_FOLLOW_UP_ROUNDS:
             raise InteractiveSessionError("本轮理解核对已经结束。")
-        current_task = session.learning_task or session.active_task
+        current_task = self._active_follow_up_task(session)
         if current_task is None:
             raise InteractiveSessionError("当前理解核对内容不完整，请稍后重试。")
 
@@ -1658,6 +1821,7 @@ class InteractiveSessionManager:
         unresolved_elsewhere = set(session.unresolved_misconceptions)
         if session.follow_up_target:
             unresolved_elsewhere.discard(session.follow_up_target)
+        required_next_targets = tuple(sorted(unresolved_elsewhere))
         correction_gate_open = not unresolved_elsewhere
         completion_allowed = submitted_round >= 2 and correction_gate_open
         generation_round = min(
@@ -1693,6 +1857,7 @@ class InteractiveSessionManager:
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
                     previous_questions=previous_questions,
+                    required_next_targets=required_next_targets,
                 )
             except FollowUpGenerationError:
                 generated = session.follow_up_agent.deterministic_fallback(
@@ -1704,6 +1869,12 @@ class InteractiveSessionManager:
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
                     previous_questions=previous_questions,
+                    task_agent=runtime.task,
+                    required_target=(
+                        required_next_targets[0]
+                        if required_next_targets
+                        else None
+                    ),
                 )
             reviewed_product: dict[str, Any] | None = None
             if generated.product is not None:
@@ -1717,6 +1888,7 @@ class InteractiveSessionManager:
                     initial=generated,
                     probed_snapshot=probed_snapshot,
                     covered_snapshot=covered_snapshot,
+                    required_next_targets=required_next_targets,
                 )
             relation_index = default_relation_index(
                 tuple(runtime.task.misconception_ids)
@@ -1740,6 +1912,7 @@ class InteractiveSessionManager:
                         tuple(runtime.task.misconception_ids)
                     ),
                     routing_policy=self._routing_policy,
+                    required_targets=required_next_targets,
                 )
             )
             if (
@@ -1787,25 +1960,33 @@ class InteractiveSessionManager:
             for item in current_task.get("evidence", [])
             if isinstance(item, Mapping)
         )
+        base_feedback = self._follow_up_feedback(
+            generated.assessment,
+            question=session.follow_up_question,
+            answer=text.strip(),
+            evidence=reviewed_evidence,
+        )
         turn_record = {
             "round": submitted_round,
             "question": session.follow_up_question,
             "answer": text.strip(),
-            "feedback": self._follow_up_feedback(
-                generated.assessment,
-                question=session.follow_up_question,
-                answer=text.strip(),
-                evidence=reviewed_evidence,
-            ),
+            "feedback": base_feedback,
             "assessment": generated.assessment,
             "diagnosed_misconception": generated.diagnosed_misconception,
             "target_misconception": session.follow_up_target,
         }
         session.follow_up_submission_count += 1
+        resolved_historical_ticket = False
         if generated.assessment == "mastered":
             resolved_target = session.follow_up_target
             if resolved_target:
                 session.unresolved_misconceptions.discard(resolved_target)
+                resolved_historical_ticket = self._resolve_correction_tickets(
+                    session,
+                    misconception_id=resolved_target,
+                    evidence=reviewed_evidence,
+                    resolved_round=submitted_round,
+                )
             if resolved_target == UNKNOWN_MISCONCEPTION:
                 session.unresolved_misconceptions.discard(UNKNOWN_MISCONCEPTION)
         else:
@@ -1820,6 +2001,24 @@ class InteractiveSessionManager:
                 else session.follow_up_target or UNKNOWN_MISCONCEPTION
             )
             session.unresolved_misconceptions.add(unresolved)
+            self._open_correction_ticket(
+                session,
+                misconception_id=unresolved,
+                answer=text.strip(),
+                evidence=reviewed_evidence,
+                source_round=submitted_round,
+            )
+
+        if generated.assessment == "mastered" and session.unresolved_misconceptions:
+            turn_record["feedback"] = (
+                f"{base_feedback} 本轮判断正确，但此前还有 "
+                f"{len(session.unresolved_misconceptions)} 项问题需要逐项纠正，"
+                "因此暂不升档。"
+            )
+        elif resolved_historical_ticket:
+            turn_record["feedback"] = (
+                f"{base_feedback} 本轮已完成对上一处错误的纠正。"
+            )
 
         if (
             generated.assessment == "mastered"
@@ -1883,7 +2082,11 @@ class InteractiveSessionManager:
             "turns": [dict(turn) for turn in next_turns],
             "feedback": turn_record["feedback"],
             "next_step_reason": (
-                "当前回答已有正确依据；为避免一次偶然作答被误判为掌握，"
+                "当前回答已有正确依据，但此前暴露的问题尚未全部纠正；"
+                "下一轮将优先核对仍未结清的问题。"
+                if generated.assessment == "mastered"
+                and session.unresolved_misconceptions
+                else "当前回答已有正确依据；为避免一次偶然作答被误判为掌握，"
                 "还需要完成下一轮不同角度的核对。"
                 if generated.assessment == "mastered"
                 else "当前回答的证据或解释还不完整，因此继续留在本知识点，"
@@ -1919,6 +2122,7 @@ class InteractiveSessionManager:
         initial: FollowUpTurn,
         probed_snapshot: tuple[str, ...],
         covered_snapshot: tuple[str, ...],
+        required_next_targets: tuple[str, ...] = (),
     ) -> tuple[FollowUpTurn, dict[str, Any]]:
         runtime = session.runtime
         candidate = initial
@@ -1956,6 +2160,7 @@ class InteractiveSessionManager:
                     review_feedback=last_feedback,
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
+                    required_next_targets=required_next_targets,
                 )
                 if (
                     (
@@ -2349,6 +2554,13 @@ class InteractiveSessionManager:
         evidence: tuple[Mapping[str, Any], ...] = (),
     ) -> str:
         if assessment == "mastered":
+            confirmation = reviewed_answer_confirmation(
+                question=question,
+                answer=answer,
+                evidence=evidence,
+            )
+            if confirmation:
+                return f"回答有效：{confirmation}"
             return "回答有效：你已经引用了与问题对应的数据，并给出了可由当前证据支持的判断。"
         if assessment == "needs_support":
             feedback = "回答部分有效：方向基本相关，但关键数值、比较对象或因果依据仍不完整。"
@@ -2509,6 +2721,12 @@ class InteractiveSessionManager:
                 session.unresolved_misconceptions
             ),
         }
+        for ticket in session.correction_tickets:
+            if (
+                ticket.get("status") == "open"
+                and ticket.get("knowledge_point") == current_point
+            ):
+                ticket["status"] = "deferred" if deferred else "remediation"
         session.interaction = {
             "kind": "learning_notice",
             "message": (
@@ -2968,6 +3186,19 @@ class InteractiveSessionManager:
             "artifact": session.artifact,
             "interaction": session.interaction,
             "training_report": session.training_report,
+            "correction_status": {
+                "open_count": sum(
+                    1
+                    for ticket in session.correction_tickets
+                    if ticket.get("status") == "open"
+                ),
+                "resolved_count": sum(
+                    1
+                    for ticket in session.correction_tickets
+                    if bool(ticket.get("resolved"))
+                ),
+                "total_count": len(session.correction_tickets),
+            },
             "remediation_status": {
                 "unresolved_misconceptions": sorted(
                     session.unresolved_misconceptions

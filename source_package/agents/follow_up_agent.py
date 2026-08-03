@@ -276,11 +276,21 @@ def deterministic_follow_up_route(
     allowed_targets: Sequence[str],
     allowed_support_points: Sequence[str],
     routing_policy: RoutingPolicy,
+    required_targets: Sequence[str] = (),
 ) -> tuple[str | None, tuple[str, ...]]:
     """Resolve one immutable next target and its backend-only route support."""
 
     if terminal_round or (completion_allowed and assessment == "mastered"):
         return None, ()
+    required = tuple(
+        dict.fromkeys(
+            target for target in required_targets if target in allowed_targets
+        )
+    )
+    if assessment == "mastered" and required:
+        # A correct answer may close only the question it actually answered.
+        # Any older open correction is selected before relation expansion.
+        return required[0], ()
     if diagnosed_misconception == UNKNOWN_MISCONCEPTION:
         return UNKNOWN_MISCONCEPTION, ()
     probed = tuple(dict.fromkeys(probed_misconceptions))
@@ -699,6 +709,82 @@ def _matches_reviewed_answer(
     )
 
 
+def reviewed_answer_confirmation(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> str | None:
+    """Explain a deterministic positive match without exposing internals.
+
+    The confirmation is emitted only after the same strict, reviewed-evidence
+    guard used for mastery succeeds.  It therefore cannot turn an unsupported
+    model judgement into a learner-facing factual claim.
+    """
+
+    if not _matches_reviewed_answer(
+        question=question,
+        answer=answer,
+        evidence=evidence,
+    ):
+        return None
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    rows = _expected_rows(evidence)
+    if not rows:
+        return None
+
+    common_keys = set(rows[0])
+    for row in rows[1:]:
+        common_keys.intersection_update(row)
+    metric_keys = [
+        key
+        for key in common_keys
+        if _match_key(key)
+        in {"completerate", "completionrate", _match_key("完成率")}
+    ]
+    if len(metric_keys) != 1:
+        return None
+    metric_key = metric_keys[0]
+
+    direction: str | None = None
+    if any(token in normalized_question for token in ("最低", "最小")):
+        direction = "最低值"
+        extreme = min
+    elif any(token in normalized_question for token in ("最高", "最大")):
+        direction = "最高值"
+        extreme = max
+
+    if direction is not None and len(rows) >= 2:
+        reviewed = [
+            (row, _decimal_scalar(row.get(metric_key)))
+            for row in rows
+        ]
+        if all(value is not None for _, value in reviewed):
+            target_value = extreme(value for _, value in reviewed if value is not None)
+            winners = [row for row, value in reviewed if value == target_value]
+            if len(winners) == 1:
+                winner = winners[0]
+                identifiers = [
+                    str(value).strip()
+                    for key, value in winner.items()
+                    if key != metric_key
+                    and isinstance(value, str)
+                    and value.strip()
+                    and _decimal_scalar(value) is None
+                ]
+                if identifiers:
+                    return (
+                        f"已核验：{identifiers[0]} 的完成率为 "
+                        f"{winner[metric_key]}，与查询结果中的{direction}一致。"
+                    )
+
+    if len(rows) == 1:
+        value = rows[0].get(metric_key)
+        return f"已核验：回答引用的完成率 {value} 与当前查询结果一致。"
+    return None
+
+
 def _match_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return "".join(character for character in normalized if character.isalnum())
@@ -770,6 +856,8 @@ class FollowUpAgent:
         completion_allowed: bool = False,
         terminal_round: bool = False,
         previous_questions: Sequence[str] = (),
+        task_agent: TaskAgent | None = None,
+        required_target: str | None = None,
     ) -> FollowUpTurn:
         """Build one evidence-bound probe when model output fails hard gates.
 
@@ -813,16 +901,25 @@ class FollowUpAgent:
                 },
             )
 
+        target_task = current_task
+        if required_target is not None:
+            if task_agent is None or required_target not in task_agent.misconception_ids:
+                raise FollowUpGenerationError(
+                    "required correction target is not in the current domain"
+                )
+            target_task = task_agent.counter_evidence(required_target)
+        target_content = _payload_content(target_task)
+        target_evidence = _evidence_items(target_task)
         source_standard_stem = str(
-            current_content.get("standard_stem")
-            or current_content.get("question")
+            target_content.get("standard_stem")
+            or target_content.get("question")
             or ""
         ).strip()
         if not source_standard_stem:
             raise FollowUpGenerationError("follow-up evidence has no standard stem")
-        template_id = str(current_content.get("template_id") or "").strip()
+        template_id = str(target_content.get("template_id") or "").strip()
         template_questions = _TEMPLATE_FALLBACK_QUESTIONS.get(template_id)
-        family = str(current_content.get("family") or "").strip()
+        family = str(target_content.get("family") or "").strip()
         family_questions = _FAMILY_FALLBACK_QUESTIONS.get(family)
         standard_stem = source_standard_stem
         fallback_questions = (
@@ -857,6 +954,7 @@ class FollowUpAgent:
             raise FollowUpGenerationError(
                 "no unused evidence-bound fallback question remains"
             )
+        evidence = target_evidence
         evidence_refs = [str(item["ref"]) for item in evidence]
         content: dict[str, Any] = {
             "event": "follow_up_question_ready",
@@ -869,7 +967,7 @@ class FollowUpAgent:
             ],
             "standard_stem": standard_stem,
             "assessment": assessment,
-            "target_misconception": UNKNOWN_MISCONCEPTION,
+            "target_misconception": required_target or UNKNOWN_MISCONCEPTION,
             "follow_up_round": round_index,
             "max_follow_up_rounds": max_rounds,
             "evidence_refs": evidence_refs,
@@ -878,11 +976,15 @@ class FollowUpAgent:
             "knowledge_point",
             "difficulty",
             "family",
-            "responsibility_scope",
+            "template_id",
         ):
-            value = current_content.get(key)
+            value = target_content.get(key)
             if value is not None:
                 content[key] = deepcopy(value)
+        if current_content.get("responsibility_scope") is not None:
+            content["responsibility_scope"] = deepcopy(
+                current_content["responsibility_scope"]
+            )
         product: dict[str, Any] = {
             "trace_id": self._trace_id,
             "agent": "task",
@@ -893,7 +995,7 @@ class FollowUpAgent:
             "probe": {
                 "wrong_attempts": max(1, round_index - 1),
                 "questions": [question],
-                "target_misconception": UNKNOWN_MISCONCEPTION,
+                "target_misconception": required_target or UNKNOWN_MISCONCEPTION,
             },
             "model": model,
             "latency_ms": 0,
@@ -910,7 +1012,9 @@ class FollowUpAgent:
         return FollowUpTurn(
             assessment=assessment,
             diagnosed_misconception=UNKNOWN_MISCONCEPTION,
-            next_target_misconception=UNKNOWN_MISCONCEPTION,
+            next_target_misconception=(
+                required_target or UNKNOWN_MISCONCEPTION
+            ),
             route_support_points=(),
             product=product,
             model=model,
@@ -938,6 +1042,7 @@ class FollowUpAgent:
         completion_allowed: bool = False,
         terminal_round: bool = False,
         previous_questions: Sequence[str] = (),
+        required_next_targets: Sequence[str] = (),
     ) -> FollowUpTurn:
         answer = normalize_learner_input(student_answer)
         if (
@@ -954,6 +1059,13 @@ class FollowUpAgent:
             raise ValueError("round_index must be between 2 and max_rounds")
 
         allowed_targets = task_agent.misconception_ids
+        required_targets = tuple(
+            dict.fromkeys(
+                target
+                for target in required_next_targets
+                if isinstance(target, str) and target in allowed_targets
+            )
+        )
         active_routing_policy = routing_policy or RoutingPolicy()
         probed = tuple(
             dict.fromkeys(
@@ -1062,6 +1174,7 @@ class FollowUpAgent:
                         "max_rounds": max_rounds,
                         "completion_allowed": completion_allowed,
                         "terminal_round": terminal_round,
+                        "required_next_targets": list(required_targets),
                         "review_feedback": [
                             str(item)
                             for item in review_feedback
@@ -1144,6 +1257,7 @@ class FollowUpAgent:
             allowed_targets=allowed_targets,
             allowed_support_points=allowed_route_points,
             routing_policy=active_routing_policy,
+            required_targets=required_targets,
         )
         if proposed_next != expected_next:
             raise FollowUpGenerationError(
@@ -1223,11 +1337,15 @@ class FollowUpAgent:
             "knowledge_point",
             "difficulty",
             "family",
-            "responsibility_scope",
+            "template_id",
         ):
-            value = current_content.get(key)
+            value = base_content.get(key)
             if value is not None:
                 content[key] = deepcopy(value)
+        if current_content.get("responsibility_scope") is not None:
+            content["responsibility_scope"] = deepcopy(
+                current_content["responsibility_scope"]
+            )
         draft: dict[str, Any] = {
             "trace_id": self._trace_id,
             "agent": "task",

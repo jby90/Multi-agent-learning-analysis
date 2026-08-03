@@ -218,12 +218,22 @@ class DiagnosisAgent:
         else:
             difficulty = _step_up(str(profile["difficulty_start"]))
 
+        knowledge_point_plan = [
+            {
+                "knowledge_point": knowledge_point,
+                "initial_difficulty": difficulty,
+                "difficulty_source": "diagnosis_baseline",
+            }
+            for knowledge_point in blind_spots
+        ]
+
         content: dict[str, Any] = {
             "event": "diagnosis_ready",
             "profile_id": profile_id,
             "blind_spots": blind_spots,
             "hit_misconceptions": hit_misconceptions,
             "difficulty": difficulty,
+            "knowledge_point_plan": knowledge_point_plan,
             "pretest_score": {
                 "correct": correct,
                 "total": total,

@@ -1345,7 +1345,15 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     assert continued["awaiting"] == "advance"
     assert continued["profile"]["profile_id"] == "line_leader"
     assert continued["learning_contract"]["target_knowledge_points"][0] == "完成率计算"
-    assert continued["learning_contract"]["difficulty"] == "applied"
+    assert continued["learning_contract"]["difficulty"] == "basic"
+    continued_diagnosis = (
+        manager._get_session(continued["session_id"]).diagnosis or {}
+    )["payload"]["content"]
+    assert continued_diagnosis["knowledge_point_plan"][0] == {
+        "knowledge_point": "计划量与实际量口径",
+        "initial_difficulty": "basic",
+        "difficulty_source": "diagnosis_baseline",
+    }
     assert continued["interaction"] == {
         "kind": "learning_notice",
         "message": "已沿用本轮画像与测评结果，下一知识点：完成率计算。",
@@ -1561,7 +1569,9 @@ def test_unresolved_historical_error_blocks_an_unrelated_mastery_result(
     follow_up_llm = FollowUpLLM(
         follow_up_response(
             "mastered",
-            "请再用查询结果说明计划量与实际完成量的区别。",
+            "按船号比较时，查询结果中最低的完成率来自哪艘船？",
+            target="M-01",
+            next_target="M-04",
         ),
     )
     manager, session_id = start_sql_session(
@@ -1589,6 +1599,195 @@ def test_unresolved_historical_error_blocks_an_unrelated_mastery_result(
     assert state["awaiting"] == "follow_up"
     assert state["interaction"]["round"] == 3
     assert "M-04" in state["remediation_status"]["unresolved_misconceptions"]
+    assert manager._get_session(session_id).follow_up_target == "M-04"
+    assert "此前" in state["interaction"]["feedback"]
+
+
+def test_wrong_follow_up_creates_an_auditable_correction_ticket(
+    tmp_path: Path,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response(
+            "needs_support",
+            "查询结果中AZTP和ZZTP的完成率分别是多少？",
+            target="M-01",
+        )
+    )
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+
+    state = manager.submit_follow_up(
+        session_id,
+        "YCL应该比较低。",
+        "ticket-open-1",
+    )
+
+    assert state["correction_status"] == {
+        "open_count": 1,
+        "resolved_count": 0,
+        "total_count": 1,
+    }
+    ticket = manager._get_session(session_id).correction_tickets[0]
+    assert ticket["source_round"] == 1
+    assert ticket["misconception_id"] == "M-01"
+    assert ticket["resolved"] is False
+    assert ticket["learner_answer_digest"]
+    assert "YCL应该比较低" not in str(ticket)
+    assert ticket["missing_evidence_fields"]
+
+
+def test_targeted_mastery_resolves_only_the_matching_correction_ticket(
+    tmp_path: Path,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response("mastered", "", target="M-04"),
+    )
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+    internal = manager._get_session(session_id)
+    internal.follow_up_round = 2
+    internal.follow_up_target = "M-04"
+    internal.unresolved_misconceptions = {"M-04"}
+    internal.correction_tickets = [
+        {
+            "source_round": 1,
+            "learner_answer_digest": "digest",
+            "missing_evidence_fields": ["ship_no", "complete_rate"],
+            "misconception_id": "M-04",
+            "correction_evidence": [],
+            "resolved": False,
+        }
+    ]
+
+    state = manager.submit_follow_up(
+        session_id,
+        "H2601的完成率最低，为0.6236。",
+        "ticket-resolve-2",
+    )
+
+    assert state["awaiting"] == "advance"
+    assert state["correction_status"] == {
+        "open_count": 0,
+        "resolved_count": 1,
+        "total_count": 1,
+    }
+    ticket = manager._get_session(session_id).correction_tickets[0]
+    assert ticket["resolved"] is True
+    assert ticket["resolved_round"] == 2
+    assert ticket["resolution_evidence"]
+
+
+def test_second_round_assessment_uses_the_targeted_probe_evidence(
+    tmp_path: Path,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response(
+            "needs_support",
+            "按船号比较时，查询结果中最低的完成率来自哪艘船？",
+            target="M-04",
+        ),
+        follow_up_response("mastered", "", target="M-04"),
+    )
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=follow_up_llm,
+    )
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[task["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+
+    continued = manager.submit_follow_up(
+        session_id,
+        "完成率可能偏低，但我还没有核对船号。",
+        "targeted-evidence-1",
+    )
+    assert continued["interaction"]["round"] == 2
+    assert manager._get_session(session_id).follow_up_target == "M-04"
+
+    completed = manager.submit_follow_up(
+        session_id,
+        "H2601的完成率最低，为0.6236。",
+        "targeted-evidence-2",
+    )
+
+    assert completed["awaiting"] == "advance"
+    assert "上一处错误" in completed["interaction"]["feedback"]
+    ticket = manager._get_session(session_id).correction_tickets[0]
+    assert any(
+        "船级排名" in point
+        for evidence in ticket["resolution_evidence"]
+        for point in evidence["expected_points"]
+    )
+
+
+def test_reviewed_field_and_value_correct_a_model_false_negative_with_feedback(
+    tmp_path: Path,
+) -> None:
+    follow_up_llm = FollowUpLLM(
+        follow_up_response(
+            "unknown",
+            "查询结果中AZTP和ZZTP的完成率分别是多少？",
+            target="UNKNOWN",
+            next_target="UNKNOWN",
+        )
+    )
+    executor = CatalogExecutor()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=follow_up_llm,
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+    manager.advance(session_id)
+    task = manager.advance(session_id)
+    content = task["artifact"]["payload"]["content"]
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates[content["template_id"]].standard_sql,
+    )
+    manager.advance(session_id)
+
+    continued = manager.submit_follow_up(
+        session_id,
+        "YCL 0.6236",
+        "reviewed-false-negative-1",
+    )
+
+    assert continued["awaiting"] == "follow_up"
+    assert continued["interaction"]["round"] == 2
+    assert continued["interaction"]["turns"][0]["assessment"] == "mastered"
+    assert continued["interaction"]["feedback"] == (
+        "回答有效：已核验：YCL 的完成率为 0.6236，"
+        "与查询结果中的最低值一致。"
+    )
 
 
 def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
@@ -2000,7 +2199,17 @@ def test_first_t17_creates_a_lower_difficulty_contract_revision(
     }
     assert state["remediation_status"]["context"]["action"] == "step_down"
 
-    manager.advance(session_id)
+    lecture = manager.advance(session_id)
+    lecture_content = lecture["artifact"]["payload"]["content"]
+    assert lecture_content["difficulty"] == "basic"
+    assert lecture["evidence_bundle"]["sources"]["pedagogy"]["remediation"] == {
+        "knowledge_point": "三道工序与传导关系",
+        "attempt": 1,
+        "action": "step_down",
+        "from_difficulty": "applied",
+        "to_difficulty": "basic",
+        "exposed_misconceptions": ["M-01"],
+    }
     relearned_task = manager.advance(session_id)
     relearned_content = relearned_task["artifact"]["payload"]["content"]
     assert relearned_content["difficulty"] == "basic"
@@ -2029,10 +2238,11 @@ def test_second_t17_defers_the_point_instead_of_repeating_forever(
                 follow_up_response("needs_support", ""),
             )
         )
+    scripted_llm = ScriptedLLM()
     manager = InteractiveSessionManager(
         trace_dir=tmp_path / "traces",
         cache_dir=tmp_path / "cache",
-        llm_call=ScriptedLLM(),
+        llm_call=scripted_llm,
         follow_up_llm_call=FollowUpLLM(*responses),
         executor_factory=CatalogExecutor,
     )
@@ -2043,7 +2253,21 @@ def test_second_t17_defers_the_point_instead_of_repeating_forever(
     )
 
     for cycle in range(2):
-        manager.advance(session_id)
+        lecture = manager.advance(session_id)
+        if cycle == 1:
+            lecture_user = next(
+                json.loads(call["user"])
+                for call in reversed(scripted_llm.calls)
+                if "oneOf" in call["json_schema"]
+            )
+            assert "第1次补学" in lecture_user["learning_report_summary"]
+            assert "更换讲解角度" in lecture_user["learning_report_summary"]
+            assert (
+                lecture["evidence_bundle"]["sources"]["pedagogy"][
+                    "remediation"
+                ]["action"]
+                == "refresh"
+            )
         task = manager.advance(session_id)
         content = task["artifact"]["payload"]["content"]
         manager.submit_sql(
@@ -2071,6 +2295,13 @@ def test_second_t17_defers_the_point_instead_of_repeating_forever(
     next_lecture = manager.advance(session_id)
     assert next_lecture["awaiting"] in {"advance", "done"}
     if next_lecture["awaiting"] == "advance":
+        assert (
+            next_lecture["evidence_bundle"]["sources"]["pedagogy"][
+                "remediation"
+            ]
+            is None
+        )
+        assert next_lecture["training_report"] is None
         next_task = manager.advance(session_id)
         assert (
             next_task["artifact"]["payload"]["content"]["knowledge_point"]

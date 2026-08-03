@@ -218,6 +218,25 @@ def test_user_approved_nine_case_diagnosis_matrix(case: dict[str, Any]) -> None:
     assert content["hit_misconceptions"] == case["hit_misconceptions"]
 
 
+def test_diagnosis_seeds_an_initial_difficulty_for_every_blind_spot() -> None:
+    module = _diagnosis_module()
+    message = module.DiagnosisAgent("trace-knowledge-plan").assess(
+        "line_leader",
+        {question_id: "D" for question_id in ALL_CORRECT},
+    )
+    content = message["payload"]["content"]
+
+    assert content["difficulty"] == "basic"
+    assert content["knowledge_point_plan"] == [
+        {
+            "knowledge_point": knowledge_point,
+            "initial_difficulty": "basic",
+            "difficulty_source": "diagnosis_baseline",
+        }
+        for knowledge_point in content["blind_spots"]
+    ]
+
+
 @pytest.mark.parametrize(
     ("correct_ids", "expected_rate"),
     [

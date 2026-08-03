@@ -581,7 +581,11 @@ def _generate_reviewable_lecture(
     difficulty_fallback: bool | None = None,
     evidence_bundle: EvidenceBundle | None = None,
 ) -> dict[str, Any]:
-    requested_difficulty = str(diagnosis_content.get("difficulty"))
+    requested_difficulty = (
+        evidence_bundle.difficulty
+        if evidence_bundle is not None
+        else str(diagnosis_content.get("difficulty"))
+    )
     keywords = tuple(str(item) for item in blind_spots[:3])
     chunks = tuple(retrieved_chunks) if retrieved_chunks is not None else None
     if difficulty_fallback is None:
@@ -602,13 +606,30 @@ def _generate_reviewable_lecture(
     hard_hits: tuple[dict[str, str], ...] = ()
     last_lecture: dict[str, Any] | None = None
     for _ in range(MAX_LECTURE_GENERATION_ATTEMPTS):
+        learning_report_summary = (
+            f"{runtime.profile['title']}当前优先补足{knowledge_point}，"
+            f"本次学习难度档为{requested_difficulty}。"
+        )
+        if evidence_bundle is not None:
+            pedagogy = evidence_bundle.source("pedagogy")
+            remediation = pedagogy.get("remediation")
+            if isinstance(remediation, Mapping):
+                attempt = remediation.get("attempt")
+                action = remediation.get("action")
+                exposed = remediation.get("exposed_misconceptions")
+                learning_report_summary += f"这是第{attempt}次补学；"
+                if action == "step_down":
+                    learning_report_summary += "请降低认知负荷并重新组织例证。"
+                elif action == "refresh":
+                    learning_report_summary += "请更换讲解角度，不要重复上一版表述。"
+                if isinstance(exposed, list) and exposed:
+                    learning_report_summary += (
+                        "重点纠正已暴露的误区：" + "、".join(map(str, exposed)) + "。"
+                    )
         lecture = runtime.knowledge.generate(
             knowledge_point=knowledge_point,
             student_profile=runtime.profile,
-            learning_report_summary=(
-                f"{runtime.profile['title']}当前优先补足{knowledge_point}，"
-                f"岗前测评难度档为{diagnosis_content.get('difficulty')}。"
-            ),
+            learning_report_summary=learning_report_summary,
             keywords=keywords,
             difficulty=generation_difficulty,
             retrieved_chunks=chunks,
