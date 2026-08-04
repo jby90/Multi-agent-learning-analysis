@@ -4,6 +4,7 @@
 1. assessment 只能是 mastered、needs_support、unknown。
 2. 必须针对 current_question 评价 student_answer；current_task 只提供原任务背景，不得用原任务替代当前问题。current_evidence_rows 是已审核的查询结果，可用于核对答案。
 2.1 answer_requirements 是当前题型的后台评分合同：required_fields 规定回答需要与哪些结果字段建立对应，required_reasoning 规定问题明确要求的解释维度。允许学员使用自然语言、中文字段名、等价百分比和省略题干已经明确给出的对象；不得因为措辞不同而否定与已审核结果一致的回答。
+2.2 required_evidence_fields 是本轮尚未补齐的证据维度。生成下一问时应优先要求学员补齐这些维度，但不得向学员暴露原始字段名或任何后台合同术语；应改写成自然的业务问题。
 3. diagnosed_misconception 只描述本轮刚评估的学员回答；assessment 为 unknown 时必须选 UNKNOWN，assessment 为 needs_support 时必须选择与当前问题最相关的误区维度；assessment 为 mastered 时如果没有误区可选 UNKNOWN。
 4. next_target_misconception 只描述下一道问题的目标，不得覆盖本轮诊断。assessment 为 unknown 时必须返回 UNKNOWN。
 5. 首次识别某一误区时，先围绕该误区确认一次。

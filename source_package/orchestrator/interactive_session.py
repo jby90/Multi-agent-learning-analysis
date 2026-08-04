@@ -1729,6 +1729,35 @@ class InteractiveSessionManager:
                 resolved = True
         return resolved
 
+    @staticmethod
+    def _next_correction_requirements(
+        session: _InteractiveSession,
+        *,
+        unresolved: set[str],
+    ) -> tuple[str | None, tuple[str, ...]]:
+        """Return the oldest open correction and its missing evidence fields."""
+
+        for ticket in session.correction_tickets:
+            target = ticket.get("misconception_id")
+            if bool(ticket.get("resolved")) or target not in unresolved:
+                continue
+            raw_fields = ticket.get("missing_evidence_fields")
+            fields = (
+                tuple(
+                    dict.fromkeys(
+                        field.strip()
+                        for field in raw_fields
+                        if isinstance(field, str) and field.strip()
+                    )
+                )
+                if isinstance(raw_fields, list)
+                else ()
+            )
+            return str(target), fields
+        if unresolved:
+            return sorted(unresolved)[0], ()
+        return None, ()
+
     def submit_follow_up(
         self,
         session_id: str,
@@ -1821,7 +1850,30 @@ class InteractiveSessionManager:
         unresolved_elsewhere = set(session.unresolved_misconceptions)
         if session.follow_up_target:
             unresolved_elsewhere.discard(session.follow_up_target)
-        required_next_targets = tuple(sorted(unresolved_elsewhere))
+        correction_target, historical_missing_fields = (
+            self._next_correction_requirements(
+                session,
+                unresolved=unresolved_elsewhere,
+            )
+        )
+        required_next_targets = tuple(
+            [
+                *([correction_target] if correction_target is not None else []),
+                *sorted(unresolved_elsewhere - {correction_target}),
+            ]
+        )
+        current_evidence = tuple(
+            item
+            for item in current_task.get("evidence", [])
+            if isinstance(item, Mapping)
+        )
+        required_evidence_fields = (
+            historical_missing_fields
+            if historical_missing_fields
+            else tuple(
+                self._missing_evidence_fields(answer_text, current_evidence)
+            )
+        )
         correction_gate_open = not unresolved_elsewhere
         completion_allowed = submitted_round >= 2 and correction_gate_open
         generation_round = min(
@@ -1858,6 +1910,7 @@ class InteractiveSessionManager:
                     terminal_round=terminal_round,
                     previous_questions=previous_questions,
                     required_next_targets=required_next_targets,
+                    required_evidence_fields=required_evidence_fields,
                 )
             except FollowUpGenerationError:
                 generated = session.follow_up_agent.deterministic_fallback(
@@ -1875,6 +1928,7 @@ class InteractiveSessionManager:
                         if required_next_targets
                         else None
                     ),
+                    required_evidence_fields=required_evidence_fields,
                 )
             reviewed_product: dict[str, Any] | None = None
             if generated.product is not None:
@@ -1889,6 +1943,7 @@ class InteractiveSessionManager:
                     probed_snapshot=probed_snapshot,
                     covered_snapshot=covered_snapshot,
                     required_next_targets=required_next_targets,
+                    required_evidence_fields=required_evidence_fields,
                 )
             relation_index = default_relation_index(
                 tuple(runtime.task.misconception_ids)
@@ -2123,6 +2178,7 @@ class InteractiveSessionManager:
         probed_snapshot: tuple[str, ...],
         covered_snapshot: tuple[str, ...],
         required_next_targets: tuple[str, ...] = (),
+        required_evidence_fields: tuple[str, ...] = (),
     ) -> tuple[FollowUpTurn, dict[str, Any]]:
         runtime = session.runtime
         candidate = initial
@@ -2161,6 +2217,7 @@ class InteractiveSessionManager:
                     completion_allowed=completion_allowed,
                     terminal_round=terminal_round,
                     required_next_targets=required_next_targets,
+                    required_evidence_fields=required_evidence_fields,
                 )
                 if (
                     (
@@ -3040,10 +3097,15 @@ class InteractiveSessionManager:
             },
         )
         session.artifact = failure
-        self._register_sql_failure(
-            session,
-            student_message=student_message,
-        )
+        # Empty results are attributable to the learner's query conditions and
+        # can therefore advance the teaching-support ladder.  Timeouts and
+        # execution failures represent external availability problems; they
+        # must never lower a learner's assessed difficulty.
+        if event == "query_empty":
+            self._register_sql_failure(
+                session,
+                student_message=student_message,
+            )
         return self.get_state(session.session_id)
 
     def _register_sql_failure(
@@ -3086,10 +3148,21 @@ class InteractiveSessionManager:
             )
         elif attempt == 4:
             level = "partial_template"
+            select_shape = ", ".join(
+                f"<{field} 的字段或计算>" for field in output_fields
+            ) or "<任务要求的字段或聚合>"
+            filter_shape = " AND ".join(
+                f"<{field} 条件>" for field in filter_fields
+            ) or "<对象与时间条件>"
+            group_shape = (
+                f" GROUP BY {', '.join(f'<{field}>' for field in group_fields)}"
+                if group_fields
+                else ""
+            )
             hint = (
                 "可按这个框架补全，但系统不会直接给出答案："
-                "SELECT <任务要求的字段或聚合> FROM <任务授权表> "
-                "WHERE <对象与时间条件> GROUP BY <需要比较的维度>。"
+                f"SELECT {select_shape} FROM <任务授权表> "
+                f"WHERE {filter_shape}{group_shape}。"
             )
         else:
             level = "step_down"

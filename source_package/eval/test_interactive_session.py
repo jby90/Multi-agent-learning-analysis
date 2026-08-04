@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from threading import Event, Thread
+from types import SimpleNamespace
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -1643,6 +1644,36 @@ def test_wrong_follow_up_creates_an_auditable_correction_ticket(
     assert ticket["learner_answer_digest"]
     assert "YCL应该比较低" not in str(ticket)
     assert ticket["missing_evidence_fields"]
+    request = json.loads(follow_up_llm.calls[0]["user"])
+    assert request["required_evidence_fields"] == ticket["missing_evidence_fields"]
+
+
+def test_oldest_open_correction_ticket_controls_the_next_target_and_gap() -> None:
+    manager = InteractiveSessionManager.__new__(InteractiveSessionManager)
+    session = SimpleNamespace(
+        correction_tickets=[
+            {
+                "source_round": 1,
+                "misconception_id": "M-04",
+                "missing_evidence_fields": ["ship_no", "complete_rate"],
+                "resolved": False,
+            },
+            {
+                "source_round": 2,
+                "misconception_id": "M-01",
+                "missing_evidence_fields": ["actual_qty"],
+                "resolved": False,
+            },
+        ]
+    )
+
+    target, fields = manager._next_correction_requirements(
+        session,
+        unresolved={"M-01", "M-04"},
+    )
+
+    assert target == "M-04"
+    assert fields == ("ship_no", "complete_rate")
 
 
 def test_targeted_mastery_resolves_only_the_matching_correction_ticket(
@@ -2332,6 +2363,74 @@ def test_repeated_sql_failures_escalate_hints_and_step_down_on_fifth_attempt(
     assert state["remediation_status"]["attempts"] == {
         "计划量与实际量口径": 1
     }
+
+
+def test_sql_failure_hints_bind_to_task_fields_without_leaking_answer(
+    tmp_path: Path,
+) -> None:
+    manager, session_id = start_sql_session(tmp_path, CatalogExecutor())
+    standard_sql = load_task_catalog().templates["T-01"].standard_sql
+
+    for _ in range(3):
+        third = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
+
+    structured_hint = third["sql_support"]["hint"]
+    assert third["sql_support"]["level"] == "structured_hint"
+    assert "plan_qty" in structured_hint
+    assert "actual_qty" in structured_hint
+    assert "ship_no" in structured_hint
+    assert "period_date" in structured_hint
+    assert standard_sql not in structured_hint
+    assert "1855.06" not in structured_hint
+    assert "1156.87" not in structured_hint
+
+    fourth = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
+    partial_template = fourth["sql_support"]["hint"]
+    assert fourth["sql_support"]["level"] == "partial_template"
+    assert "SELECT" in partial_template
+    assert "plan_qty" in partial_template
+    assert "actual_qty" in partial_template
+    assert "ship_no" in partial_template
+    assert "period_date" in partial_template
+    assert standard_sql not in partial_template
+    assert "1855.06" not in partial_template
+    assert "1156.87" not in partial_template
+
+
+@pytest.mark.parametrize("executor", [TimeoutExecutor(), FailingExecutor()])
+def test_external_query_failure_does_not_penalize_the_learner(
+    tmp_path: Path,
+    executor: Any,
+) -> None:
+    manager, session_id = start_sql_session(tmp_path, executor)
+    standard_sql = load_task_catalog().templates["T-01"].standard_sql
+
+    for _ in range(5):
+        state = manager.submit_sql(session_id, standard_sql)
+        assert state["state"] == "S7_STUDENT"
+        assert state["awaiting"] == "sql"
+        assert state["sql_support"] is None
+
+    learner_error = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
+    assert learner_error["sql_support"]["attempt"] == 1
+    assert learner_error["sql_support"]["level"] == "self_correction"
+
+
+def test_successful_sql_clears_accumulated_failure_support(
+    tmp_path: Path,
+) -> None:
+    manager, session_id = start_sql_session(tmp_path, CatalogExecutor())
+    for _ in range(3):
+        failed = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
+    assert failed["sql_support"]["attempt"] == 3
+
+    completed = manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-01"].standard_sql,
+    )
+
+    assert completed["state"] == "S9_PATH_UPDATE"
+    assert completed["sql_support"] is None
 
 
 def test_r04_exhaustion_after_follow_up_finishes_safely_and_idempotently(

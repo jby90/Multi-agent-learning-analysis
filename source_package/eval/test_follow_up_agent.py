@@ -577,6 +577,68 @@ def test_deterministic_fallback_skips_a_question_already_used_in_history() -> No
     assert second.product["payload"]["content"]["question"] != first_question
 
 
+def test_deterministic_fallback_targets_the_missing_evidence_field() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=_current_task(task_agent, "T-02"),
+        round_index=3,
+        required_evidence_fields=("process_code",),
+    )
+
+    assert turn.product is not None
+    question = turn.product["payload"]["content"]["question"]
+    assert "工序" in question
+
+
+def test_generate_passes_missing_evidence_fields_to_the_model() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "needs_support",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-01",
+            "question": "三道工序中哪一道完成率最低，你依据的工序和值是什么？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress", llm_call=llm)
+
+    agent.generate(
+        student_answer="只写了0.6236。",
+        current_task=_current_task(task_agent, "T-02"),
+        task_agent=task_agent,
+        round_index=2,
+        required_evidence_fields=("process_code",),
+    )
+
+    request = json.loads(llm.calls[0]["user"])
+    assert request["required_evidence_fields"] == ["process_code"]
+
+
+def test_generate_rejects_a_superficially_rephrased_history_question() -> None:
+    repeated = "三道工序中哪一道完成率最低，你依据的工序和值是什么？"
+    llm = FollowUpLLM(
+        {
+            "assessment": "needs_support",
+            "diagnosed_misconception": "M-01",
+            "next_target_misconception": "M-01",
+            "question": f"请问{repeated}",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress", llm_call=llm)
+
+    with pytest.raises(FollowUpGenerationError, match="repeats history"):
+        agent.generate(
+            student_answer="我还不能确认最低工序。",
+            current_task=_current_task(task_agent, "T-03"),
+            task_agent=task_agent,
+            round_index=2,
+            previous_questions=(repeated,),
+        )
+
+
 def test_reviewed_ship_extreme_is_preserved_when_the_model_is_unavailable() -> None:
     task_agent = _task_agent()
     agent = FollowUpAgent("trace-production_progress")

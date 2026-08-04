@@ -114,6 +114,15 @@ _FAMILY_ANSWER_REQUIREMENTS = {
         "required_reasoning": ["comparison"],
     },
 }
+_EVIDENCE_FIELD_QUESTION_TERMS = {
+    "actual_qty": ("实际", "完成量"),
+    "plan_qty": ("计划", "计划量"),
+    "complete_rate": ("完成率", "百分比", "数值"),
+    "month_label": ("月份", "哪个月", "月度"),
+    "process_code": ("工序",),
+    "ship_no": ("船号", "哪艘船"),
+    "workshop_code": ("责任单元", "单元"),
+}
 _TEMPLATE_FALLBACK_QUESTIONS = {
     "T-03": (
         "查询结果中AZTP和ZZTP的完成率分别是多少？",
@@ -790,6 +799,44 @@ def _match_key(value: str) -> str:
     return "".join(character for character in normalized if character.isalnum())
 
 
+def _question_history_key(value: str) -> str:
+    """Collapse harmless discourse markers before deterministic de-duplication."""
+
+    key = _match_key(value)
+    prefixes = (
+        "请问",
+        "请你",
+        "请再",
+        "请",
+        "根据当前查询结果",
+        "根据查询结果",
+    )
+    changed = True
+    while changed:
+        changed = False
+        for prefix in prefixes:
+            prefix_key = _match_key(prefix)
+            if key.startswith(prefix_key) and len(key) > len(prefix_key):
+                key = key[len(prefix_key) :]
+                changed = True
+                break
+    return key.removesuffix("呢")
+
+
+def _evidence_gap_score(question: str, fields: Sequence[str]) -> int:
+    """Score whether a learner-facing question asks for declared evidence gaps."""
+
+    normalized = _normalized_visible_text(question).casefold()
+    return sum(
+        1
+        for field in dict.fromkeys(fields)
+        if any(
+            term.casefold() in normalized
+            for term in _EVIDENCE_FIELD_QUESTION_TERMS.get(field, ())
+        )
+    )
+
+
 def _validate_question(
     question: Any,
     *,
@@ -858,6 +905,7 @@ class FollowUpAgent:
         previous_questions: Sequence[str] = (),
         task_agent: TaskAgent | None = None,
         required_target: str | None = None,
+        required_evidence_fields: Sequence[str] = (),
     ) -> FollowUpTurn:
         """Build one evidence-bound probe when model output fails hard gates.
 
@@ -926,7 +974,7 @@ class FollowUpAgent:
             template_questions or family_questions or _DEFAULT_FALLBACK_QUESTIONS
         )
         previous_keys = {
-            _match_key(item)
+            _question_history_key(item)
             for item in previous_questions
             if isinstance(item, str) and item.strip()
         }
@@ -939,17 +987,25 @@ class FollowUpAgent:
             *fallback_questions[:start_index],
         )
         question = ""
+        eligible_questions: list[tuple[int, int, str]] = []
         for template in ordered_questions:
             candidate = _validate_question(
                 template.format(
                     standard_stem=source_standard_stem.rstrip("。？！?!"),
                 ),
                 standard_stem=source_standard_stem,
-                evidence=evidence,
+                evidence=target_evidence,
             )
-            if _match_key(candidate) not in previous_keys:
-                question = candidate
-                break
+            if _question_history_key(candidate) not in previous_keys:
+                eligible_questions.append(
+                    (
+                        _evidence_gap_score(candidate, required_evidence_fields),
+                        -len(eligible_questions),
+                        candidate,
+                    )
+                )
+        if eligible_questions:
+            question = max(eligible_questions)[2]
         if not question:
             raise FollowUpGenerationError(
                 "no unused evidence-bound fallback question remains"
@@ -1043,6 +1099,7 @@ class FollowUpAgent:
         terminal_round: bool = False,
         previous_questions: Sequence[str] = (),
         required_next_targets: Sequence[str] = (),
+        required_evidence_fields: Sequence[str] = (),
     ) -> FollowUpTurn:
         answer = normalize_learner_input(student_answer)
         if (
@@ -1175,6 +1232,11 @@ class FollowUpAgent:
                         "completion_allowed": completion_allowed,
                         "terminal_round": terminal_round,
                         "required_next_targets": list(required_targets),
+                        "required_evidence_fields": [
+                            field
+                            for field in dict.fromkeys(required_evidence_fields)
+                            if isinstance(field, str) and field.strip()
+                        ],
                         "review_feedback": [
                             str(item)
                             for item in review_feedback
@@ -1310,11 +1372,11 @@ class FollowUpAgent:
             evidence=evidence,
         )
         previous_keys = {
-            _match_key(item)
+            _question_history_key(item)
             for item in previous_questions
             if isinstance(item, str) and item.strip()
         }
-        if _match_key(question) in previous_keys:
+        if _question_history_key(question) in previous_keys:
             raise FollowUpGenerationError("follow-up question repeats history")
         evidence_refs = [str(item["ref"]) for item in evidence]
         content: dict[str, Any] = {

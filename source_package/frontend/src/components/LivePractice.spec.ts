@@ -121,6 +121,31 @@ describe('LivePractice', () => {
     expect(wrapper.get('.sql-teacher-hint').text()).not.toContain('SELECT process_code')
   })
 
+  it('renders server-side progressive support with its attempt number', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+      sql_support: {
+        attempt: 3,
+        level: 'structured_hint',
+        hint: '先核对输出字段 plan_qty、actual_qty 和筛选字段 ship_no、period_date。',
+        will_step_down: false,
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    const support = wrapper.get('.sql-progressive-support')
+    expect(support.attributes('data-level')).toBe('structured_hint')
+    expect(support.text()).toContain('第 3 次提示')
+    expect(support.text()).toContain('计划量')
+    expect(support.text()).toContain('日期')
+    expect(support.text()).not.toContain('plan_qty')
+    expect(support.text()).not.toContain('period_date')
+  })
+
   it('shows answer feedback and the reason before advancing', async () => {
     sessionStorage.setItem('ref-interactive-session', 'session-live')
     const api = fakeApi()
