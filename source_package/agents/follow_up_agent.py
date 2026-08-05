@@ -476,7 +476,19 @@ def _matches_reviewed_completion_extreme(
         value = _decimal_scalar(row.get(metric_key))
         if value is None:
             return False
+        identifiers = [
+            field_value
+            for key, field_value in row.items()
+            if key != metric_key
+            and isinstance(field_value, str)
+            and field_value.strip()
+            and _decimal_scalar(field_value) is None
+        ]
+        if not identifiers:
+            continue
         reviewed.append((row, value))
+    if len(reviewed) < 2:
+        return False
     extreme_value = (
         min(value for _, value in reviewed)
         if direction == "min"
@@ -510,6 +522,62 @@ def _matches_reviewed_completion_extreme(
         and _decimal_scalar(value) is None
     ]
     return any(identifier in normalized_answer for identifier in identifiers)
+
+
+def _requires_reviewed_completion_extreme(
+    *,
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Return whether mastery must be reproduced from reviewed extrema rows.
+
+    The LLM may explain an answer, but it must not waive the deterministic
+    evidence requirement for a completion-rate minimum/maximum question.  The
+    guard is intentionally narrow so conceptual questions keep their existing
+    semantic assessment path.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    if "完成率" not in normalized_question:
+        return False
+    if not any(
+        token in normalized_question
+        for token in ("最低", "最小", "最高", "最大")
+    ):
+        return False
+
+    rows = _expected_rows(evidence)
+    if len(rows) < 2:
+        return False
+    common_keys = set(rows[0])
+    for row in rows[1:]:
+        common_keys.intersection_update(row)
+    metric_keys = [
+        key
+        for key in common_keys
+        if _match_key(key)
+        in {
+            "completerate",
+            "completionrate",
+            _match_key("完成率"),
+        }
+    ]
+    if len(metric_keys) != 1:
+        return False
+    metric_key = metric_keys[0]
+    identified_rows = [
+        row
+        for row in rows
+        if _decimal_scalar(row.get(metric_key)) is not None
+        and any(
+            key != metric_key
+            and isinstance(value, str)
+            and value.strip()
+            and _decimal_scalar(value) is None
+            for key, value in row.items()
+        )
+    ]
+    return len(identified_rows) >= 2
 
 
 def reviewed_answer_correction(
@@ -1276,13 +1344,35 @@ class FollowUpAgent:
 
         assessment = str(result.data["assessment"])
         diagnosed = str(result.data["diagnosed_misconception"])
-        if assessment != "mastered" and _matches_reviewed_answer(
+        reviewed_answer_matches = _matches_reviewed_answer(
             question=active_question,
             answer=answer,
             evidence=current_evidence,
-        ):
+        )
+        if assessment != "mastered" and reviewed_answer_matches:
             assessment = "mastered"
             diagnosed = UNKNOWN_MISCONCEPTION
+        elif (
+            assessment == "mastered"
+            and _requires_reviewed_completion_extreme(
+                question=active_question,
+                evidence=current_evidence,
+            )
+            and not reviewed_answer_matches
+        ):
+            return self.deterministic_fallback(
+                current_task=current_task,
+                round_index=round_index,
+                max_rounds=max_rounds,
+                student_answer=answer,
+                current_question=active_question,
+                completion_allowed=False,
+                terminal_round=terminal_round,
+                previous_questions=previous_questions,
+                task_agent=task_agent,
+                required_target=(required_targets[0] if required_targets else None),
+                required_evidence_fields=required_evidence_fields,
+            )
         proposed_next = (
             None
             if result.data["next_target_misconception"] == NO_NEXT_TARGET

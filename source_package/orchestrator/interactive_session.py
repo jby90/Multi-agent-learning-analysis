@@ -38,6 +38,7 @@ from agents.misconception_relations import (
     default_relation_index,
     default_relation_support_points,
 )
+from agents.review_agent import evaluate_hard_rules
 from agents.sandbox import (
     QueryExecutionError,
     QueryTimeoutError,
@@ -69,7 +70,7 @@ from orchestrator.demo_session import (
     _summary,
     _trace_messages,
 )
-from orchestrator.llm import LLMResult, call_llm
+from orchestrator.llm import LLMCallError, LLMResult, call_llm
 from orchestrator.outcomes import verification_outcome
 from orchestrator.review_flow import (
     ReviewFlowError,
@@ -911,6 +912,67 @@ class InteractiveSessionManager:
             "system_error",
         )
 
+    def _retain_follow_up_after_quality_interruption(
+        self,
+        session: _InteractiveSession,
+        *,
+        client_turn_id: str,
+    ) -> None:
+        """Keep the last approved prompt when a new probe cannot pass Review.
+
+        The rejected or incomplete probe is never shown to the learner.  The
+        session remains on the previously approved question so a transient
+        generation/review failure cannot terminate an otherwise valid lesson.
+        """
+
+        current_task = session.learning_task or session.active_task
+        allowed_relation_points = set(
+            default_relation_support_points(
+                tuple(session.runtime.task.misconception_ids)
+            )
+        )
+        session.covered_relation_points.intersection_update(
+            allowed_relation_points
+        )
+        session.outcome = None
+        session.awaiting = "follow_up"
+        session.pending_learning_action = None
+        session.interaction = {
+            "kind": "free_text_follow_up",
+            **_follow_up_task_context(current_task),
+            "prompt": session.follow_up_question,
+            "round": session.follow_up_round,
+            "max_rounds": MAX_FOLLOW_UP_ROUNDS,
+            "turns": [dict(turn) for turn in session.follow_up_turns],
+            "feedback": (
+                "本轮新追问暂时未能通过质量检查，系统已保留上一道已审核题目；"
+                "你可以结合查询结果重新作答，本次学习不会结束。"
+            ),
+            "next_step_reason": (
+                "新的追问未通过质量门，因此不展示该内容，也不改变当前学习进度。"
+            ),
+            "retry_required": True,
+            "correction_required": bool(session.unresolved_misconceptions),
+            "unresolved_misconceptions": sorted(
+                session.unresolved_misconceptions
+            ),
+        }
+        session.processed_turn_ids.add(client_turn_id)
+        self._settle_active_agent_events(
+            session,
+            status="waiting",
+            activity="follow_up_retry",
+            label="上一道已审核题目仍然有效，等待学员重新作答",
+        )
+        self._publish_activity(
+            session,
+            "review",
+            "blocked",
+            "follow_up_quality_gate",
+            "新追问未通过质量门，已保留上一道已审核题目",
+            peers=("task",),
+        )
+
     def advance(self, session_id: str) -> dict[str, Any]:
         session = self._get_session(session_id)
         if not session.advance_lock.acquire(blocking=False):
@@ -1102,20 +1164,43 @@ class InteractiveSessionManager:
                     )
                 )
 
-            def produce_lecture() -> dict[str, Any] | None:
-                return self._produce_reviewed_product(
-                    session,
-                    lambda: _generate_reviewable_lecture(
+            def generate_lecture_with_remediation_fallback() -> dict[str, Any]:
+                try:
+                    return _generate_reviewable_lecture(
                         runtime,
                         knowledge_point=str(blind_spots[0]),
                         diagnosis_content=diagnosis_content,
                         blind_spots=blind_spots,
                         retrieved_chunks=evidence_chunks,
                         difficulty_fallback=bool(
-                            evidence_bundle.source("knowledge")["difficulty_fallback"]
+                            evidence_bundle.source("knowledge")[
+                                "difficulty_fallback"
+                            ]
                         ),
                         evidence_bundle=evidence_bundle,
-                    ),
+                    )
+                except LLMCallError as generation_error:
+                    if session.remediation_context is None:
+                        raise
+                    fallback = runtime.knowledge.generate_evidence_projection(
+                        knowledge_point=str(blind_spots[0]),
+                        student_profile=runtime.profile,
+                        difficulty=evidence_bundle.difficulty,
+                        retrieved_chunks=evidence_chunks,
+                        fallback_reason="remediation_generation_unavailable",
+                    )
+                    fallback = evidence_bundle.bind(fallback)
+                    if (
+                        evaluate_hard_rules(fallback)
+                        or runtime.review.preflight_r04(fallback) is not None
+                    ):
+                        raise generation_error
+                    return fallback
+
+            def produce_lecture() -> dict[str, Any] | None:
+                return self._produce_reviewed_product(
+                    session,
+                    generate_lecture_with_remediation_fallback,
                     session.diagnosis,
                     "T03",
                     "T04",
@@ -1979,24 +2064,24 @@ class InteractiveSessionManager:
                     "approved follow-up route does not match backend recomputation"
                 )
         except ReviewFlowTerminal as terminal:
-            self._finish_review_stop(
+            del terminal
+            self._retain_follow_up_after_quality_interruption(
                 session,
-                terminal.control_message,
-                terminal.action,
+                client_turn_id=client_turn_id,
             )
-            session.processed_turn_ids.add(client_turn_id)
             return self.get_state(session_id)
         except ReviewFlowInterrupted as interrupted:
-            self._finish_review_stop(
+            del interrupted
+            self._retain_follow_up_after_quality_interruption(
                 session,
-                interrupted.last_message,
-                "system_error",
+                client_turn_id=client_turn_id,
             )
-            session.processed_turn_ids.add(client_turn_id)
             return self.get_state(session_id)
         except RelationIntegrityError:
-            self._finish_system_error(session)
-            session.processed_turn_ids.add(client_turn_id)
+            self._retain_follow_up_after_quality_interruption(
+                session,
+                client_turn_id=client_turn_id,
+            )
             return self.get_state(session_id)
         except (FollowUpGenerationError, ReviewFlowError) as exc:
             raise InteractiveSessionError(
@@ -2823,6 +2908,8 @@ class InteractiveSessionManager:
         session.unresolved_misconceptions.clear()
         session.probed_misconceptions.clear()
         session.covered_relation_points.clear()
+        session.sql_failure_count = 0
+        session.sql_support = None
         session.awaiting = "advance"
 
     def submit_sql(self, session_id: str, sql: str) -> dict[str, Any]:

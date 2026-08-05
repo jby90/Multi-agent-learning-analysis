@@ -518,7 +518,7 @@ def test_final_commit_preparation_failure_preserves_all_six_session_fields(
     assert internal.processed_turn_ids == before["processed"]
 
 
-def test_invalid_coverage_fails_closed_and_idempotent_without_an_http_error(
+def test_invalid_coverage_retains_the_last_approved_probe_idempotently(
     tmp_path: Path,
 ) -> None:
     follow_up = FollowUpScript(
@@ -548,9 +548,11 @@ def test_invalid_coverage_fails_closed_and_idempotent_without_an_http_error(
         "b-error-2",
     )
 
-    assert failed["awaiting"] == "done"
-    assert failed["outcome"] == "system_error"
+    assert failed["awaiting"] == "follow_up"
+    assert failed["outcome"] is None
+    assert failed["interaction"]["retry_required"] is True
     assert replay == failed
+    assert internal.covered_relation_points == set()
     assert len(follow_up.calls) == 1
 
 
@@ -604,8 +606,9 @@ def test_rejected_relation_drafts_never_commit_probe_or_coverage(
     )
     internal = manager._get_session(session_id)
 
-    assert failed["awaiting"] == "done"
-    assert failed["outcome"] == "safe_rejected"
+    assert failed["awaiting"] == "follow_up"
+    assert failed["outcome"] is None
+    assert failed["interaction"]["retry_required"] is True
     assert internal.probed_misconceptions == {"M-01"}
     assert internal.covered_relation_points == set()
     assert "M-04" not in internal.probed_misconceptions
@@ -676,8 +679,9 @@ def test_interrupted_selective_rebuttal_commits_no_relation_coverage(
     )
     internal = manager._get_session(session_id)
 
-    assert interrupted["awaiting"] == "done"
-    assert interrupted["outcome"] == "system_error"
+    assert interrupted["awaiting"] == "follow_up"
+    assert interrupted["outcome"] is None
+    assert interrupted["interaction"]["retry_required"] is True
     assert replay == interrupted
     assert internal.probed_misconceptions == {"M-01"}
     assert internal.covered_relation_points == set()

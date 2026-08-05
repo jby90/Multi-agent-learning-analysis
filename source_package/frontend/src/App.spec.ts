@@ -298,6 +298,158 @@ describe('App', () => {
     expect(wrapper.get('.lesson-page-heading h3').text()).toMatch(/实操指南|练习题/)
   })
 
+  it('keeps the SQL result workspace visible after a successful query', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-sql-result', 'planner_new', '新入职生产计划员',
+      '先理解计划量与实际量。', '1156.87',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, unknown>)
+    const state: InteractiveState = {
+      session_id: 'session-sql-result',
+      trace_id: 'interactive-sql-result',
+      trace_path: 'traces/interactive-sql-result.jsonl',
+      state: 'S9_PATH_UPDATE',
+      awaiting: 'advance',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages,
+      artifact: null,
+      interaction: null,
+    }
+    const practice = wrapper.getComponent(LivePractice)
+    practice.vm.$emit('state', state)
+    await flushPromises()
+
+    expect(wrapper.get('.training-workbench-body').classes())
+      .toContain('is-practice-layout')
+    expect(practice.attributes('style')).toContain('display: grid')
+  })
+
+  it('never shows an unapproved follow-up candidate in the learner guide', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-approved-probe', 'craft_engineer', '转岗数字化的工艺工程师',
+      '先核对责任单元。', '0.6218',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, any>)
+    const task = messages.find((message) => message.payload?.type === 'quiz_set')
+    expect(task).toBeTruthy()
+    const approved = JSON.parse(JSON.stringify(task)) as Record<string, any>
+    approved.msg_id = 'interactive-approved-probe-approved'
+    approved.step = messages.length + 1
+    approved.role = 'probe'
+    approved.payload.content.event = 'follow_up_question_ready'
+    approved.payload.content.question = '已审核：哪个责任单元完成率最低？'
+    approved.payload.content.questions = [{
+      id: 'follow-up-2',
+      prompt: approved.payload.content.question,
+    }]
+    const approvedReview = {
+      msg_id: 'interactive-approved-probe-approved-review',
+      trace_id: 'interactive-approved-probe',
+      step: messages.length + 2,
+      agent: 'review',
+      role: 'verdict',
+      payload: {
+        type: 'review_verdict',
+        content: {
+          event: 'review_complete',
+          reviewed_msg_id: approved.msg_id,
+          reviewed_payload_type: 'quiz_set',
+        },
+      },
+      evidence: [],
+      claims: [],
+      verdict: { decision: 'approve', rule_hits: [] },
+      timestamp: '2026-07-16T02:00:00+00:00',
+    }
+    const rejected = JSON.parse(JSON.stringify(approved)) as Record<string, any>
+    rejected.msg_id = 'interactive-approved-probe-rejected'
+    rejected.step = messages.length + 3
+    rejected.payload.content.question = '未审核候选：请直接猜测原因？'
+    rejected.payload.content.questions = [{
+      id: 'follow-up-rejected',
+      prompt: rejected.payload.content.question,
+    }]
+    const rejectedReview = {
+      ...approvedReview,
+      msg_id: 'interactive-approved-probe-rejected-review',
+      step: messages.length + 4,
+      payload: {
+        type: 'review_verdict',
+        content: {
+          event: 'review_complete',
+          reviewed_msg_id: rejected.msg_id,
+          reviewed_payload_type: 'quiz_set',
+        },
+      },
+      verdict: {
+        decision: 'reject',
+        rule_hits: [{ rule_id: 'R-03', reason: '问题未绑定已批准证据。' }],
+      },
+    }
+    const state: InteractiveState = {
+      session_id: 'session-approved-probe',
+      trace_id: 'interactive-approved-probe',
+      trace_path: 'traces/interactive-approved-probe.jsonl',
+      state: 'S8_PROBE',
+      awaiting: 'follow_up',
+      mode: 'live',
+      profile: { profile_id: 'craft_engineer', title: '转岗数字化的工艺工程师' },
+      messages: [...messages, approved, approvedReview, rejected, rejectedReview],
+      artifact: approved,
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: approved.payload.content.question,
+        round: 2,
+        max_rounds: 4,
+        turns: [],
+        feedback: '保留上一道已审核题目。',
+      },
+    }
+    wrapper.getComponent(LivePractice).vm.$emit('state', state)
+    await flushPromises()
+
+    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
+    while (next.attributes('disabled') === undefined) {
+      await next.trigger('click')
+      await flushPromises()
+    }
+
+    expect(wrapper.get('[aria-label="学习与实操指南"]').text())
+      .toContain('已审核：哪个责任单元完成率最低？')
+    expect(wrapper.get('[aria-label="学习与实操指南"]').text())
+      .not.toContain('未审核候选：请直接猜测原因？')
+
+    wrapper.getComponent(LivePractice).vm.$emit('state', {
+      ...state,
+      state: 'S9_PATH_UPDATE',
+      awaiting: 'advance',
+      artifact: null,
+      interaction: {
+        kind: 'next_learning_step',
+        message: '正在安排下一步训练。',
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="学习与实操指南"]').text())
+      .toContain('已审核：哪个责任单元完成率最低？')
+    expect(wrapper.get('[aria-label="学习与实操指南"]').text())
+      .not.toContain('未审核候选：请直接猜测原因？')
+  })
+
   it('reveals the task action on the last lesson page before the guide has been generated', async () => {
     installFetch()
     const wrapper = mount(App, {

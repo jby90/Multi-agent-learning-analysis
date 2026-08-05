@@ -480,6 +480,36 @@ def test_reviewed_extreme_guard_does_not_accept_incomplete_or_mismatched_evidenc
     assert turn.assessment == "unknown"
 
 
+def test_model_cannot_master_an_extreme_answer_without_the_reviewed_value() -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "mastered",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "NO_NEXT_TARGET",
+            "question": "",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production_progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer="YCL完成率最低。",
+        current_task=_current_task(task_agent, "T-03"),
+        task_agent=task_agent,
+        current_question=(
+            "根据刚才的三道工序结果，哪一道工序完成率最低，"
+            "你依据的数值是什么？"
+        ),
+        round_index=3,
+        max_rounds=4,
+        completion_allowed=True,
+    )
+
+    assert turn.assessment == "unknown"
+    assert turn.next_target_misconception is not None
+    assert turn.product is not None
+
+
 def test_reviewed_extreme_correction_names_the_grounded_winner_and_wrong_row() -> None:
     current_task = _current_task(_task_agent(), "T-03")
 

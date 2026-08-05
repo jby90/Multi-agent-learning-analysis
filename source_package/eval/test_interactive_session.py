@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from agents.knowledge_agent import KnowledgeAgent
+from agents.misconception_relations import RelationIntegrityError
 from agents.rebuttal_generator import RebuttalGenerator
 from agents.sandbox import (
     QueryExecutionError,
@@ -28,7 +29,8 @@ from orchestrator.interactive_session import (
     build_http_server,
     main,
 )
-from orchestrator.llm import LLMResult, TokenUsage
+from orchestrator.llm import LLMCallError, LLMResult, TokenUsage
+from orchestrator.review_flow import ReviewFlowInterrupted, ReviewFlowTerminal
 
 
 SYSTEM_ERROR_COPY = "内容生成服务暂时不可用，本次学习已安全结束，请稍后重新开始。"
@@ -1934,7 +1936,7 @@ def test_top_tier_answer_completes_without_claiming_a_fake_increase(
     manager.advance(session_id)
     manager.submit_follow_up(
         session_id,
-        "应以实际完成量说明真实进度。",
+        "WSB责任单元完成率最低，为0.6218。",
         "top-tier-1",
     )
     manager.submit_follow_up(
@@ -2247,6 +2249,49 @@ def test_first_t17_creates_a_lower_difficulty_contract_revision(
     assert relearned_content["template_id"] == "T-03"
 
 
+def test_t17_generation_failure_uses_reviewed_evidence_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, session_id = start_sql_session(tmp_path, CatalogExecutor())
+    session = manager._get_session(session_id)
+    session.runtime.transition(
+        manager._student_answer_draft(session, answer_result="wrong"),
+        "T15",
+    )
+    session.runtime.transition(
+        manager._probe_outcome_draft(session, answer_result="wrong"),
+        "T17",
+    )
+    manager._apply_t17_remediation(
+        session,
+        feedback="连续练习后仍需降低难度。",
+    )
+
+    def fail_live_lecture(*_: Any, **__: Any) -> dict[str, Any]:
+        raise LLMCallError("simulated live generation outage")
+
+    monkeypatch.setattr(
+        "orchestrator.interactive_session._generate_reviewable_lecture",
+        fail_live_lecture,
+    )
+
+    fallback = manager.advance(session_id)
+    content = fallback["artifact"]["payload"]["content"]
+
+    assert fallback["state"] == "S3_TASK"
+    assert fallback["awaiting"] == "advance"
+    assert fallback["outcome"] is None
+    assert content["generated_by"] == "evidence_projection_fallback"
+    assert content["fallback_reason"] == "remediation_generation_unavailable"
+    assert fallback["artifact"]["claims"]
+    assert fallback["artifact"]["evidence"]
+    assert all(
+        claim["kind"] == "fact"
+        for claim in fallback["artifact"]["claims"]
+    )
+
+
 def test_second_t17_defers_the_point_instead_of_repeating_forever(
     tmp_path: Path,
 ) -> None:
@@ -2346,23 +2391,29 @@ def test_repeated_sql_failures_escalate_hints_and_step_down_on_fifth_attempt(
     manager, session_id = start_sql_session(tmp_path, CatalogExecutor())
 
     levels = []
-    for attempt in range(1, 6):
+    for attempt in range(1, 5):
         state = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
         levels.append(state["sql_support"]["level"])
         assert state["sql_support"]["attempt"] == attempt
+
+    state = manager.submit_sql(session_id, "DELETE FROM forbidden_table")
 
     assert levels == [
         "self_correction",
         "self_correction",
         "structured_hint",
         "partial_template",
-        "step_down",
     ]
     assert state["state"] == "S2_KNOWLEDGE"
     assert state["awaiting"] == "advance"
     assert state["remediation_status"]["attempts"] == {
         "计划量与实际量口径": 1
     }
+    session = manager._get_session(session_id)
+    assert session.sql_failure_count == 0
+    assert state["sql_support"] is None
+    assert state["interaction"]["kind"] == "learning_notice"
+    assert "连续五次" in state["interaction"]["feedback"]
 
 
 def test_sql_failure_hints_bind_to_task_fields_without_leaking_answer(
@@ -2505,6 +2556,56 @@ def test_r04_exhaustion_after_follow_up_finishes_safely_and_idempotently(
     assert manager._get_session(session_id).pending_learning_action is None
     assert manager.advance(session_id) == stopped
     assert preflight_calls == expected_calls
+
+
+@pytest.mark.parametrize(
+    "failure",
+    (
+        ReviewFlowTerminal("refuse", {"role": "re_verdict"}),
+        ReviewFlowInterrupted({"role": "re_verdict"}),
+        RelationIntegrityError("simulated relation mismatch"),
+    ),
+    ids=("review-exhausted", "review-interrupted", "relation-mismatch"),
+)
+def test_follow_up_review_exhaustion_keeps_the_approved_question_available(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+) -> None:
+    manager, session_id = start_sql_session(
+        tmp_path,
+        CatalogExecutor(),
+        follow_up_llm=support_then_mastered_follow_up(),
+    )
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-01"].standard_sql,
+    )
+    before = manager.advance(session_id)
+    original_question = before["interaction"]["prompt"]
+
+    def exhaust_follow_up_review(*_: Any, **__: Any) -> tuple[Any, Any]:
+        raise failure
+
+    monkeypatch.setattr(
+        manager,
+        "_review_follow_up_product",
+        exhaust_follow_up_review,
+    )
+
+    retained = manager.submit_follow_up(
+        session_id,
+        "我仍然把计划量当成实际完成量。",
+        "retain-approved-follow-up",
+    )
+
+    assert retained["awaiting"] == "follow_up"
+    assert retained["outcome"] is None
+    assert retained["interaction"]["kind"] == "free_text_follow_up"
+    assert retained["interaction"]["prompt"] == original_question
+    assert retained["interaction"]["retry_required"] is True
+    assert "不会结束" in retained["interaction"]["feedback"]
+    assert retained["artifact"] == before["artifact"]
 
 
 def test_follow_up_path_does_not_fall_back_to_the_obsolete_probe_sql_action(

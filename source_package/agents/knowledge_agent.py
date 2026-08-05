@@ -15,7 +15,7 @@ from agents.kb_loader import DIFFICULTIES, KnowledgeChunk
 from agents.knowledge_scope import responsibility_scope
 from agents.retriever import Retriever
 from agents.semantic_claims import ClaimPlanItem, build_claim_plan, enforce_claim_plan
-from orchestrator.llm import LLMResult, call_llm
+from orchestrator.llm import LLMResult, TokenUsage, call_llm
 
 
 MODEL = "qwen3-235b-a22b"
@@ -178,6 +178,113 @@ class KnowledgeAgent:
             llm_result=llm_result,
             started=started,
         )
+
+    def generate_evidence_projection(
+        self,
+        *,
+        knowledge_point: str,
+        student_profile: Mapping[str, Any],
+        difficulty: str | None,
+        retrieved_chunks: Sequence[KnowledgeChunk],
+        fallback_reason: str,
+    ) -> dict[str, Any]:
+        """Build a minimal lecture only from approved chunk sentences.
+
+        This path is reserved for remediation when live generation is
+        unavailable.  It reuses the normal claim/evidence construction and is
+        still sent through the ordinary Review gate by the orchestrator.
+        """
+
+        self._validate_inputs(
+            knowledge_point,
+            student_profile,
+            "补学资源使用已审核知识切片进行确定性重组。",
+            (),
+            difficulty,
+        )
+        chunks = tuple(retrieved_chunks)
+        if not chunks or any(
+            not isinstance(chunk, KnowledgeChunk) for chunk in chunks
+        ):
+            raise ValueError(
+                "retrieved_chunks must contain at least one KnowledgeChunk"
+            )
+        grounding_chunks, _ = self._grounding_chunks(
+            knowledge_point,
+            chunks,
+        )
+        claims: list[dict[str, Any]] = []
+        lecture_lines: list[str] = []
+        protect_card_numbers = any(
+            chunk.teaching_fact_card is not None for chunk in chunks
+        )
+        for chunk in grounding_chunks:
+            reference = self._foundation_sentence_ref(
+                chunk,
+                protect_card_numbers=protect_card_numbers,
+            )
+            if reference is None:
+                continue
+            text = self._public_claim_text(chunk.sentences[reference - 1])
+            if not text:
+                continue
+            lecture_lines.append(text)
+            claims.append(
+                {
+                    "text": text,
+                    "kind": "fact",
+                    "chunk_id": chunk.chunk_id,
+                    "sentence_ref": [reference],
+                }
+            )
+        if not claims:
+            raise ValueError(
+                "approved chunks do not contain a projection-safe sentence"
+            )
+        synthetic_result = LLMResult(
+            data={
+                "lecture_md": "\n\n".join(
+                    (
+                        "# 岗位补学微课",
+                        "## 核心依据",
+                        *lecture_lines,
+                        "## 学习提示",
+                        "请先确认题目对象、时间范围和统计口径，再进入实操。",
+                        "## 小结",
+                        "请在实操结果中逐项核对以上依据。",
+                    )
+                ),
+                "claims": claims,
+                "coverage": [knowledge_point],
+            },
+            model="deterministic-evidence-projection",
+            latency_ms=0,
+            token_usage=TokenUsage(0, 0, 0),
+            attempts=0,
+        )
+        knowledge_point_match, knowledge_point_match_basis = self._match_audit(
+            knowledge_point,
+            chunks,
+        )
+        draft = self._success_draft(
+            knowledge_point=knowledge_point,
+            difficulty=self._resolved_difficulty(difficulty, chunks),
+            student_profile_ref=str(student_profile["profile_id"]),
+            chunks=chunks,
+            knowledge_point_match=knowledge_point_match,
+            knowledge_point_match_basis=knowledge_point_match_basis,
+            claim_plan=build_claim_plan(
+                self._domain_config,
+                knowledge_point,
+                chunks,
+            ),
+            llm_result=synthetic_result,
+            started=perf_counter(),
+        )
+        content = draft["payload"]["content"]
+        content["generated_by"] = "evidence_projection_fallback"
+        content["fallback_reason"] = fallback_reason
+        return draft
 
     @staticmethod
     def _resolved_difficulty(

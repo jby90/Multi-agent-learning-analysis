@@ -66,8 +66,55 @@ const view = computed(() => selectedDocument.value
 const liveView = computed(() => liveDocument.value
   ? buildTraceView(liveDocument.value, liveDocument.value.messages.length)
   : undefined)
+const liveLearnerView = computed(() => {
+  const current = liveView.value
+  const state = liveState.value
+  if (!current || !state) return current
+
+  const approvedTaskIds = new Set(current.visibleMessages.flatMap((message) => {
+    const reviewedId = message.content.reviewed_msg_id
+    const decision = message.verdict?.decision
+    return message.payloadType === 'review_verdict'
+      && typeof reviewedId === 'string'
+      && (decision === 'approve' || decision === 'approve_with_fix')
+      ? [reviewedId]
+      : []
+  }))
+  const latestReviewedTask = [...current.visibleMessages].reverse().find((message) => (
+    (message.payloadType === 'quiz_set' || message.payloadType === 'practice_guide')
+    && approvedTaskIds.has(message.msgId)
+  ))
+
+  if (
+    state.awaiting !== 'follow_up'
+    || state.interaction?.kind !== 'free_text_follow_up'
+  ) {
+    return state.awaiting === 'advance' && latestReviewedTask
+      ? { ...current, task: latestReviewedTask }
+      : current
+  }
+
+  const artifactId = typeof state.artifact?.msg_id === 'string'
+    ? state.artifact.msg_id
+    : undefined
+  const prompt = state.interaction.prompt
+  const approvedTask = [...current.visibleMessages].reverse().find((message) => (
+    (message.payloadType === 'quiz_set' || message.payloadType === 'practice_guide')
+    && (!artifactId || message.msgId === artifactId)
+    && message.content.question === prompt
+  ))
+
+  // The collaboration trace intentionally keeps rejected drafts for auditability.
+  // Learners may only see the artifact approved for the current interaction.
+  return { ...current, task: approvedTask }
+})
 const liveHasResource = computed(() => Boolean(
   liveView.value?.lecture || liveView.value?.task || liveView.value?.sqlResult,
+))
+const liveLearnerHasResource = computed(() => Boolean(
+  liveLearnerView.value?.lecture
+  || liveLearnerView.value?.task
+  || liveLearnerView.value?.sqlResult,
 ))
 const liveTrainingLayout = computed<LiveTrainingLayout>(() => {
   const state = liveState.value
@@ -75,6 +122,11 @@ const liveTrainingLayout = computed<LiveTrainingLayout>(() => {
   if (state.awaiting === 'done') return 'report'
   if (state.awaiting === 'sql' || state.awaiting === 'follow_up') return 'practice'
   if (state.state === 'S2_KNOWLEDGE') return 'transition'
+  if (
+    state.state === 'S9_PATH_UPDATE'
+    && liveView.value?.sqlResult
+    && state.awaiting === 'advance'
+  ) return 'practice'
   if (liveView.value?.task && liveLessonPage.value.kind === 'task') return 'practice'
   if (state.state === 'S3_TASK' && state.awaiting === 'advance' && liveLessonPage.value.isLast) {
     return 'practice'
@@ -469,8 +521,8 @@ onMounted(loadTraces)
               :bundle="liveState.resource_bundle"
             />
             <ResourcePanel
-              v-if="liveView && liveHasResource"
-              :view="liveView"
+              v-if="liveLearnerView && liveLearnerHasResource"
+              :view="liveLearnerView"
               lesson-pager
               :guidance-feedback="liveFeedback"
               :guidance-next-step-reason="liveNextStepReason"
