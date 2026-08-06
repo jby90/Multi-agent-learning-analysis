@@ -104,6 +104,15 @@ const completionMessage = computed(() => {
   }
   return '训练完成'
 })
+const terminationReason = computed(() => {
+  const reason = session.value?.termination?.reason_code
+  if (!reason) return undefined
+  return {
+    model_unavailable: '内容生成服务暂时不可用',
+    evidence_insufficient: '证据不足：当前内容缺少足够证据支持',
+    review_exhausted: '内容在限定次数内未通过质量审核',
+  }[reason]
+})
 
 const nextKnowledgePoint = computed(() => {
   const value = session.value
@@ -198,6 +207,17 @@ const activeTaskDifficulty = computed(() => {
   const value = activeTaskContent.value?.difficulty
   return typeof value === 'string' ? difficultyLabel(value) : undefined
 })
+const activeTaskIdentity = computed(() => {
+  const record = activeTaskContent.value
+  if (!record) return ''
+  return [
+    session.value?.session_id ?? '',
+    record.knowledge_point ?? '',
+    record.template_id ?? '',
+    record.difficulty ?? '',
+    record.contextualized_stem ?? record.question ?? record.standard_stem ?? '',
+  ].map(String).join('|')
+})
 
 function stringList(value: unknown): string[] {
   return Array.isArray(value)
@@ -235,8 +255,9 @@ const sqlHints = computed(() => {
   ]
 })
 
-watch(() => activeTaskPrompt.value, () => {
+watch(activeTaskIdentity, (current, previous) => {
   sqlHintLevel.value = 0
+  if (previous && current !== previous) sqlText.value = ''
 })
 const followUpInputLength = computed(
   () => followUpText.value.trim().normalize('NFKC').length,
@@ -939,6 +960,19 @@ onBeforeUnmount(() => {
 
     <div v-else-if="session.awaiting === 'done'" class="live-complete">
       <strong>{{ completionMessage }}</strong>
+      <section
+        v-if="session.termination && terminationReason"
+        class="termination-explanation"
+        data-testid="termination-explanation"
+        aria-label="本轮安全结束说明"
+      >
+        <span>结束原因</span>
+        <h3>{{ terminationReason }}</h3>
+        <p>
+          已完成 {{ session.termination.review_attempts }}/{{ session.termination.review_limit }} 轮质量审核；
+          系统没有向学员交付未通过审核的内容。
+        </p>
+      </section>
       <section v-if="session.training_report" class="training-report" aria-label="本轮训练报告">
         <header>
           <span>本轮训练报告</span>

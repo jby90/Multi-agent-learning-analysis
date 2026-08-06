@@ -25,6 +25,12 @@ type TopologyNode = {
   responsibility: string
 }
 
+type NodeRuntimeConfig = {
+  model: string
+  strategy: string
+  parameters: readonly string[]
+}
+
 type TopologyEdge = {
   from: TopologyNodeId
   to: TopologyNodeId
@@ -34,8 +40,10 @@ type TopologyEdge = {
 const props = withDefaults(defineProps<{
   view: TraceView
   events?: AgentActivityEvent[]
+  debugMode?: boolean
 }>(), {
   events: () => [],
+  debugMode: false,
 })
 
 const nodes: readonly TopologyNode[] = [
@@ -130,6 +138,79 @@ const edges: readonly TopologyEdge[] = [
   { from: 'readability_review', to: 'review_arbiter' },
   { from: 'review_arbiter', to: 'review', label: '确定性裁决' },
 ] as const
+
+const runtimeConfig: Record<TopologyNodeId, NodeRuntimeConfig> = {
+  diagnosis: {
+    model: 'Qwen3-32B + 确定性评分',
+    strategy: '混合执行',
+    parameters: ['输入：岗位画像与岗前测评', '输出：盲区、初始难度、学习契约'],
+  },
+  knowledge: {
+    model: 'Qwen3-235B-A22B',
+    strategy: 'BM25 检索增强生成',
+    parameters: ['只使用当前领域证据包', '产物必须绑定引用并进入 Review'],
+  },
+  assessment: {
+    model: 'Qwen3-235B-A22B + 题库约束',
+    strategy: '资源并行分支',
+    parameters: ['难度来自 LearningContract', '与微课、实操共享证据边界'],
+  },
+  task: {
+    model: 'Qwen3-235B-A22B',
+    strategy: '目录选题 + 受控情境化',
+    parameters: ['输出查询权限与完成标准', '不得扩大授权表、字段或口径'],
+  },
+  verification: {
+    model: '主链不依赖 LLM',
+    strategy: '确定性验证',
+    parameters: ['SQLGlot 校验与改写', '真实只读查询结果作为事实源'],
+  },
+  orchestrator: {
+    model: '无 LLM',
+    strategy: '有序主链 + 局部并行 DAG',
+    parameters: ['证据/资源阶段最大并发：3', '会话以 session_id 与 trace_id 隔离'],
+  },
+  state_machine: {
+    model: '无 LLM',
+    strategy: '确定性状态机',
+    parameters: ['固定 21 条状态转移', '非法越级与未审产物默认阻断'],
+  },
+  query_sandbox: {
+    model: '无 LLM',
+    strategy: '只读安全执行',
+    parameters: ['仅允许授权查询', '拦截写操作、越权字段与危险结构'],
+  },
+  review: {
+    model: 'Qwen3-32B + 确定性规则',
+    strategy: '四路专项审核并行汇聚',
+    parameters: ['语义审核受并发预算约束', '拒绝后仅允许受控辩护或局部重生成'],
+  },
+  review_arbiter: {
+    model: '无 LLM',
+    strategy: '确定性汇聚裁决',
+    parameters: ['输出：通过 / 带修正通过 / 拒绝', '任一硬规则失败时 fail-closed'],
+  },
+  evidence_review: {
+    model: 'Qwen3-32B + 证据规则',
+    strategy: '事实与引用审核',
+    parameters: ['检查主张—引用对应关系', '数值必须可由查询证据复算'],
+  },
+  pedagogy_review: {
+    model: 'Qwen3-32B',
+    strategy: '教学适配审核',
+    parameters: ['检查岗位责任范围', '检查难度、误区与学习目标一致性'],
+  },
+  data_safety_review: {
+    model: '无 LLM',
+    strategy: '确定性硬规则',
+    parameters: ['检查数据口径与查询安全', '不接受模型对硬规则的辩护覆盖'],
+  },
+  readability_review: {
+    model: '无 LLM',
+    strategy: '确定性表达校阅',
+    parameters: ['阻止内部协议术语泄漏', '检查严重可读性与结构缺陷'],
+  },
+}
 
 const nodeMap = new Map<TopologyNodeId, TopologyNode>(nodes.map((node) => [node.id, node]))
 const activityNodeIds = new Set<TopologyNodeId>([
@@ -265,6 +346,7 @@ watch(latestEvent, (event) => {
 })
 
 const selectedNode = computed(() => nodeMap.get(selectedId.value) ?? nodes[0])
+const selectedRuntimeConfig = computed(() => runtimeConfig[selectedNode.value.id])
 const selectedEvent = computed(() => (
   activityNodeIds.has(selectedNode.value.id)
     ? latestByAgent.value.get(selectedNode.value.id as AgentActivityId)
@@ -343,6 +425,20 @@ function eventNodeLabel(id: AgentActivityId): string {
   return nodeMap.get(id)?.label ?? id
 }
 
+function safeEventDetails(event: AgentActivityEvent): string {
+  const details = event.details ?? {}
+  const allowed = [
+    'fan_out', 'parallel_elapsed_ms', 'elapsed_ms', 'cycle', 'branch_id',
+    'aggregation', 'artifact_id', 'evidence_bundle_id', 'decision', 'rule_id',
+  ]
+  const values = allowed.flatMap((key) => {
+    const value = shortValue(details[key])
+    return value ? [`${key}=${value}`] : []
+  })
+  if (event.peers.length) values.push(`peers=${event.peers.join(',')}`)
+  return values.join(' · ')
+}
+
 function isDynamicEdge(edge: TopologyEdge): boolean {
   return dynamicEdges.value.some((item) => item.from === edge.from && item.to === edge.to)
 }
@@ -384,6 +480,8 @@ const completedCount = computed(() => nodes.filter((node) => (
           <span><i class="control-dot" />控制模块</span>
           <span><i class="service-dot" />服务 / 分支</span>
           <span><i class="flow-dot" />本轮真实调用</span>
+          <span><i class="passed-dot" />通过</span>
+          <span><i class="blocked-dot" />阻断 / 报错</span>
         </div>
 
         <svg class="topology-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -450,8 +548,17 @@ const completedCount = computed(() => nodes.filter((node) => (
         <dl class="module-identity">
           <div><dt>Python 模块</dt><dd>{{ selectedNode.module }}</dd></div>
           <div><dt>实现单元</dt><dd>{{ selectedNode.className }}</dd></div>
+          <div v-if="debugMode"><dt>模型配置</dt><dd>{{ selectedRuntimeConfig.model }}</dd></div>
+          <div v-if="debugMode"><dt>执行策略</dt><dd>{{ selectedRuntimeConfig.strategy }}</dd></div>
           <div><dt>当前阶段</dt><dd>{{ stageLabels[selectedEvent?.stage ?? view.currentState] ?? selectedEvent?.stage ?? view.currentState }}</dd></div>
         </dl>
+
+        <section v-if="debugMode" class="module-parameters" aria-label="节点运行参数">
+          <strong>节点设置与边界</strong>
+          <ul>
+            <li v-for="parameter in selectedRuntimeConfig.parameters" :key="parameter">{{ parameter }}</li>
+          </ul>
+        </section>
 
         <div class="io-summary">
           <article>
@@ -477,7 +584,12 @@ const completedCount = computed(() => nodes.filter((node) => (
           <ol v-if="selectedRecentEvents.length">
             <li v-for="event in selectedRecentEvents" :key="`${event.trace_id}-${event.sequence}`">
               <i :class="`is-${event.status}`" />
-              <div><b>{{ event.label }}</b><small>{{ eventNodeLabel(event.agent) }} · {{ eventTime(event.timestamp) }}</small></div>
+              <div>
+                <b>{{ event.label }}</b>
+                <small v-if="debugMode">#{{ event.sequence }} · {{ event.activity }} · {{ eventNodeLabel(event.agent) }} · {{ eventTime(event.timestamp) }}</small>
+                <small v-else>{{ eventNodeLabel(event.agent) }} · {{ eventTime(event.timestamp) }}</small>
+                <code v-if="debugMode && safeEventDetails(event)">{{ safeEventDetails(event) }}</code>
+              </div>
             </li>
           </ol>
           <p v-else class="empty-events">尚未收到该模块的运行事件。</p>
@@ -528,7 +640,7 @@ const completedCount = computed(() => nodes.filter((node) => (
 .topology-legend { position:absolute; z-index:4; left:14px; bottom:10px; display:flex; gap:10px; padding:6px 8px; color:#7fa5b8; font-size:9px; background:rgba(5,20,33,.82); border:1px solid rgba(111,198,235,.1); border-radius:8px; }
 .topology-legend span { display:flex; align-items:center; gap:4px; }
 .topology-legend i { width:7px; height:7px; display:inline-block; border-radius:50%; }
-.agent-dot { background:#22bde9; }.control-dot { background:#9d7cff; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); }.service-dot { background:#36d69d; border-radius:2px!important; }.flow-dot { background:#fff; box-shadow:0 0 7px #41d7ff; }
+.agent-dot { background:#22bde9; }.control-dot { background:#9d7cff; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); }.service-dot { background:#36d69d; border-radius:2px!important; }.flow-dot { background:#fff; box-shadow:0 0 7px #41d7ff; }.passed-dot { background:#4bdfa8; box-shadow:0 0 6px rgba(75,223,168,.7); }.blocked-dot { background:#ff6474; box-shadow:0 0 6px rgba(255,100,116,.7); }
 .topology-lines { position:absolute; z-index:1; inset:0; width:100%; height:100%; overflow:visible; }
 .topology-edge { stroke:rgba(91,171,204,.18); stroke-width:.22; vector-effect:non-scaling-stroke; marker-end:url(#topology-arrow); }
 .topology-edge.is-live { stroke:rgba(64,210,255,.34); }
@@ -546,9 +658,11 @@ const completedCount = computed(() => nodes.filter((node) => (
 .inspector-heading > span { display:inline-flex; padding:3px 6px; color:#66dfff; font:700 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.08em; background:rgba(75,210,255,.1); border-radius:4px; }.inspector-heading > span.is-control { color:#ba9cff; background:rgba(159,126,255,.12); }.inspector-heading > span.is-service { color:#5ce2b1; background:rgba(69,216,164,.1); }
 .inspector-heading > small { float:right; color:#74a1b5; font-size:9px; }.inspector-heading h3 { margin:8px 0 4px; color:#fff; font-size:20px; }.inspector-heading p { margin:0; color:#96b7c7; font-size:11px; line-height:1.55; }
 .module-identity { display:grid; gap:1px; margin:0; overflow:hidden; border:1px solid rgba(117,197,231,.12); border-radius:9px; }.module-identity div { min-width:0; display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; padding:7px 8px; background:rgba(255,255,255,.025); }.module-identity dt { color:#638ca0; font-size:9px; }.module-identity dd { min-width:0; margin:0; overflow:hidden; color:#c8dfeb; font:500 9px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.module-parameters { padding:8px 9px; background:rgba(159,126,255,.055); border:1px solid rgba(159,126,255,.12); border-radius:9px; }.module-parameters strong { color:#d8cbff; font-size:9px; }.module-parameters ul { display:grid; gap:4px; margin:6px 0 0; padding-left:16px; }.module-parameters li { color:#9db8c6; font-size:9px; line-height:1.4; }
 .io-summary { display:grid; grid-template-columns:1fr 1fr; gap:7px; }.io-summary article { min-width:0; padding:8px; background:rgba(255,255,255,.035); border:1px solid rgba(124,201,233,.1); border-radius:9px; }.io-summary span { display:block; margin-bottom:4px; color:#5f91a8; font-size:8px; }.io-summary p { margin:0; color:#c7dce6; font-size:9px; line-height:1.45; }
 .module-metrics { display:grid; grid-template-columns:1fr 1fr; gap:5px; }.module-metrics div { min-width:0; display:grid; gap:2px; padding:6px 7px; background:rgba(46,201,242,.055); border-radius:7px; }.module-metrics span { color:#628da1; font-size:8px; }.module-metrics b { overflow:hidden; color:#d8f6ff; font:600 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .module-events { min-height:0; display:flex; flex:1 1 auto; flex-direction:column; overflow:hidden; }.module-events-heading { display:flex; align-items:center; justify-content:space-between; padding:2px 0 6px; border-bottom:1px solid rgba(118,197,231,.12); }.module-events-heading strong { font-size:10px; }.module-events-heading small { color:#638da1; font-size:8px; }.module-events ol { min-height:0; display:grid; align-content:start; gap:1px; margin:0; padding:5px 0 0; overflow:auto; list-style:none; }.module-events li { display:grid; grid-template-columns:8px minmax(0,1fr); gap:7px; padding:5px 3px; }.module-events li > i { width:5px; height:5px; margin-top:4px; border-radius:50%; background:#557585; }.module-events li > i.is-working,.module-events li > i.is-collaborating,.module-events li > i.is-reviewing,.module-events li > i.is-debating { background:#47d8ff; box-shadow:0 0 6px #47d8ff; }.module-events li > i.is-done,.module-events li > i.is-approved { background:#45daa6; }.module-events li > i.is-blocked { background:#ff6474; }.module-events li div { min-width:0; display:grid; gap:2px; }.module-events li b { overflow:hidden; color:#cfe5ef; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.module-events li small { color:#5e899d; font-size:8px; }.empty-events { margin:auto; color:#5b8295; font-size:9px; }
+.module-events li code { display:block; overflow:hidden; color:#6d9aad; font:500 8px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .topology-timeline { min-width:0; display:grid; grid-template-columns:150px minmax(0,1fr); gap:10px; padding:10px 14px; overflow:hidden; border-top:1px solid rgba(115,203,239,.13); background:#071b2a; }
 .timeline-heading { display:flex; flex-direction:column; justify-content:center; }.timeline-heading span { color:#47d6ff; font:700 8px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.1em; }.timeline-heading strong { margin:3px 0 2px; color:#e9f8ff; font-size:11px; }.timeline-heading small { color:#60889b; font-size:8px; }
 .topology-timeline ol { min-width:0; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(110px,1fr); gap:5px; margin:0; padding:0; overflow-x:auto; list-style:none; }.topology-timeline li { min-width:0; display:grid; align-content:center; gap:2px; padding:7px 8px; color:#7ea5b8; background:rgba(255,255,255,.025); border:1px solid rgba(115,194,228,.09); border-radius:8px; cursor:pointer; }.topology-timeline li.is-active { color:#51d9ff; background:rgba(45,198,239,.07); border-color:rgba(74,211,248,.22); }.topology-timeline li span { font:700 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; }.topology-timeline li b { overflow:hidden; color:#d3e7f0; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.topology-timeline li small { overflow:hidden; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }.timeline-empty { display:grid; place-items:center; color:#5d8497; font-size:10px; border:1px dashed rgba(110,190,225,.12); border-radius:8px; }

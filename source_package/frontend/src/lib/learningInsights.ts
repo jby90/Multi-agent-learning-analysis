@@ -154,6 +154,7 @@ function catalogLevel(
 export function difficultyJourney(
   view: TraceView,
   catalog: KnowledgeCatalogEntry[],
+  authoritativeCurrentDifficulty?: DifficultyLevel | string | null,
 ): DifficultyJourney {
   const points: DifficultyPoint[] = []
   const assessed = difficulty(view.diagnosis?.content.difficulty)
@@ -190,13 +191,18 @@ export function difficultyJourney(
   if (view.path) {
     const prior = points.at(-1)?.level ?? assessed ?? 'basic'
     const nextAction = action(view.path.content.difficulty_action)
+    const explicitLevel = difficulty(view.path.content.difficulty)
     points.push({
       stage: 'advanced',
       label: '进阶',
-      level: applyAction(prior, nextAction),
+      level: explicitLevel ?? applyAction(prior, nextAction),
       ...(nextAction ? { action: nextAction } : {}),
     })
   }
+
+  const authoritativeLevel = difficulty(authoritativeCurrentDifficulty)
+  const currentPoint = points.at(-1)
+  if (authoritativeLevel && currentPoint) currentPoint.level = authoritativeLevel
 
   const practiceIndex = points.findIndex((point) => point.stage === 'practice')
   const lectureIndex = points.findIndex((point) => point.stage === 'lecture')

@@ -8,9 +8,14 @@ import type { DifficultyLevel, KnowledgeCatalogEntry, TraceView } from '../types
 const props = defineProps<{
   view: TraceView
   catalog: KnowledgeCatalogEntry[]
+  currentDifficulty?: string | null
 }>()
 
-const journey = computed(() => difficultyJourney(props.view, props.catalog))
+const journey = computed(() => difficultyJourney(
+  props.view,
+  props.catalog,
+  props.currentDifficulty,
+))
 const stageX: Record<DifficultyPoint['stage'], number> = {
   assessment: 42,
   lecture: 91,

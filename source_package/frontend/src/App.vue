@@ -6,6 +6,7 @@ import knowledgeCatalog from 'virtual:knowledge-catalog'
 import CollaborationWorkspace from './components/CollaborationWorkspace.vue'
 import LearningPath from './components/LearningPath.vue'
 import DataCollisionMoment from './components/DataCollisionMoment.vue'
+import DebugWorkspace from './components/DebugWorkspace.vue'
 import FloatingAgentAssistant from './components/FloatingAgentAssistant.vue'
 import LivePractice from './components/LivePractice.vue'
 import ProfileComparison from './components/ProfileComparison.vue'
@@ -23,6 +24,7 @@ import type { DataCollision, TraceDocument, TraceManifestEntry } from './types/t
 
 
 const documents = ref<TraceDocument[]>([])
+const isDebugWorkspace = new URLSearchParams(window.location.search).get('view') === 'debug'
 const selectedFile = ref('')
 const comparison = ref(false)
 const entryMode = ref<'replay' | 'live'>(
@@ -217,6 +219,7 @@ function changeViewMode(value: 'student' | 'collaboration'): void {
 
 function updateLiveState(state: InteractiveState): void {
   liveState.value = state
+  sessionStorage.setItem('ref-interactive-trace', state.trace_id)
   const interaction = state.interaction
   if (interaction?.kind === 'data_collision') {
     const key = `${state.trace_id}-${state.messages.length}`
@@ -244,6 +247,7 @@ function updateLiveState(state: InteractiveState): void {
 }
 
 function resetLiveState(): void {
+  sessionStorage.removeItem('ref-interactive-trace')
   liveState.value = undefined
   liveDocument.value = undefined
   liveCollision.value = undefined
@@ -251,6 +255,15 @@ function resetLiveState(): void {
   dismissedLiveCollision.value = ''
   liveLessonPage.value = { index: 0, total: 0, isLast: false }
   resetAgentEventPlayback()
+}
+
+function openDebugWorkspace(): void {
+  if (!liveState.value) return
+  sessionStorage.setItem('ref-interactive-session', liveState.value.session_id)
+  sessionStorage.setItem('ref-interactive-trace', liveState.value.trace_id)
+  const url = new URL(window.location.href)
+  url.searchParams.set('view', 'debug')
+  window.location.assign(`${url.pathname}${url.search}${url.hash}`)
 }
 
 async function importTrace(file: File): Promise<void> {
@@ -350,11 +363,15 @@ async function loadTraces(): Promise<void> {
   }
 }
 
-onMounted(loadTraces)
+onMounted(() => {
+  if (!isDebugWorkspace) void loadTraces()
+})
 </script>
 
 <template>
+  <DebugWorkspace v-if="isDebugWorkspace" />
   <div
+    v-else
     class="app-shell"
     :class="[
       `is-${entryMode}-entry`,
@@ -388,6 +405,7 @@ onMounted(loadTraces)
       @view="changeViewMode"
       @import="importTrace"
       @export="exportTrace"
+      @debug="openDebugWorkspace"
     />
 
     <p v-if="transferMessage" class="trace-transfer-message" role="status">
@@ -455,7 +473,12 @@ onMounted(loadTraces)
       ]"
       :aria-label="liveState ? '岗位训练工作台' : '选择岗位训练路径'"
     >
-      <ProfilePanel v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />
+        <ProfilePanel
+          v-if="liveView"
+          :view="liveView"
+          :catalog="knowledgeCatalog"
+          :current-difficulty="liveState?.current_difficulty"
+        />
       <div
         id="collaboration-learner-workspace"
         class="live-training-stage"

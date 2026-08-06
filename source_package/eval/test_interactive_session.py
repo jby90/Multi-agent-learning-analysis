@@ -716,6 +716,9 @@ def test_review_follow_up_failure_closes_session_in_learning_language(
         "kind": "review_notice",
         "message": "内容生成服务暂时不可用，本次学习已安全结束，请稍后重新开始。",
     }
+    assert stopped["termination"]["reason_code"] == "model_unavailable"
+    assert stopped["termination"]["review_attempts"] >= 1
+    assert stopped["termination"]["review_limit"] == 4
     learner_copy = json.dumps(stopped["interaction"], ensure_ascii=False)
     assert not any(
         marker in learner_copy
@@ -769,6 +772,11 @@ def test_review_retry_exhaustion_returns_canonical_template_fallback(
         "kind": "review_notice",
         "message": "这份内容多次未通过专业审核，本次学习已安全结束。",
     }
+    assert fallback["termination"] == {
+        "reason_code": "review_exhausted",
+        "review_attempts": 3,
+        "review_limit": 4,
+    }
     assert fallback["artifact"]["payload"]["type"] == "lecture_note"
     assert (
         fallback["artifact"]["payload"]["content"]["generated_by"]
@@ -798,6 +806,42 @@ def test_review_retry_exhaustion_returns_canonical_template_fallback(
     with pytest.raises(InteractiveSessionError):
         manager.advance(session_id)
     assert manager.get_state(session_id)["messages"] == fallback["messages"]
+
+
+def test_review_stop_reports_evidence_insufficient_separately(
+    tmp_path: Path,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=RecordingExecutor,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+    session = manager._get_session(session_id)
+    artifact = {
+        "verdict": {
+            "decision": "reject",
+            "rule_hits": [{"rule_id": "R-02"}],
+        }
+    }
+
+    manager._finish_review_stop(
+        session,
+        artifact,
+        "refuse",
+        review_attempts=2,
+    )
+
+    assert manager.get_state(session_id)["termination"] == {
+        "reason_code": "evidence_insufficient",
+        "review_attempts": 2,
+        "review_limit": 4,
+    }
 
 
 @pytest.mark.parametrize(
@@ -2015,6 +2059,7 @@ def test_progression_selection_failure_is_retryable_and_uses_learning_language(
     monkeypatch.undo()
     retry = manager.advance(session_id)
     assert retry["artifact"]["payload"]["content"]["template_id"] == "T-01-A"
+    assert retry["current_difficulty"] == "applied"
     assert retry["state"] == "S7_STUDENT"
     assert retry["awaiting"] == "sql"
 

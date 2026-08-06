@@ -14,8 +14,10 @@ defineOptions({ name: 'ProfilePanel' })
 const props = withDefaults(defineProps<{
   view: TraceView
   catalog?: KnowledgeCatalogEntry[]
+  currentDifficulty?: string | null
 }>(), {
   catalog: () => [],
+  currentDifficulty: undefined,
 })
 
 const blindSpots = computed(() => {
@@ -44,7 +46,10 @@ const score = computed(() => {
 })
 
 const difficulty = computed(() => {
-  const value = props.view.diagnosis?.content.difficulty
+  const value = props.currentDifficulty
+    ?? props.view.path?.content.difficulty
+    ?? props.view.task?.content.difficulty
+    ?? props.view.diagnosis?.content.difficulty
   if (value === 'basic') return '基础档'
   if (value === 'applied') return '应用档'
   if (value === 'advanced') return '进阶档'
@@ -111,7 +116,11 @@ const difficulty = computed(() => {
           </div>
 
           <ResourceMatch :view="view" />
-          <DifficultyJourney :view="view" :catalog="catalog" />
+          <DifficultyJourney
+            :view="view"
+            :catalog="catalog"
+            :current-difficulty="currentDifficulty"
+          />
         </div>
       </details>
     </section>

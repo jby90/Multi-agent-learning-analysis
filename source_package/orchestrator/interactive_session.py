@@ -379,6 +379,7 @@ class _InteractiveSession:
     sql_failure_count: int = 0
     sql_support: dict[str, Any] | None = None
     outcome: str | None = None
+    termination: dict[str, Any] | None = None
     events: AgentEventStream | None = None
     prefetched_task: dict[str, Any] | None = None
     prefetched_task_generator: Any = None
@@ -658,8 +659,13 @@ class InteractiveSessionManager:
         activity: str,
         working_label: str,
     ) -> dict[str, Any] | None:
+        review_attempts = 0
+
         def observe(event: str, details: Mapping[str, Any]) -> None:
+            nonlocal review_attempts
             cycle = int(details.get("cycle", 1))
+            if event == "review_started":
+                review_attempts = max(review_attempts, cycle)
             event_details = {"cycle": cycle, **dict(details)}
             if self._publish_specialist_review_activity(
                 session,
@@ -807,6 +813,7 @@ class InteractiveSessionManager:
                 session,
                 terminal.control_message,
                 terminal.action,
+                review_attempts=review_attempts,
             )
             return None
         except ReviewFlowInterrupted as interrupted:
@@ -814,10 +821,11 @@ class InteractiveSessionManager:
                 session,
                 interrupted.last_message,
                 "system_error",
+                review_attempts=review_attempts,
             )
             return None
         except DemoSessionError:
-            self._finish_system_error(session)
+            self._finish_system_error(session, review_attempts=review_attempts)
             return None
         self._publish_activity(
             session,
@@ -831,6 +839,7 @@ class InteractiveSessionManager:
                 session,
                 product,
                 "degrade_to_template",
+                review_attempts=review_attempts,
             )
             return None
         return product
@@ -871,6 +880,8 @@ class InteractiveSessionManager:
         session: _InteractiveSession,
         artifact: dict[str, Any],
         action: str,
+        *,
+        review_attempts: int = 0,
     ) -> None:
         try:
             student_message = _REVIEW_STOP_COPY[action]
@@ -888,6 +899,30 @@ class InteractiveSessionManager:
         session.outcome = (
             "system_error" if action == "system_error" else "safe_rejected"
         )
+        rule_ids: set[str] = set()
+        verdict = artifact.get("verdict") if isinstance(artifact, Mapping) else None
+        hits = verdict.get("rule_hits") if isinstance(verdict, Mapping) else None
+        if isinstance(hits, list):
+            for hit in hits:
+                if isinstance(hit, Mapping) and isinstance(hit.get("rule_id"), str):
+                    rule_ids.add(str(hit["rule_id"]))
+        reason_code = (
+            "model_unavailable"
+            if action == "system_error"
+            else "evidence_insufficient"
+            if rule_ids.intersection({"R-02", "R-05"})
+            else "review_exhausted"
+        )
+        review_limit = (
+            session.learning_contract.quality_policy.max_review_cycles
+            if session.learning_contract is not None
+            else max(review_attempts, 1)
+        )
+        session.termination = {
+            "reason_code": reason_code,
+            "review_attempts": max(0, int(review_attempts)),
+            "review_limit": int(review_limit),
+        }
         if session.events is not None:
             InteractiveSessionManager._settle_active_agent_events(
                 session,
@@ -905,11 +940,16 @@ class InteractiveSessionManager:
             )
 
     @staticmethod
-    def _finish_system_error(session: _InteractiveSession) -> None:
+    def _finish_system_error(
+        session: _InteractiveSession,
+        *,
+        review_attempts: int = 0,
+    ) -> None:
         InteractiveSessionManager._finish_review_stop(
             session,
             session.artifact or {},
             "system_error",
+            review_attempts=review_attempts,
         )
 
     def _retain_follow_up_after_quality_interruption(
@@ -3317,6 +3357,18 @@ class InteractiveSessionManager:
         )
         messages = _trace_messages(trace_path)
         events = session.events.after(0) if session.events is not None else []
+        current_difficulty = None
+        for product in (session.active_task, session.learning_task):
+            value = _payload_content(product or {}).get("difficulty")
+            if value in {"basic", "applied", "advanced"}:
+                current_difficulty = str(value)
+                break
+        if current_difficulty is None and session.learning_contract is not None:
+            current_difficulty = session.learning_contract.difficulty
+        if current_difficulty is None:
+            diagnosed = _payload_content(session.diagnosis or {}).get("difficulty")
+            if diagnosed in {"basic", "applied", "advanced"}:
+                current_difficulty = str(diagnosed)
         return {
             "session_id": session.session_id,
             "trace_id": session.runtime.options.trace_id,
@@ -3324,8 +3376,10 @@ class InteractiveSessionManager:
             "state": session.runtime.engine.state.value,
             "awaiting": session.awaiting,
             "outcome": session.outcome,
+            "termination": session.termination,
             "mode": session.runtime.mode,
             "profile": dict(session.runtime.profile),
+            "current_difficulty": current_difficulty,
             "learning_contract": (
                 session.learning_contract.as_dict()
                 if session.learning_contract is not None

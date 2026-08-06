@@ -100,6 +100,30 @@ describe('learning insight derivation', () => {
     )).not.toContain('validation')
   })
 
+  it('uses an explicit path difficulty without applying the same step-up twice', () => {
+    const view: TraceView = {
+      ...craft,
+      path: craft.path
+        ? {
+            ...craft.path,
+            content: {
+              ...craft.path.content,
+              difficulty_action: 'step_up',
+              difficulty: 'applied',
+            },
+          }
+        : undefined,
+    }
+
+    const journey = difficultyJourney(view, catalog)
+
+    expect(journey.points.at(-1)).toMatchObject({
+      stage: 'advanced',
+      level: 'applied',
+      action: 'step_up',
+    })
+  })
+
   it('derives three distinct next points from remaining blind spots and prerequisites', () => {
     const plans = [planner, craft, leader].map((view) => nextLearningPlan(view, catalog))
 

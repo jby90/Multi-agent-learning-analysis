@@ -191,6 +191,32 @@ describe('LivePractice', () => {
     expect(wrapper.get('.training-report').text()).toContain('已完成')
   })
 
+  it('explains a safe stop with its reason and bounded review count', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S6_DEBATE',
+      awaiting: 'done',
+      outcome: 'safe_rejected',
+      interaction: {
+        kind: 'review_notice',
+        message: '这份内容多次未通过专业审核，本次学习已安全结束。',
+      },
+      termination: {
+        reason_code: 'evidence_insufficient',
+        review_attempts: 3,
+        review_limit: 3,
+      },
+    }))
+
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    const explanation = wrapper.get('[data-testid="termination-explanation"]')
+    expect(explanation.text()).toContain('证据不足')
+    expect(explanation.text()).toContain('已完成 3/3 轮质量审核')
+  })
+
   it('keeps the report focused and exposes the next knowledge point from the report', async () => {
     sessionStorage.setItem('ref-interactive-session', 'session-live')
     const api = fakeApi()
@@ -718,6 +744,47 @@ describe('LivePractice', () => {
 
     expect(api.getState).toHaveBeenCalledTimes(2)
     expect(wrapper.get('.live-complete').text()).toBe('训练完成')
+    wrapper.unmount()
+  })
+
+  it('clears the SQL draft when polling switches to a different learning task', async () => {
+    vi.useFakeTimers()
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const taskMessage = (knowledgePoint: string, templateId: string) => ({
+      agent: 'task',
+      role: 'produce',
+      msg_id: `task-${templateId}`,
+      payload: { content: {
+        event: 'product_ready',
+        knowledge_point: knowledgePoint,
+        template_id: templateId,
+        difficulty: 'basic',
+        question: `完成${knowledgePoint}查询`,
+      } },
+    })
+    vi.mocked(api.getState)
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT', awaiting: 'sql',
+        messages: [taskMessage('计划量与实际量口径', 'T-01')],
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT', awaiting: 'sql',
+        messages: [
+          taskMessage('计划量与实际量口径', 'T-01'),
+          taskMessage('月度聚合方法', 'T-03'),
+        ],
+      }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 1000 } })
+    await flushPromises()
+
+    await wrapper.get('textarea[aria-label="输入查询语句"]')
+      .setValue('SELECT actual_qty FROM fact_production_progress')
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+
+    expect((wrapper.get('textarea[aria-label="输入查询语句"]').element as HTMLTextAreaElement).value)
+      .toBe('')
     wrapper.unmount()
   })
 

@@ -224,6 +224,17 @@ describe('trace presentation mappings', () => {
     expect(publicQueryText(query)).toBe(query)
   })
 
+  it('keeps domain snake-case evidence visible through approved Chinese labels', () => {
+    expect(learnerText(
+      '从 fact_production_progress 读取 risk_level、delay_days 与 shortfall_intensity。',
+    )).toBe('从 生产进度表 读取 风险等级、延迟天数 与 缺口强度。')
+  })
+
+  it('still blocks explicit internal protocol fields after narrowing snake-case checks', () => {
+    expect(learnerText('内部记录 trace_id 与 transition_id'))
+      .toBe('当前内容暂时无法展示，请稍后再试。')
+  })
+
   it.each([
     'T0',
     'T1',

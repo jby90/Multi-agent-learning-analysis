@@ -30,6 +30,16 @@ function mountPanel(view: TraceView) {
 
 
 describe('ProfilePanel learning evidence', () => {
+  it('uses the authoritative live difficulty instead of the initial diagnosis', () => {
+    const view = officialView('demo-planner_new-20260716133542.jsonl')
+    const wrapper = mount(ProfilePanel, {
+      props: { view, catalog, currentDifficulty: 'applied' },
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+
+    expect(wrapper.get('.assessment-summary').text()).toContain('当前档位应用档')
+  })
+
   it('shows exact blind-spot coverage with links to the matched resources', () => {
     const wrapper = mountPanel(officialView('demo-planner_new-20260716133542.jsonl'))
 

@@ -266,6 +266,29 @@ input:focus-visible,
   border-color: transparent;
 }
 
+.debug-workspace-action {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  color: #0969da;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(0, 122, 255, 0.08);
+  border: 1px solid rgba(0, 122, 255, 0.15);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.debug-workspace-action:hover {
+  background: rgba(0, 122, 255, 0.13);
+  border-color: rgba(0, 122, 255, 0.25);
+  transform: translateY(-1px);
+}
+
 .session-commandbar {
   min-height: 58px;
   display: flex;

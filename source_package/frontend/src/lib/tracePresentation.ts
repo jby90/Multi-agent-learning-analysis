@@ -107,6 +107,11 @@ const DIMENSION_LABELS: Record<string, string> = {
 }
 
 const FIELD_LABELS: Record<string, string> = {
+  fact_production_progress: '生产进度表',
+  dim_date: '日期维表',
+  dim_process: '工序维表',
+  dim_ship: '船舶维表',
+  dim_workshop: '车间维表',
   plan_qty: '计划量',
   actual_qty: '实际完成量',
   complete_rate: '完成率',
@@ -120,6 +125,19 @@ const FIELD_LABELS: Record<string, string> = {
   month_label: '月份',
   high_risk_rows: '高风险记录数',
   responsibility_unit: '责任单元',
+  risk_level: '风险等级',
+  delay_days: '延迟天数',
+  shortfall_intensity: '缺口强度',
+  anomaly_flag: '异常标记',
+  batch_code: '批次编码',
+  batch_no: '批次号',
+  process_name: '工序名称',
+  process_order: '工序顺序',
+  progress_id: '进度记录编号',
+  quality_pass_qty: '质量合格量',
+  rework_qty: '返工量',
+  ship_type: '船型',
+  source_type: '数据来源类型',
   DEPT: '部门',
   PROCESS: '工序',
   YEARNUM: '年总量',
@@ -188,14 +206,8 @@ export function abbreviateDimension(dimension: string): string {
 
 export function dataFieldLabel(field: string): string {
   const approvedLabel = ownValue(FIELD_LABELS, field)
-  if (
-    approvedLabel === undefined
-    && Object.prototype.hasOwnProperty.call(Object.prototype, field)
-  ) {
-    return '数据字段'
-  }
-  const translated = approvedLabel ?? field.replaceAll('_', ' ')
-  return publicDisplayText(field, translated, '数据字段')
+  if (approvedLabel === undefined) return '数据字段'
+  return publicDisplayText(field, approvedLabel, '数据字段')
 }
 
 
@@ -270,7 +282,7 @@ const FORBIDDEN_PUBLIC_TEXT: RegExp[] = [
   ...CORE_ENGINEERING_PUBLIC_TEXT,
   /\bT-(?:FS\d+|\d+(?:-[A-Z]+)*)\b/iu,
   /\b(?:diagnostic|difficulty|family|misconception|route|state)\b/iu,
-  /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/u,
+  /\b(?:trace_id|session_id|msg_id|template_id|transition_id|from_state|to_state|payload_type|rule_hits|evidence_ref|reviewed_msg_id|difficulty_action|target_misconception|learning_contract|domain_package_sha256)\b/iu,
 ]
 
 

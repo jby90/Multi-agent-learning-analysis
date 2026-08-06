@@ -180,6 +180,7 @@ export interface InteractiveState {
   awaiting: string
   mode: string
   profile: InteractiveProfile
+  current_difficulty?: string | null
   learning_contract?: InteractiveLearningContract | null
   evidence_bundle?: InteractiveEvidenceBundle | null
   resource_bundle?: InteractiveResourceBundle | null
@@ -201,6 +202,11 @@ export interface InteractiveState {
     will_step_down: boolean
   } | null
   outcome?: InteractiveOutcome | null
+  termination?: {
+    reason_code: 'model_unavailable' | 'evidence_insufficient' | 'review_exhausted'
+    review_attempts: number
+    review_limit: number
+  } | null
 }
 
 export type AgentActivityId =

@@ -5,6 +5,7 @@ import {
   Pause,
   Play,
   StepForward,
+  Workflow,
   Upload,
   UserRound,
   Users,
@@ -45,6 +46,7 @@ const emit = defineEmits<{
   view: [value: 'student' | 'collaboration']
   import: [file: File]
   export: []
+  debug: []
 }>()
 
 function selectTrace(event: Event): void {
@@ -146,6 +148,18 @@ function importDropped(event: DragEvent): void {
           @click="emit('view', 'collaboration')"
         >协同视图</button>
       </div>
+
+      <button
+        v-if="entryMode === 'live' && hasSession"
+        type="button"
+        class="debug-workspace-action"
+        aria-label="打开当前会话调试工作台"
+        title="只查看当前浏览器正在进行的会话"
+        @click="emit('debug')"
+      >
+        <Workflow :size="15" aria-hidden="true" />
+        <span>调试工作台</span>
+      </button>
 
       <div
         class="trace-transfer control-cluster"
