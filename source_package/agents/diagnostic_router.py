@@ -19,6 +19,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 PROBE_PATH = ROOT / "config" / "diagnostic_probes_v3.json"
 DEPENDENCY_PATH = ROOT / "config" / "knowledge_dependencies_v3.json"
+EXPERIENCE_TAG_PATH = ROOT / "config" / "diagnostic_experience_tags_v3.json"
 PRETEST_PATH = ROOT / "eval" / "cases" / "pretest.json"
 PROFILE_DIR = Path(__file__).with_name("profiles")
 DIFFICULTIES = ("basic", "applied", "advanced")
@@ -59,11 +60,13 @@ class DiagnosticRouter:
         *,
         probe_path: Path = PROBE_PATH,
         dependency_path: Path = DEPENDENCY_PATH,
+        experience_tag_path: Path = EXPERIENCE_TAG_PATH,
         pretest_path: Path = PRETEST_PATH,
         profile_dir: Path = PROFILE_DIR,
     ) -> None:
         probes = _read_json(Path(probe_path))
         dependency = _read_json(Path(dependency_path))
+        experience_config = _read_json(Path(experience_tag_path))
         pretest = _read_json(Path(pretest_path))
         if not isinstance(probes, list) or not probes:
             raise ValueError("diagnostic probe library must be a non-empty list")
@@ -71,6 +74,10 @@ class DiagnosticRouter:
             raise ValueError("knowledge dependency configuration must be an object")
         if not isinstance(pretest, list) or len(pretest) != 5:
             raise ValueError("v3 router requires exactly five pretest questions")
+        if not isinstance(experience_config, dict) or not isinstance(
+            experience_config.get("tags"), list
+        ):
+            raise ValueError("diagnostic experience tag configuration is invalid")
 
         self._probes = {str(item["probe_id"]): dict(item) for item in probes}
         if len(self._probes) != len(probes):
@@ -84,6 +91,17 @@ class DiagnosticRouter:
         if set(self._prerequisites) != set(self._order):
             raise ValueError("dependency configuration must cover all knowledge points")
         self._pretest = {str(item["question_id"]): dict(item) for item in pretest}
+        self._experience_tags = {
+            str(item["tag_id"]): dict(item)
+            for item in experience_config["tags"]
+        }
+        if len(self._experience_tags) != len(experience_config["tags"]):
+            raise ValueError("diagnostic experience tag IDs must be unique")
+        if {
+            str(item["knowledge_point"])
+            for item in self._experience_tags.values()
+        } != set(self._order):
+            raise ValueError("experience tags must cover all core knowledge points")
         self._profiles: dict[str, dict[str, Any]] = {}
         for path in sorted(Path(profile_dir).glob("*.json")):
             profile = _read_json(path)
@@ -98,12 +116,15 @@ class DiagnosticRouter:
         profile_id: str,
         answers: Mapping[str, str],
         probe_results: Sequence[ProbeResult | Mapping[str, Any]] = (),
+        *,
+        experience_tags: Sequence[str] = (),
     ) -> dict[str, Any]:
         if profile_id not in self._profiles:
             raise ValueError(f"unsupported profile_id: {profile_id}")
         if not isinstance(answers, Mapping) or set(answers) != set(self._pretest):
             raise ValueError("answers must contain exactly the five approved question IDs")
         probes = tuple(ProbeResult.from_value(item) for item in probe_results)
+        normalized_tags = self._normalize_experience_tags(experience_tags)
         if len(probes) > 2:
             raise ValueError("a production session accepts at most two diagnostic probes")
         if len({item.probe_id for item in probes}) != len(probes):
@@ -233,15 +254,83 @@ class DiagnosticRouter:
         for index, item in enumerate(ordered, start=1):
             item["plan_item_id"] = f"PLAN-{index:03d}"
         selected = ordered[0] if ordered else None
+        recommended_point, recommendation_evidence = self.recommend_probe_point(
+            profile_id,
+            answers,
+            normalized_tags,
+            selected_knowledge_point=(
+                str(selected["knowledge_point"]) if selected is not None else None
+            ),
+        )
         return {
-            "router_version": "diagnostic-router-v3",
+            "router_version": "diagnostic-router-v3.1",
             "knowledge_point_plan": ordered,
             "selected_plan_item_id": selected["plan_item_id"] if selected else None,
             "selected_knowledge_point": selected["knowledge_point"] if selected else None,
             "selected_difficulty": selected["initial_difficulty"] if selected else None,
             "route_evidence": evidence_log,
             "probe_count": len(probes),
+            "experience_tags": list(normalized_tags),
+            "recommended_probe_knowledge_point": recommended_point,
+            "probe_recommendation_evidence": recommendation_evidence,
         }
+
+    def recommend_probe_point(
+        self,
+        profile_id: str,
+        answers: Mapping[str, str],
+        experience_tags: Sequence[str] = (),
+        *,
+        selected_knowledge_point: str | None = None,
+    ) -> tuple[str | None, dict[str, Any] | None]:
+        """Choose a calibration target from observable profile evidence.
+
+        An experience tag requests calibration only.  It never creates a
+        blind spot; the subsequent frozen probe remains the sole evidence for
+        marking the point as needing training.
+        """
+
+        if profile_id not in self._profiles:
+            raise ValueError(f"unsupported profile_id: {profile_id}")
+        if not isinstance(answers, Mapping) or set(answers) != set(self._pretest):
+            raise ValueError("answers must contain exactly the five approved question IDs")
+        tags = self._normalize_experience_tags(experience_tags)
+        if tags:
+            tag = self._experience_tags[tags[0]]
+            point = str(tag["knowledge_point"])
+            return point, {
+                "evidence_source": "profile_experience",
+                "evidence_ids": [f"EXPERIENCE:{tags[0]}"],
+                "route_reason": (
+                    f"岗位画像经历“{tag['label']}”需要先用固定探针校准；"
+                    "该标签本身不判定盲区。"
+                ),
+            }
+        if selected_knowledge_point:
+            return selected_knowledge_point, {
+                "evidence_source": "diagnostic_plan",
+                "evidence_ids": [f"PLAN_CANDIDATE:{selected_knowledge_point}"],
+                "route_reason": "按当前确定性知识点计划首项执行固定探针校准。",
+            }
+        return None, None
+
+    def _normalize_experience_tags(
+        self,
+        experience_tags: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(experience_tags, str) or not isinstance(
+            experience_tags, Sequence
+        ):
+            raise ValueError("experience_tags must be a sequence of tag IDs")
+        normalized = tuple(str(item).strip() for item in experience_tags)
+        if any(not item for item in normalized):
+            raise ValueError("experience tag IDs must not be empty")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("experience tag IDs must not repeat")
+        unknown = [item for item in normalized if item not in self._experience_tags]
+        if unknown:
+            raise ValueError(f"unknown diagnostic experience tags: {unknown}")
+        return normalized
 
     def _candidate(
         self,
@@ -297,6 +386,28 @@ def probes_for_knowledge_point(
             ),
         )[:2]
     )
+
+
+def probes_for_diagnosis(
+    profile_id: str,
+    answers: Mapping[str, str],
+    experience_tags: Sequence[str] = (),
+    *,
+    probe_path: Path = PROBE_PATH,
+) -> tuple[dict[str, Any], ...]:
+    """Return system-selected probes without accepting a target point."""
+
+    router = DiagnosticRouter(probe_path=probe_path)
+    preliminary = router.route(
+        profile_id,
+        answers,
+        (),
+        experience_tags=experience_tags,
+    )
+    point = preliminary.get("recommended_probe_knowledge_point")
+    if not isinstance(point, str) or not point.strip():
+        return ()
+    return probes_for_knowledge_point(point, path=probe_path)
 
 
 def grade_probe_answer(probe: Mapping[str, Any], answer: str) -> bool:

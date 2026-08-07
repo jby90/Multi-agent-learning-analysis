@@ -3,7 +3,7 @@ from __future__ import annotations
 from eval.route_reachability import audit_route_reachability, render_markdown
 
 
-def test_v3_route_gate_exposes_pre_probe_indistinguishability() -> None:
+def test_v3_1_route_gate_resolves_probe_selection_from_profile_evidence() -> None:
     report = audit_route_reachability()
 
     assert report["scenario_space"]["profile_count"] == 3
@@ -13,9 +13,9 @@ def test_v3_route_gate_exposes_pre_probe_indistinguishability() -> None:
     assert report["summary"]["unreachable_count"] == 0
     assert report["summary"]["forced_knowledge_point_count"] == 0
     assert report["summary"]["forced_template_id_count"] == 0
-    assert report["summary"]["pre_probe_conflicting_group_count"] == 3
-    assert report["summary"]["pre_probe_affected_case_count"] == 45
-    assert report["summary"]["real_route_reachable_upper_bound"] == 8
+    assert report["summary"]["pre_probe_conflicting_group_count"] == 0
+    assert report["summary"]["pre_probe_affected_case_count"] == 0
+    assert report["summary"]["real_route_reachable_upper_bound"] == 10
 
 
 def test_every_formal_selection_is_traceable_and_deterministic() -> None:
@@ -30,21 +30,21 @@ def test_every_formal_selection_is_traceable_and_deterministic() -> None:
         assert row["forced_template_id"] is False
 
 
-def test_offline_prefed_probe_match_does_not_pass_the_real_route_gate() -> None:
+def test_frozen_probe_matches_pass_the_real_route_gate_without_target_injection() -> None:
     report = audit_route_reachability()
 
     assert report["summary"]["formal_route_matches"] == 50
     assert all(row["knowledge_point_match"] for row in report["formal_case_audit"])
     assert all(row["difficulty_match"] for row in report["formal_case_audit"])
     assert all(row["template_match"] for row in report["formal_case_audit"])
-    assert report["summary"]["status"] == "failed"
-    assert report["pre_probe_compatibility"]["compatible"] is False
+    assert report["summary"]["status"] == "passed"
+    assert report["pre_probe_compatibility"]["compatible"] is True
 
 
 def test_markdown_report_names_all_acceptance_gates() -> None:
     markdown = render_markdown(audit_route_reachability())
 
-    assert "生产路由可区分上限：8/10" in markdown
-    assert "探针选择冲突：3组，影响45例" in markdown
+    assert "生产路由可区分上限：10/10" in markdown
+    assert "探针选择冲突：0组，影响0例" in markdown
     assert "路由证据可追溯：50/50" in markdown
     assert "强制知识点/模板注入：0/0" in markdown

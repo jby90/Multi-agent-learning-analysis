@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 from uuid import uuid4
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -19,7 +19,7 @@ from agents.diagnosis_agent import load_pretest
 from agents.diagnostic_router import (
     ProbeResult,
     grade_probe_answer,
-    probes_for_knowledge_point,
+    probes_for_diagnosis,
 )
 from agents.kb_loader import KnowledgeChunk
 from agents.follow_up_agent import (
@@ -396,6 +396,7 @@ class _InteractiveSession:
     pending_diagnostic_probes: tuple[dict[str, Any], ...] = ()
     diagnostic_probe_queue: tuple[dict[str, Any], ...] = ()
     diagnostic_probe_results: list[ProbeResult] = field(default_factory=list)
+    experience_tags: tuple[str, ...] = ()
 
 
 class InteractiveSessionManager:
@@ -440,7 +441,12 @@ class InteractiveSessionManager:
         self._sessions: dict[str, _InteractiveSession] = {}
         self._lock = RLock()
 
-    def create_session(self, profile_id: str) -> dict[str, Any]:
+    def create_session(
+        self,
+        profile_id: str,
+        *,
+        experience_tags: Sequence[str] = (),
+    ) -> dict[str, Any]:
         session_id = uuid4().hex
         trace_id = f"interactive-{session_id}"
         executor = self._executor_factory()
@@ -474,6 +480,7 @@ class InteractiveSessionManager:
             follow_up_agent=follow_up_agent,
             awaiting="pretest",
             events=AgentEventStream(trace_id),
+            experience_tags=tuple(str(item).strip() for item in experience_tags),
         )
         for agent in sorted(AGENT_IDS):
             session.events.publish(
@@ -509,7 +516,10 @@ class InteractiveSessionManager:
         if not remaining:
             raise InteractiveSessionError("当前培养路径已全部完成。")
 
-        created = self.create_session(previous.runtime.options.profile_id)
+        created = self.create_session(
+            previous.runtime.options.profile_id,
+            experience_tags=previous.experience_tags,
+        )
         next_session = self._get_session(str(created["session_id"]))
         previous_content = _payload_content(previous.diagnosis)
         next_knowledge_point = remaining[0]
@@ -631,6 +641,7 @@ class InteractiveSessionManager:
                 session.runtime.options.profile_id,
                 answers,
                 probe_results=probe_results or (),
+                experience_tags=session.experience_tags,
             )
         except Exception:
             self._publish_activity(
@@ -650,9 +661,15 @@ class InteractiveSessionManager:
                 for item in preliminary_content.get("route_evidence", [])
                 if isinstance(item, Mapping)
             )
-            selected_point = preliminary_content.get("selected_knowledge_point")
+            selected_point = preliminary_content.get(
+                "recommended_probe_knowledge_point"
+            ) or preliminary_content.get("selected_knowledge_point")
             pending = (
-                probes_for_knowledge_point(str(selected_point))
+                probes_for_diagnosis(
+                    session.runtime.options.profile_id,
+                    answers,
+                    session.experience_tags,
+                )
                 if not has_wrong_pretest
                 and isinstance(selected_point, str)
                 and selected_point.strip()
@@ -681,8 +698,17 @@ class InteractiveSessionManager:
                         "knowledge_point": selected_point,
                         "difficulty": preliminary_content.get("selected_difficulty"),
                         "reason": (
-                            preliminary_content.get("knowledge_point_plan") or [{}]
-                        )[0].get("route_reason"),
+                            preliminary_content.get("probe_recommendation_evidence")
+                            or {}
+                        ).get("route_reason"),
+                        "evidence_source": (
+                            preliminary_content.get("probe_recommendation_evidence")
+                            or {}
+                        ).get("evidence_source"),
+                        "evidence_ids": (
+                            preliminary_content.get("probe_recommendation_evidence")
+                            or {}
+                        ).get("evidence_ids", []),
                     },
                 }
                 self._publish_activity(
@@ -761,6 +787,7 @@ class InteractiveSessionManager:
             session.runtime.options.profile_id,
             session.pretest_answers,
             probe_results=session.diagnostic_probe_results,
+            experience_tags=session.experience_tags,
         )
         session.pending_diagnostic_probes = ()
         session.diagnostic_probe_queue = ()
@@ -4127,7 +4154,18 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
                 profile_id = body.get("profile_id")
                 if not isinstance(profile_id, str):
                     raise ValueError("请选择有效岗位画像。")
-                self._send_json(201, self.manager.create_session(profile_id))
+                experience_tags = body.get("experience_tags", [])
+                if not isinstance(experience_tags, list) or not all(
+                    isinstance(item, str) for item in experience_tags
+                ):
+                    raise ValueError("岗位画像经历标签格式无效。")
+                self._send_json(
+                    201,
+                    self.manager.create_session(
+                        profile_id,
+                        experience_tags=experience_tags,
+                    ),
+                )
                 return
             if (
                 len(parts) == 4

@@ -1,0 +1,15 @@
+{
+  "version": "v3.1-profile-evidence-20260807",
+  "tags": [
+    {"tag_id":"process_flow_coordination","knowledge_point":"三道工序与传导关系","label":"参与过三道工序协同或交接"},
+    {"tag_id":"plan_actual_reconciliation","knowledge_point":"计划量与实际量口径","label":"需要核对计划量与实际报工"},
+    {"tag_id":"completion_rate_reporting","knowledge_point":"完成率计算","label":"需要制作完成率统计或报表"},
+    {"tag_id":"variance_risk_monitoring","knowledge_point":"偏差率与风险等级","label":"需要监控偏差幅度与风险"},
+    {"tag_id":"monthly_rollup_reporting","knowledge_point":"月度聚合方法","label":"需要进行跨日或跨月汇总"},
+    {"tag_id":"anomaly_threshold_review","knowledge_point":"异常识别标准","label":"需要按阈值识别生产异常"},
+    {"tag_id":"cross_month_lag_review","knowledge_point":"传导时滞分析","label":"需要分析跨月响应或时滞"},
+    {"tag_id":"decay_pattern_review","knowledge_point":"异常衰减规律","label":"需要判断异常是否沿工序收窄"},
+    {"tag_id":"handled_responsibility_handoffs","knowledge_point":"责任单元定位","label":"需要核对责任单元与交接边界"},
+    {"tag_id":"cross_process_root_cause_review","knowledge_point":"跨工序归因方法","label":"需要开展跨工序原因分析"}
+  ]
+}

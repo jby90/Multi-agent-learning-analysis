@@ -11,6 +11,7 @@ def test_v3_formal_inputs_are_50_production_routes_without_target_injection() ->
     assert len(cases) == 50
     assert {case.route_mode for case in cases} == {"production"}
     assert all(len(case.diagnostic_probe_answers) <= 2 for case in cases)
+    assert all(len(case.experience_tags) <= 1 for case in cases)
     raw = json.loads(INPUT_PATH.read_text(encoding="utf-8"))
     serialized = json.dumps(raw, ensure_ascii=False)
     assert '"knowledge_point"' not in serialized

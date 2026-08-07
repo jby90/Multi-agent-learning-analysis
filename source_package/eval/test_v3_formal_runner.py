@@ -18,8 +18,8 @@ class FakeManager:
             "outcome": None,
         }
 
-    def create_session(self, profile_id):
-        self.calls.append(("create_session", profile_id))
+    def create_session(self, profile_id, *, experience_tags=()):
+        self.calls.append(("create_session", profile_id, tuple(experience_tags)))
         return dict(self._state)
 
     def submit_pretest(self, session_id, answers):
@@ -57,6 +57,7 @@ def test_formal_runner_never_injects_knowledge_point_or_template(tmp_path: Path)
         "case_id": "E2E-001",
         "route_mode": "production",
         "profile_id": "planner_new",
+        "experience_tags": ["process_flow_coordination"],
         "pretest_answers": {f"PT-{index}": "A" for index in range(1, 6)},
         "diagnostic_probe_answers": [{"probe_id": "DP-01-B", "answer": "wrong"}],
         "learner_script_id": "S-KEEP-B",

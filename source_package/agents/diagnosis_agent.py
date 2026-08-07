@@ -190,6 +190,8 @@ class DiagnosisAgent:
         profile_id: str,
         answers: Mapping[str, str],
         probe_results: Sequence[ProbeResult | Mapping[str, Any]] = (),
+        *,
+        experience_tags: Sequence[str] = (),
     ) -> dict[str, Any]:
         if profile_id not in self._profiles:
             raise ValueError(f"unsupported profile_id: {profile_id}")
@@ -225,7 +227,12 @@ class DiagnosisAgent:
         else:
             difficulty = _step_up(str(profile["difficulty_start"]))
 
-        route = self._router.route(profile_id, answers, probe_results)
+        route = self._router.route(
+            profile_id,
+            answers,
+            probe_results,
+            experience_tags=experience_tags,
+        )
         knowledge_point_plan = route["knowledge_point_plan"]
         selected_difficulty = route["selected_difficulty"] or difficulty
         blind_spots = [
@@ -251,6 +258,13 @@ class DiagnosisAgent:
             "route_evidence": route["route_evidence"],
             "diagnostic_probe_count": route["probe_count"],
             "router_version": route["router_version"],
+            "experience_tags": route["experience_tags"],
+            "recommended_probe_knowledge_point": route[
+                "recommended_probe_knowledge_point"
+            ],
+            "probe_recommendation_evidence": route[
+                "probe_recommendation_evidence"
+            ],
             "pretest_score": {
                 "correct": correct,
                 "total": total,

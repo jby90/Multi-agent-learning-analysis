@@ -343,6 +343,35 @@ def test_failed_basic_probe_finishes_diagnosis_without_showing_applied_probe(
     assert content["diagnostic_probe_count"] == 1
 
 
+def test_profile_experience_drives_system_probe_selection_without_route_injection(
+    tmp_path: Path,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=forbidden_llm,
+        executor_factory=RecordingExecutor,
+    )
+    created = manager.create_session(
+        "planner_new",
+        experience_tags=("handled_responsibility_handoffs",),
+    )
+    session_id = created["session_id"]
+
+    pending = manager.submit_pretest(session_id, ALL_CORRECT)
+
+    assert pending["awaiting"] == "diagnostic_probe"
+    assert [
+        item["probe_id"] for item in manager.get_diagnostic_probes(session_id)
+    ] == ["DP-04-B"]
+    assert pending["interaction"]["provisional_route"]["knowledge_point"] == (
+        "责任单元定位"
+    )
+    assert pending["interaction"]["provisional_route"]["evidence_source"] == (
+        "profile_experience"
+    )
+
+
 def test_advance_returns_reviewed_lecture_then_reviewed_sql_task(
     tmp_path: Path,
 ) -> None:

@@ -10,8 +10,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT_PATH = ROOT / "eval" / "cases" / "v3" / "formal_50_inputs_v3.json"
-GOLD_PATH = ROOT / "eval" / "gold" / "v3" / "formal_50_gold_v3.json"
+INPUT_PATH = ROOT / "eval" / "cases" / "v3_1" / "formal_50_inputs_v3_1.json"
+GOLD_PATH = ROOT / "eval" / "gold" / "v3_1" / "formal_50_gold_v3_1.json"
 _FORBIDDEN_RUNTIME_KEYS = {
     "knowledge_point",
     "template_id",
@@ -34,6 +34,7 @@ class V3FormalCase:
     case_id: str
     route_mode: str
     profile_id: str
+    experience_tags: tuple[str, ...]
     pretest_answers: Mapping[str, str]
     diagnostic_probe_answers: tuple[V3ProbeAnswer, ...]
     learner_script_id: str
@@ -76,11 +77,20 @@ def load_formal_cases(path: Path = INPUT_PATH) -> tuple[V3FormalCase, ...]:
             V3ProbeAnswer(str(probe["probe_id"]), str(probe["answer"]))
             for probe in probes_raw
         )
+        experience_tags_raw = item.get("experience_tags", [])
+        if not isinstance(experience_tags_raw, list) or not all(
+            isinstance(value, str) and value.strip()
+            for value in experience_tags_raw
+        ):
+            raise ValueError(f"{expected_id} experience_tags must be a string list")
         cases.append(
             V3FormalCase(
                 case_id=expected_id,
                 route_mode="production",
                 profile_id=str(item["profile_id"]),
+                experience_tags=tuple(
+                    dict.fromkeys(value.strip() for value in experience_tags_raw)
+                ),
                 pretest_answers=dict(answers),
                 diagnostic_probe_answers=probes,
                 learner_script_id=str(item["learner_script_id"]),

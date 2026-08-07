@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from agents.diagnosis_agent import DiagnosisAgent
-from agents.diagnostic_router import DiagnosticRouter, ProbeResult
+from agents.diagnostic_router import (
+    DiagnosticRouter,
+    ProbeResult,
+    probes_for_diagnosis,
+)
 
 
 ALL_CORRECT = {
@@ -101,3 +105,42 @@ def test_router_rejects_more_than_two_probes_per_session() -> None:
         assert "at most two" in str(exc)
     else:  # pragma: no cover - assertion clarity
         raise AssertionError("three probes must be rejected")
+
+
+def test_profile_experience_selects_probe_without_creating_a_blind_spot() -> None:
+    router = DiagnosticRouter()
+
+    probes = probes_for_diagnosis(
+        "planner_new",
+        ALL_CORRECT,
+        ("handled_responsibility_handoffs",),
+    )
+    preliminary = router.route(
+        "planner_new",
+        ALL_CORRECT,
+        (),
+        experience_tags=("handled_responsibility_handoffs",),
+    )
+
+    assert [item["probe_id"] for item in probes] == ["DP-04-B", "DP-04-A"]
+    assert preliminary["recommended_probe_knowledge_point"] == "责任单元定位"
+    assert "责任单元定位" not in {
+        item["knowledge_point"]
+        for item in preliminary["knowledge_point_plan"]
+        if item["mastery_status"] == "needs_training"
+    }
+
+
+def test_probe_failure_not_experience_tag_creates_the_selected_blind_spot() -> None:
+    router = DiagnosticRouter()
+
+    result = router.route(
+        "planner_new",
+        ALL_CORRECT,
+        (ProbeResult("DP-04-B", False),),
+        experience_tags=("handled_responsibility_handoffs",),
+    )
+
+    assert result["selected_knowledge_point"] == "责任单元定位"
+    assert result["selected_difficulty"] == "basic"
+    assert result["knowledge_point_plan"][0]["evidence_source"] == "diagnostic_probe"

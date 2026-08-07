@@ -219,7 +219,10 @@ class FormalCaseRunner:
             raise ValueError(f"formal case contains forbidden route injection: {leaked}")
         case_id = str(case["case_id"])
         started = _now()
-        state = self.manager.create_session(str(case["profile_id"]))
+        state = self.manager.create_session(
+            str(case["profile_id"]),
+            experience_tags=tuple(str(value) for value in case.get("experience_tags", [])),
+        )
         session_id = str(state["session_id"])
         script_id = str(case["learner_script_id"])
         probe_answers = {
@@ -299,6 +302,7 @@ class FormalCaseRunner:
             "prompt_version": self.prompt_version,
             "model_config": self.model_config,
             "profile_id": str(case["profile_id"]),
+            "experience_tags": list(case.get("experience_tags", [])),
             "learner_script_id": script_id,
             "started_at": started,
             "finished_at": _now(),
@@ -378,10 +382,10 @@ def run_seed(
             "failed_count": len(failures),
             "code_version": code_version,
             "formal_input_sha256": _sha256(
-                ROOT / "eval" / "cases" / "v3" / "formal_50_inputs_v3.json"
+                ROOT / "eval" / "cases" / "v3_1" / "formal_50_inputs_v3_1.json"
             ),
             "gold_sha256": _sha256(
-                ROOT / "eval" / "gold" / "v3" / "formal_50_gold_v3.json"
+                ROOT / "eval" / "gold" / "v3_1" / "formal_50_gold_v3_1.json"
             ),
             "cases": [
                 {

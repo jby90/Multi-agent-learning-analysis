@@ -1,0 +1,1167 @@
+[
+  {
+    "case_id": "E2E-001",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-01-B",
+        "answer": "不知道"
+      },
+      {
+        "probe_id": "DP-01-A",
+        "answer": "不能；只能形成候选，需要对象依赖、齐套和交接证据。"
+      }
+    ],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": [
+      "process_flow_coordination"
+    ]
+  },
+  {
+    "case_id": "E2E-002",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-01-B",
+        "answer": "YCL→ZZTP→AZTP。"
+      },
+      {
+        "probe_id": "DP-01-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "process_flow_coordination"
+    ]
+  },
+  {
+    "case_id": "E2E-003",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-01-B",
+        "answer": "YCL→ZZTP→AZTP。"
+      },
+      {
+        "probe_id": "DP-01-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "process_flow_coordination"
+    ]
+  },
+  {
+    "case_id": "E2E-004",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-01-B",
+        "answer": "YCL→ZZTP→AZTP。"
+      },
+      {
+        "probe_id": "DP-01-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "process_flow_coordination"
+    ]
+  },
+  {
+    "case_id": "E2E-005",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-01-B",
+        "answer": "YCL→ZZTP→AZTP。"
+      },
+      {
+        "probe_id": "DP-01-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "process_flow_coordination"
+    ]
+  },
+  {
+    "case_id": "E2E-006",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "A",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": []
+  },
+  {
+    "case_id": "E2E-007",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-01",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "plan_actual_reconciliation"
+    ]
+  },
+  {
+    "case_id": "E2E-008",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-01",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "plan_actual_reconciliation"
+    ]
+  },
+  {
+    "case_id": "E2E-009",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-01",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "plan_actual_reconciliation"
+    ]
+  },
+  {
+    "case_id": "E2E-010",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-01",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "plan_actual_reconciliation"
+    ]
+  },
+  {
+    "case_id": "E2E-011",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "A",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": []
+  },
+  {
+    "case_id": "E2E-012",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-02",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "completion_rate_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-013",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-02",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "completion_rate_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-014",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-02",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "completion_rate_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-015",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-02",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "completion_rate_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-016",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-02-B",
+        "answer": "不知道"
+      },
+      {
+        "probe_id": "DP-02-A",
+        "answer": "不能；可判欠产及幅度，风险等级必须依据冻结阈值。"
+      }
+    ],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": [
+      "variance_risk_monitoring"
+    ]
+  },
+  {
+    "case_id": "E2E-017",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-02-B",
+        "answer": "(850-1000)/1000=-15%，属于欠产。"
+      },
+      {
+        "probe_id": "DP-02-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "variance_risk_monitoring"
+    ]
+  },
+  {
+    "case_id": "E2E-018",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-02-B",
+        "answer": "(850-1000)/1000=-15%，属于欠产。"
+      },
+      {
+        "probe_id": "DP-02-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "variance_risk_monitoring"
+    ]
+  },
+  {
+    "case_id": "E2E-019",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-02-B",
+        "answer": "(850-1000)/1000=-15%，属于欠产。"
+      },
+      {
+        "probe_id": "DP-02-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "variance_risk_monitoring"
+    ]
+  },
+  {
+    "case_id": "E2E-020",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-02-B",
+        "answer": "(850-1000)/1000=-15%，属于欠产。"
+      },
+      {
+        "probe_id": "DP-02-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "variance_risk_monitoring"
+    ]
+  },
+  {
+    "case_id": "E2E-021",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "A"
+    },
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": []
+  },
+  {
+    "case_id": "E2E-022",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-05",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "monthly_rollup_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-023",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-05",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "monthly_rollup_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-024",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-05",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "monthly_rollup_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-025",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-05",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "monthly_rollup_reporting"
+    ]
+  },
+  {
+    "case_id": "E2E-026",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "A",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": []
+  },
+  {
+    "case_id": "E2E-027",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-04",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "anomaly_threshold_review"
+    ]
+  },
+  {
+    "case_id": "E2E-028",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-04",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "anomaly_threshold_review"
+    ]
+  },
+  {
+    "case_id": "E2E-029",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-04",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "anomaly_threshold_review"
+    ]
+  },
+  {
+    "case_id": "E2E-030",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-04",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "anomaly_threshold_review"
+    ]
+  },
+  {
+    "case_id": "E2E-031",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "A",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": []
+  },
+  {
+    "case_id": "E2E-032",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-03",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "cross_month_lag_review"
+    ]
+  },
+  {
+    "case_id": "E2E-033",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-03",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "cross_month_lag_review"
+    ]
+  },
+  {
+    "case_id": "E2E-034",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-03",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "cross_month_lag_review"
+    ]
+  },
+  {
+    "case_id": "E2E-035",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "AP-03",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "cross_month_lag_review"
+    ]
+  },
+  {
+    "case_id": "E2E-036",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-03-B",
+        "answer": "不知道"
+      },
+      {
+        "probe_id": "DP-03-A",
+        "answer": "不能；应考虑混合情形和本地叠加，分别报告证据。"
+      }
+    ],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": [
+      "decay_pattern_review"
+    ]
+  },
+  {
+    "case_id": "E2E-037",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-03-B",
+        "answer": "可描述为表观收窄/衰减形态，但不能据此证明传导。"
+      },
+      {
+        "probe_id": "DP-03-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "decay_pattern_review"
+    ]
+  },
+  {
+    "case_id": "E2E-038",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-03-B",
+        "answer": "可描述为表观收窄/衰减形态，但不能据此证明传导。"
+      },
+      {
+        "probe_id": "DP-03-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "decay_pattern_review"
+    ]
+  },
+  {
+    "case_id": "E2E-039",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-03-B",
+        "answer": "可描述为表观收窄/衰减形态，但不能据此证明传导。"
+      },
+      {
+        "probe_id": "DP-03-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "decay_pattern_review"
+    ]
+  },
+  {
+    "case_id": "E2E-040",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-03-B",
+        "answer": "可描述为表观收窄/衰减形态，但不能据此证明传导。"
+      },
+      {
+        "probe_id": "DP-03-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "decay_pattern_review"
+    ]
+  },
+  {
+    "case_id": "E2E-041",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-04-B",
+        "answer": "不知道"
+      },
+      {
+        "probe_id": "DP-04-A",
+        "answer": "需核对任务范围、计划规模、交接/齐套、执行边界和本地异常。"
+      }
+    ],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": [
+      "handled_responsibility_handoffs"
+    ]
+  },
+  {
+    "case_id": "E2E-042",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-04-B",
+        "answer": "不能；完成率差异只是线索。"
+      },
+      {
+        "probe_id": "DP-04-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "handled_responsibility_handoffs"
+    ]
+  },
+  {
+    "case_id": "E2E-043",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-04-B",
+        "answer": "不能；完成率差异只是线索。"
+      },
+      {
+        "probe_id": "DP-04-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "handled_responsibility_handoffs"
+    ]
+  },
+  {
+    "case_id": "E2E-044",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-04-B",
+        "answer": "不能；完成率差异只是线索。"
+      },
+      {
+        "probe_id": "DP-04-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "handled_responsibility_handoffs"
+    ]
+  },
+  {
+    "case_id": "E2E-045",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-04-B",
+        "answer": "不能；完成率差异只是线索。"
+      },
+      {
+        "probe_id": "DP-04-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "handled_responsibility_handoffs"
+    ]
+  },
+  {
+    "case_id": "E2E-046",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-05-B",
+        "answer": "不知道"
+      },
+      {
+        "probe_id": "DP-05-A",
+        "answer": "对象依赖、时序/交接、共同因素与本地叠加；结论应区分传导证据和本地证据。"
+      }
+    ],
+    "learner_script_id": "S-KEEP-B",
+    "experience_tags": [
+      "cross_process_root_cause_review"
+    ]
+  },
+  {
+    "case_id": "E2E-047",
+    "route_mode": "production",
+    "profile_id": "craft_engineer",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-05-B",
+        "answer": "不等于；时序相容只是候选证据。"
+      },
+      {
+        "probe_id": "DP-05-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-KEEP-A",
+    "experience_tags": [
+      "cross_process_root_cause_review"
+    ]
+  },
+  {
+    "case_id": "E2E-048",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-05-B",
+        "answer": "不等于；时序相容只是候选证据。"
+      },
+      {
+        "probe_id": "DP-05-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-STEP-UP",
+    "experience_tags": [
+      "cross_process_root_cause_review"
+    ]
+  },
+  {
+    "case_id": "E2E-049",
+    "route_mode": "production",
+    "profile_id": "line_leader",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-05-B",
+        "answer": "不等于；时序相容只是候选证据。"
+      },
+      {
+        "probe_id": "DP-05-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-REBUTTAL",
+    "experience_tags": [
+      "cross_process_root_cause_review"
+    ]
+  },
+  {
+    "case_id": "E2E-050",
+    "route_mode": "production",
+    "profile_id": "planner_new",
+    "pretest_answers": {
+      "PT-1": "B",
+      "PT-2": "B",
+      "PT-3": "C",
+      "PT-4": "B",
+      "PT-5": "C"
+    },
+    "diagnostic_probe_answers": [
+      {
+        "probe_id": "DP-05-B",
+        "answer": "不等于；时序相容只是候选证据。"
+      },
+      {
+        "probe_id": "DP-05-A",
+        "answer": "不知道"
+      }
+    ],
+    "learner_script_id": "S-DOWNSTEP",
+    "experience_tags": [
+      "cross_process_root_cause_review"
+    ]
+  }
+]
