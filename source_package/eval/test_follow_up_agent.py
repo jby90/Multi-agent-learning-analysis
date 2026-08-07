@@ -617,7 +617,8 @@ def test_generic_fallback_uses_the_task_family_instead_of_an_unresolved_referenc
     question = turn.product["payload"]["content"]["question"]
     assert "题目中的问题" not in question
     assert "完成率" in question
-    assert "计划" in question
+    assert question == "该工序完成率是多少，换算为百分比后是多少？"
+    assert "计划目标" not in question
 
 
 def test_deterministic_fallback_skips_a_question_already_used_in_history() -> None:
