@@ -1417,14 +1417,17 @@ class InteractiveSessionManager:
                         evidence_bundle=evidence_bundle,
                     )
                 except LLMCallError as generation_error:
-                    if session.remediation_context is None:
-                        raise
+                    fallback_reason = (
+                        "remediation_generation_unavailable"
+                        if session.remediation_context is not None
+                        else "primary_generation_unavailable"
+                    )
                     fallback = runtime.knowledge.generate_evidence_projection(
                         knowledge_point=str(blind_spots[0]),
                         student_profile=runtime.profile,
                         difficulty=evidence_bundle.difficulty,
                         retrieved_chunks=evidence_chunks,
-                        fallback_reason="remediation_generation_unavailable",
+                        fallback_reason=fallback_reason,
                     )
                     fallback = evidence_bundle.bind(fallback)
                     if (

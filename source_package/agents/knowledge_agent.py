@@ -190,9 +190,10 @@ class KnowledgeAgent:
     ) -> dict[str, Any]:
         """Build a minimal lecture only from approved chunk sentences.
 
-        This path is reserved for remediation when live generation is
-        unavailable.  It reuses the normal claim/evidence construction and is
-        still sent through the ordinary Review gate by the orchestrator.
+        This path is reserved for a bounded live-generation outage, including
+        the initial lecture and T17 remediation. It reuses the normal
+        claim/evidence construction and is still sent through the ordinary
+        Review gate by the orchestrator.
         """
 
         self._validate_inputs(

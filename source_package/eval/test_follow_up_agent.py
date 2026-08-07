@@ -621,6 +621,22 @@ def test_generic_fallback_uses_the_task_family_instead_of_an_unresolved_referenc
     assert "计划目标" not in question
 
 
+def test_high_risk_count_fallback_uses_the_template_output_contract() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress")
+    current_task = _current_task(task_agent, "T-10-A")
+
+    turn = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+    )
+
+    assert turn.product is not None
+    question = turn.product["payload"]["content"]["question"]
+    assert question == "查询结果中WSA与WSB的高风险记录数分别是多少？"
+    assert "完成率" not in question
+
+
 def test_deterministic_fallback_skips_a_question_already_used_in_history() -> None:
     task_agent = _task_agent()
     agent = FollowUpAgent("trace-production-progress")

@@ -2466,6 +2466,42 @@ def test_t17_generation_failure_uses_reviewed_evidence_projection(
     )
 
 
+def test_initial_generation_failure_uses_reviewed_evidence_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {f"PT-{index}": "D" for index in range(1, 6)},
+    )
+
+    def fail_live_lecture(*_: Any, **__: Any) -> dict[str, Any]:
+        raise LLMCallError("simulated initial generation outage")
+
+    monkeypatch.setattr(
+        "orchestrator.interactive_session._generate_reviewable_lecture",
+        fail_live_lecture,
+    )
+
+    fallback = manager.advance(session_id)
+    content = fallback["artifact"]["payload"]["content"]
+
+    assert fallback["state"] == "S3_TASK"
+    assert fallback["awaiting"] == "advance"
+    assert fallback["outcome"] is None
+    assert content["generated_by"] == "evidence_projection_fallback"
+    assert content["fallback_reason"] == "primary_generation_unavailable"
+    assert fallback["artifact"]["claims"]
+    assert fallback["artifact"]["evidence"]
+
+
 def test_second_t17_defers_the_point_instead_of_repeating_forever(
     tmp_path: Path,
 ) -> None:
