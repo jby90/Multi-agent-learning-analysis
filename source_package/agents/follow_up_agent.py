@@ -498,6 +498,23 @@ def _matches_reviewed_completion_extreme(
     if len(winners) != 1:
         return False
 
+    cited_percent_values = {
+        Decimal(token)
+        for token in re.findall(
+            r"([-+]?\d+(?:\.\d+)?)\s*[%％]",
+            normalized_answer,
+        )
+    }
+    reviewed_percent_values = {
+        value * Decimal("100") for _, value in reviewed
+    }
+    if cited_percent_values - reviewed_percent_values:
+        # A positive deterministic override must fail closed when the same
+        # answer also introduces an unreviewed percentage.  Otherwise a learner
+        # can quote the right row and append a contradictory fabricated metric
+        # while still being marked as mastered.
+        return False
+
     cited_numbers = _numbers_in(normalized_answer)
     exact_value_cited = extreme_value in cited_numbers
     if not exact_value_cited:
