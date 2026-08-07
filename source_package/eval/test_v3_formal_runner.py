@@ -222,3 +222,34 @@ def test_formal_runner_tolerates_bounded_quality_review_retries(tmp_path: Path):
 
     assert result["status"] == "completed_scenario"
     assert manager.follow_up_calls == 57
+
+
+def test_formal_learner_solves_the_observed_runtime_task_not_a_mismatched_gold_sql():
+    actor = GoldLearnerActor(
+        {
+            "case_id": "E2E-008",
+            "标准SQL": "SELECT SUM(plan_qty) AS plan_qty, SUM(actual_qty) AS actual_qty",
+            "预期要点": "计划量1855.06，实际量1156.87",
+        }
+    )
+    state = {
+        "messages": [
+            {
+                "step": 12,
+                "payload": {
+                    "content": {
+                        "event": "product_ready",
+                        "template_id": "T-01-A",
+                        "question": "查询2025-05各船YCL完成率",
+                    }
+                },
+            }
+        ]
+    }
+
+    sql = actor.sql_for_state(state)
+
+    assert "ship_no" in sql
+    assert "complete_rate" in sql
+    assert "GROUP BY ship_no" in sql
+    assert "plan_qty, SUM(actual_qty)" not in sql

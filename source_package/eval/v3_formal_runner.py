@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -24,11 +25,35 @@ from orchestrator.interactive_session import InteractiveSessionManager
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS = ROOT / "eval" / "results" / "v3_formal"
+TASK_TEMPLATE_PATH = (
+    ROOT / "config" / "domains" / "production_progress" / "task_templates.json"
+)
 # A formal case can legitimately retain the same learner turn while the
 # production review flow retries or safely interrupts a candidate.  Keep a
 # finite ceiling, but leave enough room for four learner rounds plus one T17
 # remediation cycle without turning review retries into false case failures.
 MAX_ACTIONS = 160
+
+
+@lru_cache(maxsize=1)
+def _runtime_task_sql() -> dict[str, str]:
+    """Index production task SQL by the task actually shown to the learner."""
+
+    raw = json.loads(TASK_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    templates = raw.get("templates") if isinstance(raw, Mapping) else None
+    if not isinstance(templates, list):
+        raise ValueError("production task template registry is invalid")
+    indexed: dict[str, str] = {}
+    for item in templates:
+        if not isinstance(item, Mapping):
+            continue
+        template_id = str(item.get("template_id") or "").strip()
+        sql = str(item.get("standard_sql") or "").strip()
+        if template_id and sql:
+            if template_id in indexed:
+                raise ValueError(f"duplicate production task template: {template_id}")
+            indexed[template_id] = sql
+    return indexed
 
 
 def _now() -> str:
@@ -89,6 +114,29 @@ class GoldLearnerActor:
         if not isinstance(value, str) or not value.strip():
             raise ValueError("frozen learner actor requires 标准SQL")
         return value.strip()
+
+    def sql_for_state(self, state: Mapping[str, Any]) -> str:
+        """Solve the runtime task currently visible to the external learner.
+
+        Formal gold rows describe the case-level target, while a production
+        route may first display a different difficulty template.  Selecting
+        SQL from the observed ``template_id`` follows that real task and does
+        not pass a route or template into the production manager.
+        """
+
+        for message in reversed(list(state.get("messages", []))):
+            if not isinstance(message, Mapping):
+                continue
+            content = _content(message)
+            if content.get("event") not in {"product_ready", "assessment_ready"}:
+                continue
+            template_id = str(content.get("template_id") or "").strip()
+            if not template_id:
+                continue
+            sql = _runtime_task_sql().get(template_id)
+            if sql:
+                return sql
+        return self.sql
 
     def follow_up_answer(self, state: Mapping[str, Any], script_id: str) -> str:
         self._follow_up_attempt += 1
@@ -290,7 +338,10 @@ class FormalCaseRunner:
                 state = self.manager.advance(session_id)
                 continue
             if awaiting == "sql":
-                state = self.manager.submit_sql(session_id, self.actor.sql)
+                state = self.manager.submit_sql(
+                    session_id,
+                    self.actor.sql_for_state(state),
+                )
                 continue
             if awaiting == "follow_up":
                 answer = self.actor.follow_up_answer(state, script_id)
