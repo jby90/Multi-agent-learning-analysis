@@ -53,6 +53,53 @@ class FakeManager:
         return dict(self._state)
 
 
+class RetryingReviewManager(FakeManager):
+    """Keep the learner on one turn while bounded quality review retries."""
+
+    def __init__(self, retries: int = 55):
+        super().__init__()
+        self.retries = retries
+        self.follow_up_calls = 0
+
+    def submit_diagnostic_probes(self, session_id, answers):
+        self.calls.append(("submit_diagnostic_probes", session_id, dict(answers)))
+        self._state.update(awaiting="follow_up", state="S7_STUDENT", messages=[])
+        return dict(self._state)
+
+    def submit_follow_up(self, session_id, answer, client_turn_id):
+        self.follow_up_calls += 1
+        self.calls.append(("submit_follow_up", session_id, answer, client_turn_id))
+        if self.follow_up_calls <= self.retries:
+            return dict(self._state)
+        assessments = [
+            {
+                "step": 1,
+                "payload": {
+                    "content": {
+                        "event": "learner_follow_up_assessed",
+                        "round": 1,
+                        "assessment": "unknown",
+                    }
+                },
+            }
+        ]
+        if self.follow_up_calls > self.retries + 1:
+            assessments.append(
+                {
+                    "step": 2,
+                    "payload": {
+                        "content": {
+                            "event": "learner_follow_up_assessed",
+                            "round": 2,
+                            "assessment": "mastered",
+                        }
+                    },
+                }
+            )
+        self._state["messages"] = assessments
+        return dict(self._state)
+
+
 def test_formal_runner_never_injects_knowledge_point_or_template(tmp_path: Path):
     case = {
         "case_id": "E2E-001",
@@ -143,3 +190,35 @@ def test_wrong_formal_learner_answer_is_evidence_bearing_and_accepted_by_input_g
     assert "工序" in answer
     assert "完成率" in answer
     assert "9999" in answer
+
+
+def test_formal_runner_tolerates_bounded_quality_review_retries(tmp_path: Path):
+    manager = RetryingReviewManager(retries=55)
+    runner = FormalCaseRunner(
+        manager,
+        actor=GoldLearnerActor(
+            {
+                "case_id": "E2E-004",
+                "标准SQL": "SELECT 1 AS value",
+                "预期要点": "value=1",
+            }
+        ),
+        run_id="RUN-RETRY",
+        seed_id="seed_A",
+        output_dir=tmp_path,
+        code_version="abc123",
+    )
+    case = {
+        "case_id": "E2E-004",
+        "route_mode": "production",
+        "profile_id": "planner_new",
+        "experience_tags": ["process_flow_coordination"],
+        "pretest_answers": {f"PT-{index}": "A" for index in range(1, 6)},
+        "diagnostic_probe_answers": [{"probe_id": "DP-01-B", "answer": "wrong"}],
+        "learner_script_id": "S-REBUTTAL",
+    }
+
+    result = runner.run_case(case)
+
+    assert result["status"] == "completed_scenario"
+    assert manager.follow_up_calls == 57

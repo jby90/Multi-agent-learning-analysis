@@ -24,7 +24,11 @@ from orchestrator.interactive_session import InteractiveSessionManager
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS = ROOT / "eval" / "results" / "v3_formal"
-MAX_ACTIONS = 48
+# A formal case can legitimately retain the same learner turn while the
+# production review flow retries or safely interrupts a candidate.  Keep a
+# finite ceiling, but leave enough room for four learner rounds plus one T17
+# remediation cycle without turning review retries into false case failures.
+MAX_ACTIONS = 160
 
 
 def _now() -> str:
