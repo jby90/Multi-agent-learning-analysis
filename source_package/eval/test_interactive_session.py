@@ -1314,6 +1314,11 @@ def test_submit_sql_executes_student_sql_without_text2sql_and_takes_t11_to_t13(
     assert content["event"] == "query_completed"
     assert content["generated_sql"] == submitted_sql
     assert content["sql_source"] == "student"
+    assert content["query_authority"]["template_id"] == "T-01"
+    assert content["query_authority"]["output_columns"] == [
+        "plan_qty",
+        "actual_qty",
+    ]
     assert content["rows"] == [
         {"plan_qty": "1855.06", "actual_qty": "1156.87"}
     ]

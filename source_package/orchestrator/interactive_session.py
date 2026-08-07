@@ -3170,6 +3170,12 @@ class InteractiveSessionManager:
         task_content = _payload_content(session.active_task)
         question = str(task_content.get("question", "数据实操"))
         family = str(task_content.get("family", ""))
+        query_authority = task_content.get("query_authority")
+        query_authority = (
+            dict(query_authority)
+            if isinstance(query_authority, Mapping)
+            else None
+        )
         runtime = session.runtime
         entry_state = runtime.engine.state
         if entry_state is not State.S7_STUDENT:
@@ -3282,6 +3288,11 @@ class InteractiveSessionManager:
                         "rows": normalized_rows,
                         "row_count": len(normalized_rows),
                         "query_elapsed_ms": result.elapsed_ms,
+                        **(
+                            {"query_authority": query_authority}
+                            if query_authority is not None
+                            else {}
+                        ),
                     },
                 },
                 "evidence": [

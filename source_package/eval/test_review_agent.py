@@ -597,6 +597,43 @@ def test_r01_uses_structured_task_metrics_instead_of_incidental_question_words()
     assert "R-01" not in _hard_rule_ids(product)
 
 
+def test_r01_does_not_treat_a_filter_metric_as_a_required_output_column() -> None:
+    authority = {
+        "source": "task_template",
+        "template_id": "T-10-A",
+        "family": "Q7",
+        "standard_stem": (
+            "按项目高风险偏差阈值（deviation_rate < -0.15）筛选"
+            "2025-05YCL记录，并比较各责任单元的风险分布"
+        ),
+        "output_columns": ["workshop_code", "high_risk_rows"],
+        "metric_columns": ["high_risk_rows"],
+        "dimension_columns": ["workshop_code"],
+        "filter_columns": ["deviation_rate", "period_date", "process_code"],
+        "group_by_columns": ["workshop_code"],
+        "time_column": "period_date",
+        "time_values": ["2025-05"],
+    }
+    product = _sql_product(
+        question=authority["standard_stem"],
+        family="Q7",
+        sql=(
+            "SELECT workshop_code, COUNT(*) AS high_risk_rows "
+            "FROM fact_production_progress WHERE process_code='YCL' "
+            "AND deviation_rate < -0.15 AND period_date>='2025-05-01' "
+            "AND period_date<'2025-06-01' GROUP BY workshop_code "
+            "ORDER BY high_risk_rows DESC, workshop_code ASC"
+        ),
+        rows=[
+            {"workshop_code": "WSA", "high_risk_rows": "31"},
+            {"workshop_code": "WSB", "high_risk_rows": "31"},
+        ],
+        query_authority=authority,
+    )
+
+    assert "R-01" not in _hard_rule_ids(product)
+
+
 def test_r01_ratio_tolerance_is_exactly_one_e_minus_four_after_percent_normalization() -> None:
     product = _sql_product(
         question="H2601五月预处理完成率",
