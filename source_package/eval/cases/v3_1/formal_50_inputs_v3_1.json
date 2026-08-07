@@ -14,10 +14,6 @@
       {
         "probe_id": "DP-01-B",
         "answer": "不知道"
-      },
-      {
-        "probe_id": "DP-01-A",
-        "answer": "不能；只能形成候选，需要对象依赖、齐套和交接证据。"
       }
     ],
     "learner_script_id": "S-KEEP-B",
@@ -350,10 +346,6 @@
       {
         "probe_id": "DP-02-B",
         "answer": "不知道"
-      },
-      {
-        "probe_id": "DP-02-A",
-        "answer": "不能；可判欠产及幅度，风险等级必须依据冻结阈值。"
       }
     ],
     "learner_script_id": "S-KEEP-B",
@@ -789,10 +781,6 @@
       {
         "probe_id": "DP-03-B",
         "answer": "不知道"
-      },
-      {
-        "probe_id": "DP-03-A",
-        "answer": "不能；应考虑混合情形和本地叠加，分别报告证据。"
       }
     ],
     "learner_script_id": "S-KEEP-B",
@@ -919,10 +907,6 @@
       {
         "probe_id": "DP-04-B",
         "answer": "不知道"
-      },
-      {
-        "probe_id": "DP-04-A",
-        "answer": "需核对任务范围、计划规模、交接/齐套、执行边界和本地异常。"
       }
     ],
     "learner_script_id": "S-KEEP-B",
@@ -1049,10 +1033,6 @@
       {
         "probe_id": "DP-05-B",
         "answer": "不知道"
-      },
-      {
-        "probe_id": "DP-05-A",
-        "answer": "对象依赖、时序/交接、共同因素与本地叠加；结论应区分传导证据和本地证据。"
       }
     ],
     "learner_script_id": "S-KEEP-B",

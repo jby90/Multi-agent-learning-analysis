@@ -55,7 +55,10 @@ def _probe_results(case: Any) -> tuple[ProbeResult, ...]:
 
 
 def _pre_probe_compatibility(cases: Iterable[Any]) -> dict[str, Any]:
-    """Detect gold routes that production cannot distinguish before probing."""
+    """Detect probe-family choices production cannot distinguish before probing."""
+
+    def probe_family(probe_id: str) -> str:
+        return probe_id.rsplit("-", 1)[0] if probe_id.startswith("DP-") else probe_id
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for case in cases:
@@ -72,11 +75,17 @@ def _pre_probe_compatibility(cases: Iterable[Any]) -> dict[str, Any]:
             {
                 "case_id": case.case_id,
                 "probe_ids": [item.probe_id for item in case.diagnostic_probe_answers],
+                "probe_families": sorted(
+                    {
+                        probe_family(item.probe_id)
+                        for item in case.diagnostic_probe_answers
+                    }
+                ),
             }
         )
     conflicts: list[dict[str, Any]] = []
     for observable, rows in groups.items():
-        requested = {tuple(row["probe_ids"]) for row in rows}
+        requested = {tuple(row["probe_families"]) for row in rows}
         if len(requested) > 1:
             conflicts.append(
                 {

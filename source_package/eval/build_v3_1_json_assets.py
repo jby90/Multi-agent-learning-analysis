@@ -17,7 +17,6 @@ V3_INPUT = ROOT / "eval" / "cases" / "v3" / "formal_50_inputs_v3.json"
 V3_GOLD = ROOT / "eval" / "gold" / "v3" / "formal_50_gold_v3.json"
 V31_INPUT = ROOT / "eval" / "cases" / "v3_1" / "formal_50_inputs_v3_1.json"
 V31_GOLD = ROOT / "eval" / "gold" / "v3_1" / "formal_50_gold_v3_1.json"
-PROBE_LIBRARY = ROOT / "config" / "diagnostic_probes_v3.json"
 
 PROBE_TAGS = {
     "DP-01": "process_flow_coordination",
@@ -43,28 +42,11 @@ def _tag_for_probe(probe_id: str) -> str:
 
 def main() -> int:
     rows = json.loads(V3_INPUT.read_text(encoding="utf-8"))
-    probe_library = {
-        str(item["probe_id"]): item
-        for item in json.loads(PROBE_LIBRARY.read_text(encoding="utf-8"))
-    }
     for row in rows:
         probes = row.get("diagnostic_probe_answers") or []
         tags = [] if not probes else [_tag_for_probe(str(probes[0]["probe_id"]))]
         if any(_tag_for_probe(str(item["probe_id"])) != tags[0] for item in probes):
             raise ValueError(f"{row['case_id']} mixes diagnostic probe families")
-        if probes and str(probes[0]["probe_id"]).startswith("DP-"):
-            family = str(probes[0]["probe_id"]).rsplit("-", 1)[0]
-            by_id = {str(item["probe_id"]): item for item in probes}
-            for suffix in ("B", "A"):
-                probe_id = f"{family}-{suffix}"
-                if probe_id not in by_id:
-                    by_id[probe_id] = {
-                        "probe_id": probe_id,
-                        "answer": str(probe_library[probe_id]["gold_answer"]),
-                    }
-            row["diagnostic_probe_answers"] = [
-                by_id[f"{family}-B"], by_id[f"{family}-A"]
-            ]
         row["experience_tags"] = tags
 
     V31_INPUT.parent.mkdir(parents=True, exist_ok=True)
