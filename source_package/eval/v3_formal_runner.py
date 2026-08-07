@@ -88,13 +88,35 @@ class GoldLearnerActor:
 
     def follow_up_answer(self, state: Mapping[str, Any], script_id: str) -> str:
         self._follow_up_attempt += 1
+        evidence = self._query_evidence(state)
         if script_id == "S-REBUTTAL" and self._follow_up_attempt == 1:
-            return "不知道"
+            return self._evidence_bearing_wrong_answer(evidence)
         if script_id == "S-DOWNSTEP" and not _has_path_action(state, "step_down"):
             # T17 remains the production source of truth.  The external learner
             # keeps answering incorrectly until the real session emits the
             # frozen down-step action; the harness never injects a difficulty.
-            return "不知道"
+            return self._evidence_bearing_wrong_answer(evidence)
+
+        point = str(self._gold.get("预期要点") or "")
+        return f"根据刚才查询结果中的字段和值：{evidence}。据此判断：{point}。"
+
+    @staticmethod
+    def _evidence_bearing_wrong_answer(evidence: str) -> str:
+        """Return an admissible but factually wrong learner turn.
+
+        Production correctly rejects vacuous answers such as ``不知道`` before
+        review.  Formal wrong-answer scenarios must therefore exercise the real
+        reviewer with a field/value claim instead of mistaking input validation
+        for a failed case.
+        """
+
+        return (
+            f"根据刚才查询结果中的字段和值：{evidence}。"
+            "我判断完成率为9999%，因此所有工序均已正常完成。"
+        )
+
+    @staticmethod
+    def _query_evidence(state: Mapping[str, Any]) -> str:
         rows: list[Any] = []
         for message in state.get("messages", []):
             if not isinstance(message, Mapping):
@@ -124,9 +146,7 @@ class GoldLearnerActor:
                     for key, value in row.items()
                 )
             )
-        evidence = "；".join(rendered_rows)
-        point = str(self._gold.get("预期要点") or "")
-        return f"根据刚才查询结果中的字段和值：{evidence}。据此判断：{point}。"
+        return "；".join(rendered_rows)
 
 
 def _event_contents(state: Mapping[str, Any]) -> list[tuple[int, Mapping[str, Any], Mapping[str, Any]]]:

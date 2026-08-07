@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from eval.v3_formal_runner import FormalCaseRunner, GoldLearnerActor
+from orchestrator.interactive_session import _is_vacuous_follow_up_answer
 
 
 class FakeManager:
@@ -109,3 +110,36 @@ def test_formal_runner_rejects_forced_case_before_session_creation(tmp_path: Pat
     else:
         raise AssertionError("forced case must be rejected")
     assert manager.calls == []
+
+
+def test_wrong_formal_learner_answer_is_evidence_bearing_and_accepted_by_input_gate():
+    actor = GoldLearnerActor(
+        {
+            "case_id": "E2E-004",
+            "标准SQL": "SELECT process_code, complete_rate FROM result",
+            "预期要点": "YCL完成率最低",
+        }
+    )
+    state = {
+        "messages": [
+            {
+                "step": 1,
+                "payload": {
+                    "content": {
+                        "event": "query_completed",
+                        "rows": [
+                            {"process_code": "YCL", "complete_rate": 0.6236},
+                            {"process_code": "ZZTP", "complete_rate": 1.0249},
+                        ],
+                    }
+                },
+            }
+        ]
+    }
+
+    answer = actor.follow_up_answer(state, "S-REBUTTAL")
+
+    assert not _is_vacuous_follow_up_answer(answer)
+    assert "工序" in answer
+    assert "完成率" in answer
+    assert "9999" in answer
