@@ -36,24 +36,103 @@ MAX_ACTIONS = 160
 
 
 @lru_cache(maxsize=1)
-def _runtime_task_sql() -> dict[str, str]:
-    """Index production task SQL by the task actually shown to the learner."""
+def _runtime_task_contracts() -> dict[str, dict[str, Any]]:
+    """Index the immutable production task contracts used by the harness."""
 
     raw = json.loads(TASK_TEMPLATE_PATH.read_text(encoding="utf-8"))
     templates = raw.get("templates") if isinstance(raw, Mapping) else None
     if not isinstance(templates, list):
         raise ValueError("production task template registry is invalid")
-    indexed: dict[str, str] = {}
+    indexed: dict[str, dict[str, Any]] = {}
     for item in templates:
         if not isinstance(item, Mapping):
             continue
         template_id = str(item.get("template_id") or "").strip()
-        sql = str(item.get("standard_sql") or "").strip()
-        if template_id and sql:
+        if template_id:
             if template_id in indexed:
                 raise ValueError(f"duplicate production task template: {template_id}")
-            indexed[template_id] = sql
+            indexed[template_id] = dict(item)
     return indexed
+
+
+@lru_cache(maxsize=1)
+def _runtime_task_sql() -> dict[str, str]:
+    """Index production task SQL by the task actually shown to the learner."""
+
+    return {
+        template_id: str(item.get("standard_sql") or "").strip()
+        for template_id, item in _runtime_task_contracts().items()
+        if str(item.get("standard_sql") or "").strip()
+    }
+
+
+def _normalized_sql(value: Any) -> str:
+    return " ".join(str(value or "").split()).casefold()
+
+
+def validate_frozen_task_gold(
+    cases: list[Mapping[str, Any]],
+    gold: Mapping[str, Mapping[str, Any]],
+    *,
+    task_contracts: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Reject an internally incompatible frozen case before any live call.
+
+    The v3 approval explicitly forbids changing the frozen gold or silently
+    substituting another template.  A case whose declared initial template and
+    standard SQL describe different tasks cannot produce a valid formal score.
+    Returning structured conflicts lets the caller persist an auditable stop
+    report without consuming model calls.
+    """
+
+    contracts = task_contracts or _runtime_task_contracts()
+    sql_to_templates: dict[str, list[str]] = {}
+    for template_id, contract in contracts.items():
+        sql_to_templates.setdefault(
+            _normalized_sql(contract.get("standard_sql")), []
+        ).append(str(template_id))
+
+    conflicts: list[dict[str, Any]] = []
+    for case in cases:
+        case_id = str(case.get("case_id") or "")
+        expected = gold.get(case_id)
+        if not isinstance(expected, Mapping):
+            conflicts.append(
+                {
+                    "case_id": case_id,
+                    "conflict_type": "missing_gold_case",
+                    "declared_template": "",
+                    "sql_matching_templates": [],
+                }
+            )
+            continue
+        template_id = str(expected.get("预期初始模板") or "").strip()
+        contract = contracts.get(template_id)
+        if not isinstance(contract, Mapping):
+            conflicts.append(
+                {
+                    "case_id": case_id,
+                    "conflict_type": "missing_declared_template",
+                    "declared_template": template_id,
+                    "sql_matching_templates": [],
+                }
+            )
+            continue
+        gold_sql = _normalized_sql(expected.get("标准SQL"))
+        template_sql = _normalized_sql(contract.get("standard_sql"))
+        if gold_sql != template_sql:
+            conflicts.append(
+                {
+                    "case_id": case_id,
+                    "conflict_type": "initial_template_sql_mismatch",
+                    "knowledge_point": str(expected.get("目标知识点") or ""),
+                    "declared_difficulty": str(expected.get("预期初始难度") or ""),
+                    "declared_template": template_id,
+                    "business_task": str(expected.get("业务任务") or ""),
+                    "sql_matching_templates": sorted(sql_to_templates.get(gold_sql, [])),
+                }
+            )
+    return conflicts
 
 
 def _now() -> str:
@@ -423,17 +502,33 @@ def run_seed(
     output_dir = Path(output_dir)
     trace_dir = output_dir / "raw_traces"
     cache_dir = output_dir / "llm_cache"
-    manager = InteractiveSessionManager(
-        trace_dir=trace_dir,
-        cache_dir=cache_dir,
-        mode=mode,
-    )
     inputs = [asdict(case) for case in load_formal_cases()]
     gold = load_gold_standard()
     if case_id:
         inputs = [row for row in inputs if row["case_id"] == case_id]
         if not inputs:
             raise ValueError(f"unknown formal case_id: {case_id}")
+    specification_conflicts = validate_frozen_task_gold(inputs, gold)
+    if specification_conflicts:
+        report = {
+            "status": "blocked_frozen_specification_conflict",
+            "seed_id": seed_id,
+            "route_mode": "production",
+            "case_count": len(inputs),
+            "conflict_count": len(specification_conflicts),
+            "conflicts": specification_conflicts,
+        }
+        _atomic_json(output_dir / "frozen_specification_conflicts.json", report)
+        raise ValueError(
+            "formal v3 evaluation blocked before live calls: "
+            f"{len(specification_conflicts)} frozen template/SQL conflicts; "
+            f"see {output_dir / 'frozen_specification_conflicts.json'}"
+        )
+    manager = InteractiveSessionManager(
+        trace_dir=trace_dir,
+        cache_dir=cache_dir,
+        mode=mode,
+    )
     run_id = f"V3-{seed_id.upper()}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     code_version = _git_version()
     model_config = {

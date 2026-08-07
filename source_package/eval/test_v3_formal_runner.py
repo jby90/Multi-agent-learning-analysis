@@ -1,9 +1,67 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from eval.v3_formal_runner import FormalCaseRunner, GoldLearnerActor
+import pytest
+
+from eval.v3_formal_runner import (
+    FormalCaseRunner,
+    GoldLearnerActor,
+    run_seed,
+    validate_frozen_task_gold,
+)
 from orchestrator.interactive_session import _is_vacuous_follow_up_answer
+
+
+def test_frozen_specification_gate_reports_declared_template_sql_mismatch():
+    conflicts = validate_frozen_task_gold(
+        [{"case_id": "E2E-X"}],
+        {
+            "E2E-X": {
+                "目标知识点": "异常识别标准",
+                "预期初始难度": "applied",
+                "预期初始模板": "T-05-A",
+                "业务任务": "查询各船排名",
+                "标准SQL": "SELECT ship_no, complete_rate FROM ship_rates",
+            }
+        },
+        task_contracts={
+            "T-05": {
+                "standard_sql": "SELECT ship_no, complete_rate FROM ship_rates"
+            },
+            "T-05-A": {
+                "standard_sql": "SELECT month_label, complete_rate FROM monthly_rates"
+            },
+        },
+    )
+
+    assert conflicts == [
+        {
+            "case_id": "E2E-X",
+            "conflict_type": "initial_template_sql_mismatch",
+            "knowledge_point": "异常识别标准",
+            "declared_difficulty": "applied",
+            "declared_template": "T-05-A",
+            "business_task": "查询各船排名",
+            "sql_matching_templates": ["T-05"],
+        }
+    ]
+
+
+def test_formal_seed_stops_before_live_calls_when_frozen_case_is_incompatible(
+    tmp_path: Path,
+):
+    with pytest.raises(ValueError, match="blocked before live calls"):
+        run_seed("seed_A", tmp_path, mode="live", case_id="E2E-027")
+
+    report = json.loads(
+        (tmp_path / "frozen_specification_conflicts.json").read_text(encoding="utf-8")
+    )
+    assert report["status"] == "blocked_frozen_specification_conflict"
+    assert report["conflict_count"] == 1
+    assert report["conflicts"][0]["case_id"] == "E2E-027"
+    assert not (tmp_path / "raw_traces").exists()
 
 
 class FakeManager:
