@@ -7,6 +7,7 @@ import {
   type AgentActivityEvent,
   InteractiveApiError,
   type InteractiveApi,
+  type InteractiveDiagnosticProbe,
   type InteractiveOutcome,
   type InteractivePretestQuestion,
   type InteractiveState,
@@ -44,6 +45,8 @@ const sessionStorageKey = 'ref-interactive-session'
 const session = ref<InteractiveState>()
 const questions = ref<InteractivePretestQuestion[]>([])
 const answers = ref<Record<string, string>>({})
+const diagnosticProbes = ref<InteractiveDiagnosticProbe[]>([])
+const diagnosticAnswers = ref<Record<string, string>>({})
 const pretestPage = ref(0)
 const sqlText = ref('')
 const followUpText = ref('')
@@ -69,8 +72,13 @@ const currentPretestAnswered = computed(() => {
   return Boolean(question && answers.value[question.question_id])
 })
 const isLastPretestPage = computed(() => pretestPage.value >= questions.value.length - 1)
+const diagnosticComplete = computed(() => diagnosticProbes.value.length > 0
+  && diagnosticProbes.value.every(
+    (probe) => Boolean(diagnosticAnswers.value[probe.probe_id]?.trim()),
+  ))
 const stationTitle = computed(() => {
   if (session.value?.awaiting === 'pretest') return '岗前评测'
+  if (session.value?.awaiting === 'diagnostic_probe') return '补充诊断'
   if (session.value?.awaiting === 'done') return '训练报告'
   if (session.value?.state === 'S2_KNOWLEDGE') return '微课准备'
   return '实操'
@@ -403,7 +411,12 @@ async function submitPretest(): Promise<void> {
   busy.value = true
   errorMessage.value = ''
   try {
-    applyState(await api.submitPretest(session.value.session_id, answers.value))
+    const value = await api.submitPretest(session.value.session_id, answers.value)
+    applyState(value)
+    if (value.awaiting === 'diagnostic_probe') {
+      diagnosticProbes.value = await api.getDiagnosticProbes(value.session_id)
+      diagnosticAnswers.value = {}
+    }
   } catch (error) {
     errorMessage.value = publicRequestError(error, '岗前测评暂时无法提交。')
   } finally {
@@ -446,6 +459,22 @@ function newClientTurnId(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.()
   if (randomUuid) return randomUuid
   return `learner-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+async function submitDiagnosticProbes(): Promise<void> {
+  if (busy.value || !session.value || !diagnosticComplete.value) return
+  busy.value = true
+  errorMessage.value = ''
+  try {
+    applyState(await api.submitDiagnosticProbes(
+      session.value.session_id,
+      diagnosticAnswers.value,
+    ))
+  } catch (error) {
+    errorMessage.value = publicRequestError(error, '补充诊断暂时无法提交。')
+  } finally {
+    busy.value = false
+  }
 }
 
 async function continueLearning(): Promise<void> {
@@ -526,6 +555,10 @@ async function pollState(sessionId: string): Promise<void> {
     if (value.awaiting === 'pretest' && !questions.value.length) {
       questions.value = await api.getPretest(sessionId)
       pretestPage.value = 0
+    }
+    if (value.awaiting === 'diagnostic_probe' && !diagnosticProbes.value.length) {
+      diagnosticProbes.value = await api.getDiagnosticProbes(sessionId)
+      diagnosticAnswers.value = {}
     }
     errorMessage.value = ''
   } catch (error) {
@@ -734,6 +767,49 @@ onBeforeUnmount(() => {
           type="submit"
           :disabled="busy || !pretestComplete"
         >提交岗前测评</button>
+      </footer>
+    </form>
+
+    <form
+      v-else-if="session.awaiting === 'diagnostic_probe'"
+      class="pretest-form diagnostic-probe-form"
+      @submit.prevent="submitDiagnosticProbes"
+    >
+      <header class="pretest-heading">
+        <div>
+          <span>补充诊断</span>
+          <strong>校准路由与起始难度</strong>
+          <p>题目来自冻结探针库，最多2道，不由大模型临时生成。</p>
+        </div>
+        <div class="pretest-progress-copy">
+          <b>{{ diagnosticProbes.length }}</b><span>道</span>
+          <small>固定诊断探针</small>
+        </div>
+      </header>
+      <section class="diagnostic-route-preview" v-if="session.interaction?.kind === 'supplemental_diagnosis'">
+        <strong>候选路由：{{ learnerText(session.interaction.provisional_route?.knowledge_point || '待校准') }}</strong>
+        <p>{{ learnerText(session.interaction.provisional_route?.reason || session.interaction.message) }}</p>
+      </section>
+      <fieldset
+        v-for="(probe, index) in diagnosticProbes"
+        :key="probe.probe_id"
+        class="pretest-question diagnostic-probe-question"
+      >
+        <legend><span>{{ index + 1 }}</span>{{ learnerText(probe.stem) }}</legend>
+        <small>{{ probe.difficulty === 'basic' ? '基础探针' : '应用校准' }} · {{ learnerText(probe.knowledge_point) }}</small>
+        <textarea
+          v-model="diagnosticAnswers[probe.probe_id]"
+          rows="3"
+          maxlength="500"
+          :placeholder="`请用自己的话回答 ${probe.probe_id}`"
+        ></textarea>
+      </fieldset>
+      <footer class="pretest-page-actions">
+        <button
+          class="primary-action"
+          type="submit"
+          :disabled="busy || !diagnosticComplete"
+        >提交补充诊断</button>
       </footer>
     </form>
 

@@ -1360,6 +1360,36 @@ def _skill_covered_by(required: str, available: Sequence[str]) -> bool:
     )
 
 
+def _learning_report_for_contract(
+    learning_report: Mapping[str, Any] | None,
+    learning_contract: LearningContract | None,
+) -> Mapping[str, Any] | None:
+    """Bind R-03 to the contract's current route difficulty.
+
+    The diagnosis report keeps the aggregate pre-test difficulty for legacy
+    consumers, while a production learning contract may bind a different
+    point-level starting difficulty.  R-03 must judge the artifact against
+    the latter without mutating the persisted diagnosis message.
+    """
+
+    if learning_contract is None or not isinstance(learning_report, Mapping):
+        return learning_report
+    payload = learning_report.get("payload")
+    payload_type = payload.get("type") if isinstance(payload, Mapping) else None
+    # A path-update message already carries the intended next-task difficulty
+    # (for example the reviewed one-level-harder task).  Preserve that
+    # explicit transaction-local target.  Only the initial aggregate
+    # diagnosis needs to be projected onto the selected-route contract.
+    if payload_type != "profile_assessment":
+        return learning_report
+    report_copy = deepcopy(dict(learning_report))
+    report_copy["difficulty"] = learning_contract.difficulty
+    report_content = _content(report_copy)
+    if isinstance(report_content, dict):
+        report_content["difficulty"] = learning_contract.difficulty
+    return report_copy
+
+
 def _r03_review(
     product: Mapping[str, Any],
     llm_call: Callable[..., Any],
@@ -1759,6 +1789,10 @@ class ReviewAgent:
                 profile=student_profile,
                 diagnosis=learning_report,
             )
+        r03_learning_report = _learning_report_for_contract(
+            learning_report,
+            learning_contract,
+        )
         hard_hits = evaluate_hard_rules(product)
         if hard_hits:
             return _verdict_draft(
@@ -1832,7 +1866,7 @@ class ReviewAgent:
                     branch_id=self._pedagogy_review_agent.agent_id,
                     task=lambda: self._pedagogy_review_agent.review(
                         artifact,
-                        learning_report=learning_report,
+                        learning_report=r03_learning_report,
                         student_profile=student_profile,
                         learned_knowledge_points=learned_knowledge_points,
                     ),
@@ -2035,6 +2069,10 @@ class ReviewAgent:
                 profile=student_profile,
                 diagnosis=learning_report,
             )
+        r03_learning_report = _learning_report_for_contract(
+            learning_report,
+            learning_contract,
+        )
         product_msg_id = product.get("msg_id")
         if not isinstance(product_msg_id, str) or not product_msg_id.strip():
             raise ValueError("product.msg_id must be a non-empty string")
@@ -2180,7 +2218,7 @@ class ReviewAgent:
             r03_hit, r03_result, difficulty_action, _ = _r03_review(
                 product,
                 self._llm_call,
-                learning_report,
+                r03_learning_report,
                 student_profile,
                 learned_knowledge_points=learned_knowledge_points,
                 knowledge_chunks=self._knowledge_chunks,

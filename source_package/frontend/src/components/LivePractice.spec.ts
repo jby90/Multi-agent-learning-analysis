@@ -43,7 +43,12 @@ function fakeApi(): InteractiveApi {
     createSession: vi.fn(async () => sessionState()),
     getState: vi.fn(async () => sessionState()),
     getPretest: vi.fn(async () => questions),
+    getDiagnosticProbes: vi.fn(async () => []),
     submitPretest: vi.fn(async () => sessionState({
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+    })),
+    submitDiagnosticProbes: vi.fn(async () => sessionState({
       state: 'S2_KNOWLEDGE',
       awaiting: 'advance',
     })),

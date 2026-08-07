@@ -11,6 +11,7 @@ import re
 from time import perf_counter
 from typing import Any, Callable
 
+from agents.diagnostic_router import DiagnosticRouter, ProbeResult
 from orchestrator.llm import LLMResult
 
 
@@ -182,8 +183,14 @@ class DiagnosisAgent:
         self._llm_call = llm_call
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
+        self._router = DiagnosticRouter()
 
-    def assess(self, profile_id: str, answers: Mapping[str, str]) -> dict[str, Any]:
+    def assess(
+        self,
+        profile_id: str,
+        answers: Mapping[str, str],
+        probe_results: Sequence[ProbeResult | Mapping[str, Any]] = (),
+    ) -> dict[str, Any]:
         if profile_id not in self._profiles:
             raise ValueError(f"unsupported profile_id: {profile_id}")
         if not isinstance(answers, Mapping):
@@ -218,13 +225,13 @@ class DiagnosisAgent:
         else:
             difficulty = _step_up(str(profile["difficulty_start"]))
 
-        knowledge_point_plan = [
-            {
-                "knowledge_point": knowledge_point,
-                "initial_difficulty": difficulty,
-                "difficulty_source": "diagnosis_baseline",
-            }
-            for knowledge_point in blind_spots
+        route = self._router.route(profile_id, answers, probe_results)
+        knowledge_point_plan = route["knowledge_point_plan"]
+        selected_difficulty = route["selected_difficulty"] or difficulty
+        blind_spots = [
+            str(item["knowledge_point"])
+            for item in knowledge_point_plan
+            if item["mastery_status"] in {"needs_training", "pending_training"}
         ]
 
         content: dict[str, Any] = {
@@ -232,8 +239,18 @@ class DiagnosisAgent:
             "profile_id": profile_id,
             "blind_spots": blind_spots,
             "hit_misconceptions": hit_misconceptions,
+            # Preserve the legacy aggregate field for forced/internal module
+            # regression.  Production contracts consume ``selected_difficulty``
+            # explicitly, so probe-routed tasks still use the point-level value.
             "difficulty": difficulty,
+            "pretest_baseline_difficulty": difficulty,
             "knowledge_point_plan": knowledge_point_plan,
+            "selected_plan_item_id": route["selected_plan_item_id"],
+            "selected_knowledge_point": route["selected_knowledge_point"],
+            "selected_difficulty": selected_difficulty,
+            "route_evidence": route["route_evidence"],
+            "diagnostic_probe_count": route["probe_count"],
+            "router_version": route["router_version"],
             "pretest_score": {
                 "correct": correct,
                 "total": total,
@@ -275,14 +292,24 @@ class DiagnosisAgent:
             )
             return {}
 
+        narrative_basis = {
+            key: diagnosis_data[key]
+            for key in (
+                "profile_id",
+                "blind_spots",
+                "hit_misconceptions",
+                "difficulty",
+                "pretest_score",
+            )
+        }
         user_message = (
             "[诊断数据JSON]"
             + json.dumps(
                 {
-                    "diagnosis_data": diagnosis_data,
+                    "diagnosis_data": narrative_basis,
                     "narrative_number_whitelist": [
                         format(number, "f")
-                        for number in sorted(_numbers_in(diagnosis_data))
+                        for number in sorted(_numbers_in(narrative_basis))
                     ],
                     "numeric_copy_rule": (
                         "叙述若使用阿拉伯数字，只能逐字复制"
@@ -345,7 +372,7 @@ class DiagnosisAgent:
             and all(isinstance(item, str) and item for item in suggestions)
         )
         numbers_grounded = structurally_valid and _narrative_numbers_are_grounded(
-            narrative, diagnosis_data
+            narrative, narrative_basis
         )
         fallback = not numbers_grounded
         diagnosis_data.update(

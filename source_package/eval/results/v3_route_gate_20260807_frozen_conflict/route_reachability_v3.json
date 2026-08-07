@@ -1,0 +1,1755 @@
+{
+  "audit_type": "v3_production_route_reachability",
+  "generated_at": "2026-08-07T12:22:47.110776+00:00",
+  "rules": {
+    "forced_knowledge_point_allowed": false,
+    "forced_template_id_allowed": false,
+    "uses_production_profiles": true,
+    "uses_five_question_pretest": true,
+    "maximum_fixed_probes": 2,
+    "selection_semantics": "first pending knowledge_point_plan item"
+  },
+  "scenario_space": {
+    "profile_count": 3,
+    "valid_answer_combinations_per_profile": 1024,
+    "exhaustive_pretest_scenarios": 3072,
+    "formal_case_count": 50
+  },
+  "summary": {
+    "core_knowledge_points": 10,
+    "first_unit_reachable_count": 10,
+    "unreachable_count": 0,
+    "traceable_selection_count": 50,
+    "traceable_selection_rate": 1.0,
+    "deterministic_case_count": 50,
+    "formal_route_matches": 50,
+    "forced_knowledge_point_count": 0,
+    "forced_template_id_count": 0,
+    "pre_probe_observable_group_count": 8,
+    "pre_probe_conflicting_group_count": 3,
+    "pre_probe_affected_case_count": 45,
+    "real_route_reachable_upper_bound": 8,
+    "status": "failed"
+  },
+  "pre_probe_compatibility": {
+    "observable_group_count": 8,
+    "conflicting_group_count": 3,
+    "affected_case_count": 45,
+    "maximum_distinguishable_routes": 8,
+    "compatible": false,
+    "conflicts": [
+      {
+        "observable_input": {
+          "pretest_answers": {
+            "PT-1": "B",
+            "PT-2": "B",
+            "PT-3": "C",
+            "PT-4": "B",
+            "PT-5": "C"
+          },
+          "profile_id": "planner_new"
+        },
+        "case_count": 15,
+        "cases": [
+          {
+            "case_id": "E2E-001",
+            "probe_ids": [
+              "DP-01-B"
+            ]
+          },
+          {
+            "case_id": "E2E-004",
+            "probe_ids": [
+              "DP-01-B",
+              "DP-01-A"
+            ]
+          },
+          {
+            "case_id": "E2E-008",
+            "probe_ids": [
+              "AP-01"
+            ]
+          },
+          {
+            "case_id": "E2E-014",
+            "probe_ids": [
+              "AP-02"
+            ]
+          },
+          {
+            "case_id": "E2E-016",
+            "probe_ids": [
+              "DP-02-B"
+            ]
+          },
+          {
+            "case_id": "E2E-019",
+            "probe_ids": [
+              "DP-02-B",
+              "DP-02-A"
+            ]
+          },
+          {
+            "case_id": "E2E-023",
+            "probe_ids": [
+              "AP-05"
+            ]
+          },
+          {
+            "case_id": "E2E-029",
+            "probe_ids": [
+              "AP-04"
+            ]
+          },
+          {
+            "case_id": "E2E-032",
+            "probe_ids": [
+              "AP-03"
+            ]
+          },
+          {
+            "case_id": "E2E-035",
+            "probe_ids": [
+              "AP-03"
+            ]
+          },
+          {
+            "case_id": "E2E-037",
+            "probe_ids": [
+              "DP-03-B",
+              "DP-03-A"
+            ]
+          },
+          {
+            "case_id": "E2E-041",
+            "probe_ids": [
+              "DP-04-B"
+            ]
+          },
+          {
+            "case_id": "E2E-044",
+            "probe_ids": [
+              "DP-04-B",
+              "DP-04-A"
+            ]
+          },
+          {
+            "case_id": "E2E-048",
+            "probe_ids": [
+              "DP-05-B",
+              "DP-05-A"
+            ]
+          },
+          {
+            "case_id": "E2E-050",
+            "probe_ids": [
+              "DP-05-B",
+              "DP-05-A"
+            ]
+          }
+        ]
+      },
+      {
+        "observable_input": {
+          "pretest_answers": {
+            "PT-1": "B",
+            "PT-2": "B",
+            "PT-3": "C",
+            "PT-4": "B",
+            "PT-5": "C"
+          },
+          "profile_id": "craft_engineer"
+        },
+        "case_count": 16,
+        "cases": [
+          {
+            "case_id": "E2E-002",
+            "probe_ids": [
+              "DP-01-B",
+              "DP-01-A"
+            ]
+          },
+          {
+            "case_id": "E2E-005",
+            "probe_ids": [
+              "DP-01-B",
+              "DP-01-A"
+            ]
+          },
+          {
+            "case_id": "E2E-007",
+            "probe_ids": [
+              "AP-01"
+            ]
+          },
+          {
+            "case_id": "E2E-009",
+            "probe_ids": [
+              "AP-01"
+            ]
+          },
+          {
+            "case_id": "E2E-012",
+            "probe_ids": [
+              "AP-02"
+            ]
+          },
+          {
+            "case_id": "E2E-017",
+            "probe_ids": [
+              "DP-02-B",
+              "DP-02-A"
+            ]
+          },
+          {
+            "case_id": "E2E-020",
+            "probe_ids": [
+              "DP-02-B",
+              "DP-02-A"
+            ]
+          },
+          {
+            "case_id": "E2E-022",
+            "probe_ids": [
+              "AP-05"
+            ]
+          },
+          {
+            "case_id": "E2E-025",
+            "probe_ids": [
+              "AP-05"
+            ]
+          },
+          {
+            "case_id": "E2E-027",
+            "probe_ids": [
+              "AP-04"
+            ]
+          },
+          {
+            "case_id": "E2E-034",
+            "probe_ids": [
+              "AP-03"
+            ]
+          },
+          {
+            "case_id": "E2E-036",
+            "probe_ids": [
+              "DP-03-B"
+            ]
+          },
+          {
+            "case_id": "E2E-039",
+            "probe_ids": [
+              "DP-03-B",
+              "DP-03-A"
+            ]
+          },
+          {
+            "case_id": "E2E-040",
+            "probe_ids": [
+              "DP-03-B",
+              "DP-03-A"
+            ]
+          },
+          {
+            "case_id": "E2E-042",
+            "probe_ids": [
+              "DP-04-B",
+              "DP-04-A"
+            ]
+          },
+          {
+            "case_id": "E2E-047",
+            "probe_ids": [
+              "DP-05-B",
+              "DP-05-A"
+            ]
+          }
+        ]
+      },
+      {
+        "observable_input": {
+          "pretest_answers": {
+            "PT-1": "B",
+            "PT-2": "B",
+            "PT-3": "C",
+            "PT-4": "B",
+            "PT-5": "C"
+          },
+          "profile_id": "line_leader"
+        },
+        "case_count": 14,
+        "cases": [
+          {
+            "case_id": "E2E-003",
+            "probe_ids": [
+              "DP-01-B",
+              "DP-01-A"
+            ]
+          },
+          {
+            "case_id": "E2E-010",
+            "probe_ids": [
+              "AP-01"
+            ]
+          },
+          {
+            "case_id": "E2E-013",
+            "probe_ids": [
+              "AP-02"
+            ]
+          },
+          {
+            "case_id": "E2E-015",
+            "probe_ids": [
+              "AP-02"
+            ]
+          },
+          {
+            "case_id": "E2E-018",
+            "probe_ids": [
+              "DP-02-B",
+              "DP-02-A"
+            ]
+          },
+          {
+            "case_id": "E2E-024",
+            "probe_ids": [
+              "AP-05"
+            ]
+          },
+          {
+            "case_id": "E2E-028",
+            "probe_ids": [
+              "AP-04"
+            ]
+          },
+          {
+            "case_id": "E2E-030",
+            "probe_ids": [
+              "AP-04"
+            ]
+          },
+          {
+            "case_id": "E2E-033",
+            "probe_ids": [
+              "AP-03"
+            ]
+          },
+          {
+            "case_id": "E2E-038",
+            "probe_ids": [
+              "DP-03-B",
+              "DP-03-A"
+            ]
+          },
+          {
+            "case_id": "E2E-043",
+            "probe_ids": [
+              "DP-04-B",
+              "DP-04-A"
+            ]
+          },
+          {
+            "case_id": "E2E-045",
+            "probe_ids": [
+              "DP-04-B",
+              "DP-04-A"
+            ]
+          },
+          {
+            "case_id": "E2E-046",
+            "probe_ids": [
+              "DP-05-B"
+            ]
+          },
+          {
+            "case_id": "E2E-049",
+            "probe_ids": [
+              "DP-05-B",
+              "DP-05-A"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "first_unit_reachable_points": [
+    "三道工序与传导关系",
+    "计划量与实际量口径",
+    "完成率计算",
+    "偏差率与风险等级",
+    "月度聚合方法",
+    "异常识别标准",
+    "传导时滞分析",
+    "异常衰减规律",
+    "责任单元定位",
+    "跨工序归因方法"
+  ],
+  "unreachable_points": [],
+  "point_details": {
+    "三道工序与传导关系": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 3072
+    },
+    "计划量与实际量口径": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 2304
+    },
+    "完成率计算": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 2304
+    },
+    "偏差率与风险等级": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 3072
+    },
+    "月度聚合方法": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 2304
+    },
+    "异常识别标准": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 2304
+    },
+    "传导时滞分析": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 2304
+    },
+    "异常衰减规律": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 3072
+    },
+    "责任单元定位": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 3072
+    },
+    "跨工序归因方法": {
+      "first_unit_reachable": true,
+      "formal_scenario_count": 5,
+      "exhaustive_plan_scenario_count": 3072
+    }
+  },
+  "formal_case_audit": [
+    {
+      "case_id": "E2E-001",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-01-B"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "三道工序与传导关系",
+      "selected_difficulty": "basic",
+      "route_reason": "基础诊断探针答错，需从基础档建立概念与口径。",
+      "route_evidence_ids": [
+        "DP-01-B"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-03",
+      "expected_knowledge_point": "三道工序与传导关系",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-03",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-002",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-01-B",
+        "DP-01-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "三道工序与传导关系",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-01-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-03-A",
+      "expected_knowledge_point": "三道工序与传导关系",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-03-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-003",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-01-B",
+        "DP-01-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "三道工序与传导关系",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-01-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-03-A",
+      "expected_knowledge_point": "三道工序与传导关系",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-03-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-004",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-01-B",
+        "DP-01-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "三道工序与传导关系",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-01-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-03-A",
+      "expected_knowledge_point": "三道工序与传导关系",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-03-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-005",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-01-B",
+        "DP-01-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "三道工序与传导关系",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-01-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-03-A",
+      "expected_knowledge_point": "三道工序与传导关系",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-03-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-006",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "计划量与实际量口径",
+      "selected_difficulty": "basic",
+      "route_reason": "基础前测答错，需从基础档补足该知识点。",
+      "route_evidence_ids": [
+        "PT-1"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-01",
+      "expected_knowledge_point": "计划量与实际量口径",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-01",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-007",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-01"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "计划量与实际量口径",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-01"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-01-A",
+      "expected_knowledge_point": "计划量与实际量口径",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-01-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-008",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-01"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "计划量与实际量口径",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-01"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-01-A",
+      "expected_knowledge_point": "计划量与实际量口径",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-01-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-009",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-01"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "计划量与实际量口径",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-01"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-01-A",
+      "expected_knowledge_point": "计划量与实际量口径",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-01-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-010",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-01"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "计划量与实际量口径",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-01"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-01-A",
+      "expected_knowledge_point": "计划量与实际量口径",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-01-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-011",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "完成率计算",
+      "selected_difficulty": "basic",
+      "route_reason": "基础前测答错，需从基础档补足该知识点。",
+      "route_evidence_ids": [
+        "PT-2"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-02",
+      "expected_knowledge_point": "完成率计算",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-02",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-012",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-02"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "完成率计算",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-02"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-02-A",
+      "expected_knowledge_point": "完成率计算",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-02-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-013",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-02"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "完成率计算",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-02"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-02-A",
+      "expected_knowledge_point": "完成率计算",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-02-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-014",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-02"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "完成率计算",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-02"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-02-A",
+      "expected_knowledge_point": "完成率计算",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-02-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-015",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-02"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "完成率计算",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-02"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-02-A",
+      "expected_knowledge_point": "完成率计算",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-02-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-016",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-02-B"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "偏差率与风险等级",
+      "selected_difficulty": "basic",
+      "route_reason": "基础诊断探针答错，需从基础档建立概念与口径。",
+      "route_evidence_ids": [
+        "DP-02-B"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-10",
+      "expected_knowledge_point": "偏差率与风险等级",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-10",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-017",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-02-B",
+        "DP-02-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "偏差率与风险等级",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-02-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-10-A",
+      "expected_knowledge_point": "偏差率与风险等级",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-10-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-018",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-02-B",
+        "DP-02-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "偏差率与风险等级",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-02-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-10-A",
+      "expected_knowledge_point": "偏差率与风险等级",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-10-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-019",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-02-B",
+        "DP-02-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "偏差率与风险等级",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-02-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-10-A",
+      "expected_knowledge_point": "偏差率与风险等级",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-10-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-020",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-02-B",
+        "DP-02-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "偏差率与风险等级",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-02-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-10-A",
+      "expected_knowledge_point": "偏差率与风险等级",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-10-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-021",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "月度聚合方法",
+      "selected_difficulty": "basic",
+      "route_reason": "基础前测答错，需从基础档补足该知识点。",
+      "route_evidence_ids": [
+        "PT-5"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-04",
+      "expected_knowledge_point": "月度聚合方法",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-04",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-022",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-05"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "月度聚合方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-05"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-04-A",
+      "expected_knowledge_point": "月度聚合方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-04-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-023",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-05"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "月度聚合方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-05"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-04-A",
+      "expected_knowledge_point": "月度聚合方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-04-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-024",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-05"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "月度聚合方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-05"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-04-A",
+      "expected_knowledge_point": "月度聚合方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-04-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-025",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-05"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "月度聚合方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-05"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-04-A",
+      "expected_knowledge_point": "月度聚合方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-04-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-026",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常识别标准",
+      "selected_difficulty": "basic",
+      "route_reason": "基础前测答错，需从基础档补足该知识点。",
+      "route_evidence_ids": [
+        "PT-4"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-05",
+      "expected_knowledge_point": "异常识别标准",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-05",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-027",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-04"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常识别标准",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-04"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-05-A",
+      "expected_knowledge_point": "异常识别标准",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-05-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-028",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-04"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常识别标准",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-04"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-05-A",
+      "expected_knowledge_point": "异常识别标准",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-05-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-029",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-04"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常识别标准",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-04"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-05-A",
+      "expected_knowledge_point": "异常识别标准",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-05-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-030",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-04"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常识别标准",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-04"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-05-A",
+      "expected_knowledge_point": "异常识别标准",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-05-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-031",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "传导时滞分析",
+      "selected_difficulty": "basic",
+      "route_reason": "基础前测答错，需从基础档补足该知识点。",
+      "route_evidence_ids": [
+        "PT-3"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-07",
+      "expected_knowledge_point": "传导时滞分析",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-07",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-032",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-03"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "传导时滞分析",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-03"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-07-A",
+      "expected_knowledge_point": "传导时滞分析",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-07-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-033",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-03"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "传导时滞分析",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-03"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-07-A",
+      "expected_knowledge_point": "传导时滞分析",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-07-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-034",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-03"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "传导时滞分析",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-03"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-07-A",
+      "expected_knowledge_point": "传导时滞分析",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-07-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-035",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "AP-03"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "传导时滞分析",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "AP-03"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-07-A",
+      "expected_knowledge_point": "传导时滞分析",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-07-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-036",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-03-B"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常衰减规律",
+      "selected_difficulty": "basic",
+      "route_reason": "基础诊断探针答错，需从基础档建立概念与口径。",
+      "route_evidence_ids": [
+        "DP-03-B"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08-DECAY",
+      "expected_knowledge_point": "异常衰减规律",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-08-DECAY",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-037",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-03-B",
+        "DP-03-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常衰减规律",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-03-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08-DECAY-A",
+      "expected_knowledge_point": "异常衰减规律",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08-DECAY-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-038",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-03-B",
+        "DP-03-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常衰减规律",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-03-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08-DECAY-A",
+      "expected_knowledge_point": "异常衰减规律",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08-DECAY-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-039",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-03-B",
+        "DP-03-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常衰减规律",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-03-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08-DECAY-A",
+      "expected_knowledge_point": "异常衰减规律",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08-DECAY-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-040",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-03-B",
+        "DP-03-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "异常衰减规律",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-03-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08-DECAY-A",
+      "expected_knowledge_point": "异常衰减规律",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08-DECAY-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-041",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-04-B"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "责任单元定位",
+      "selected_difficulty": "basic",
+      "route_reason": "基础诊断探针答错，需从基础档建立概念与口径。",
+      "route_evidence_ids": [
+        "DP-04-B"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-06",
+      "expected_knowledge_point": "责任单元定位",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-06",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-042",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-04-B",
+        "DP-04-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "责任单元定位",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-04-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-06-A",
+      "expected_knowledge_point": "责任单元定位",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-06-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-043",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-04-B",
+        "DP-04-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "责任单元定位",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-04-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-06-A",
+      "expected_knowledge_point": "责任单元定位",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-06-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-044",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-04-B",
+        "DP-04-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "责任单元定位",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-04-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-06-A",
+      "expected_knowledge_point": "责任单元定位",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-06-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-045",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-04-B",
+        "DP-04-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "责任单元定位",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-04-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-06-A",
+      "expected_knowledge_point": "责任单元定位",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-06-A",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-046",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-05-B"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "跨工序归因方法",
+      "selected_difficulty": "basic",
+      "route_reason": "基础诊断探针答错，需从基础档建立概念与口径。",
+      "route_evidence_ids": [
+        "DP-05-B"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08-ATTR",
+      "expected_knowledge_point": "跨工序归因方法",
+      "expected_difficulty": "basic",
+      "expected_template_id": "T-08-ATTR",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-047",
+      "profile_id": "craft_engineer",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-05-B",
+        "DP-05-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "跨工序归因方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-05-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08",
+      "expected_knowledge_point": "跨工序归因方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-048",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-05-B",
+        "DP-05-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "跨工序归因方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-05-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08",
+      "expected_knowledge_point": "跨工序归因方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-049",
+      "profile_id": "line_leader",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-05-B",
+        "DP-05-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "跨工序归因方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-05-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08",
+      "expected_knowledge_point": "跨工序归因方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    },
+    {
+      "case_id": "E2E-050",
+      "profile_id": "planner_new",
+      "route_mode": "production",
+      "probe_ids": [
+        "DP-05-B",
+        "DP-05-A"
+      ],
+      "selected_plan_item_id": "PLAN-001",
+      "selected_knowledge_point": "跨工序归因方法",
+      "selected_difficulty": "applied",
+      "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+      "route_evidence_ids": [
+        "DP-05-A"
+      ],
+      "route_evidence_valid": true,
+      "deterministic": true,
+      "actual_template_id": "T-08",
+      "expected_knowledge_point": "跨工序归因方法",
+      "expected_difficulty": "applied",
+      "expected_template_id": "T-08",
+      "knowledge_point_match": true,
+      "difficulty_match": true,
+      "template_match": true,
+      "forced_knowledge_point": false,
+      "forced_template_id": false
+    }
+  ]
+}

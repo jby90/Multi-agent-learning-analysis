@@ -213,9 +213,22 @@ def test_user_approved_nine_case_diagnosis_matrix(case: dict[str, Any]) -> None:
 
     assert content["profile_id"] == case["profile_id"]
     assert content["pretest_score"] == case["score"]
+    assert content["pretest_baseline_difficulty"] == case["difficulty"]
     assert content["difficulty"] == case["difficulty"]
-    assert content["blind_spots"] == case["blind_spots"]
     assert content["hit_misconceptions"] == case["hit_misconceptions"]
+    wrong_points = {
+        item["knowledge_point"]
+        for item in content["route_evidence"]
+        if item["evidence_source"] == "pretest" and not item["is_correct"]
+    }
+    correct_points = {
+        item["knowledge_point"]
+        for item in content["route_evidence"]
+        if item["evidence_source"] == "pretest" and item["is_correct"]
+    }
+    planned = {item["knowledge_point"] for item in content["knowledge_point_plan"]}
+    assert wrong_points <= planned
+    assert not (correct_points & planned)
 
 
 def test_diagnosis_seeds_an_initial_difficulty_for_every_blind_spot() -> None:
@@ -227,14 +240,24 @@ def test_diagnosis_seeds_an_initial_difficulty_for_every_blind_spot() -> None:
     content = message["payload"]["content"]
 
     assert content["difficulty"] == "basic"
-    assert content["knowledge_point_plan"] == [
+    assert [
+        item["knowledge_point"] for item in content["knowledge_point_plan"]
+    ] == content["blind_spots"]
+    assert all(
         {
-            "knowledge_point": knowledge_point,
-            "initial_difficulty": "basic",
-            "difficulty_source": "diagnosis_baseline",
+            "plan_item_id",
+            "knowledge_point",
+            "mastery_status",
+            "evidence_source",
+            "evidence_ids",
+            "priority",
+            "initial_difficulty",
+            "route_reason",
+            "prerequisites",
         }
-        for knowledge_point in content["blind_spots"]
-    ]
+        <= set(item)
+        for item in content["knowledge_point_plan"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -258,6 +281,10 @@ def test_closed_rate_boundaries_use_profile_start_difficulty(
     )
 
     assert message["payload"]["content"]["pretest_score"]["rate"] == expected_rate
+    assert (
+        message["payload"]["content"]["pretest_baseline_difficulty"]
+        == "applied"
+    )
     assert message["payload"]["content"]["difficulty"] == "applied"
 
 
@@ -359,10 +386,7 @@ def test_grounded_narrative_is_added_without_changing_rule_diagnosis(
     ).assess("planner_new", MIXED)
     content = message["payload"]["content"]
 
-    assert content["blind_spots"][:2] == [
-        "三道工序与传导关系",
-        "计划量与实际量口径",
-    ]
+    assert content["blind_spots"][:2] == ["完成率计算", "异常识别标准"]
     assert content["diagnosis_narrative"] == "岗前测评答对3/5题，正确率为0.6。"
     assert content["suggestions"] == [
         "先练三道工序与传导关系",

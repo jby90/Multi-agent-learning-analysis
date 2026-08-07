@@ -1,0 +1,17 @@
+[
+  {"probe_id":"AP-01","probe_type":"applied_calibration","difficulty":"applied","knowledge_point":"计划量与实际量口径","stem":"同一项目跨月汇总时，计划量和实际量应如何处理，能否互换分子分母或先算各月比率再平均？","gold_answer":"计划量、实际量分别按同一范围汇总；完成率为总实际/总计划；不得互换或简单平均。","misconception_ids":["M-01","M-04"]},
+  {"probe_id":"AP-02","probe_type":"applied_calibration","difficulty":"applied","knowledge_point":"完成率计算","stem":"某月计划100、实际80，另一月计划900、实际900，两月合计完成率是多少？","gold_answer":"(80+900)/(100+900)=98%，不是(80%+100%)/2。","misconception_ids":["M-01","M-04"]},
+  {"probe_id":"AP-03","probe_type":"applied_calibration","difficulty":"applied","knowledge_point":"传导时滞分析","stem":"上游5月偏低、下游6月偏低，能否直接认定存在1个月传导时滞？","gold_answer":"只能标记候选响应期；还需对象依赖、齐套、交接和替代解释证据。","misconception_ids":["M-02"]},
+  {"probe_id":"AP-04","probe_type":"applied_calibration","difficulty":"applied","knowledge_point":"异常识别标准","stem":"某船完成率在样本中最低但仍高于冻结异常阈值，能否直接判为异常？","gold_answer":"不能；排名与阈值是不同证据，必须按冻结标准判断。","misconception_ids":["M-03"]},
+  {"probe_id":"AP-05","probe_type":"applied_calibration","difficulty":"applied","knowledge_point":"月度聚合方法","stem":"日完成率分别为50%和100%，两日计划量不同，月完成率应如何计算？","gold_answer":"先分别汇总月实际量和月计划量，再用总实际/总计划；不能简单平均日完成率。","misconception_ids":["M-04"]},
+  {"probe_id":"DP-01-B","probe_type":"diagnostic","difficulty":"basic","knowledge_point":"三道工序与传导关系","stem":"三道关键工序的物流顺序是什么？","gold_answer":"YCL→ZZTP→AZTP。","misconception_ids":["M-02"]},
+  {"probe_id":"DP-01-A","probe_type":"diagnostic","difficulty":"applied","knowledge_point":"三道工序与传导关系","stem":"只看到上游5月偏低、下游6月偏低，能否直接认定传导？","gold_answer":"不能；只能形成候选，需要对象依赖、齐套和交接证据。","misconception_ids":["M-02"]},
+  {"probe_id":"DP-02-B","probe_type":"diagnostic","difficulty":"basic","knowledge_point":"偏差率与风险等级","stem":"计划量1000、实际量850，偏差率和生产状态分别是什么？","gold_answer":"(850-1000)/1000=-15%，属于欠产。","misconception_ids":["M-05"]},
+  {"probe_id":"DP-02-A","probe_type":"diagnostic","difficulty":"applied","knowledge_point":"偏差率与风险等级","stem":"已知偏差率为-15%，能否在没有冻结阈值时直接给出风险等级？","gold_answer":"不能；可判欠产及幅度，风险等级必须依据冻结阈值。","misconception_ids":["M-05"]},
+  {"probe_id":"DP-03-B","probe_type":"diagnostic","difficulty":"basic","knowledge_point":"异常衰减规律","stem":"三个对齐节点的欠产缺口依次缩小，应如何描述？","gold_answer":"可描述为表观收窄/衰减形态，但不能据此证明传导。","misconception_ids":["M-06"]},
+  {"probe_id":"DP-03-A","probe_type":"diagnostic","difficulty":"applied","knowledge_point":"异常衰减规律","stem":"若中间节点存在独立本地异常，还能否把整条链称为单一衰减传导？","gold_answer":"不能；应考虑混合情形和本地叠加，分别报告证据。","misconception_ids":["M-06"]},
+  {"probe_id":"DP-04-B","probe_type":"diagnostic","difficulty":"basic","knowledge_point":"责任单元定位","stem":"两个责任单元完成率不同，能否直接据此认定责任？","gold_answer":"不能；完成率差异只是线索。","misconception_ids":["M-07"]},
+  {"probe_id":"DP-04-A","probe_type":"diagnostic","difficulty":"applied","knowledge_point":"责任单元定位","stem":"定位责任单元时，除完成率外至少还需哪些证据？","gold_answer":"需核对任务范围、计划规模、交接/齐套、执行边界和本地异常。","misconception_ids":["M-07"]},
+  {"probe_id":"DP-05-B","probe_type":"diagnostic","difficulty":"basic","knowledge_point":"跨工序归因方法","stem":"时间序列先后相容，是否等于因果归因成立？","gold_answer":"不等于；时序相容只是候选证据。","misconception_ids":["M-08"]},
+  {"probe_id":"DP-05-A","probe_type":"diagnostic","difficulty":"applied","knowledge_point":"跨工序归因方法","stem":"多候选与混合情形下，归因结论至少应包含哪些证据维度？","gold_answer":"对象依赖、时序/交接、共同因素与本地叠加；结论应区分传导证据和本地证据。","misconception_ids":["M-08"]}
+]

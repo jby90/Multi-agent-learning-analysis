@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from threading import Event, Thread
 from types import SimpleNamespace
@@ -34,6 +35,12 @@ from orchestrator.review_flow import ReviewFlowInterrupted, ReviewFlowTerminal
 
 
 SYSTEM_ERROR_COPY = "内容生成服务暂时不可用，本次学习已安全结束，请稍后重新开始。"
+ALL_CORRECT = {"PT-1": "B", "PT-2": "B", "PT-3": "C", "PT-4": "B", "PT-5": "C"}
+THREE_PROCESS_BASIC = [{"probe_id": "DP-01-B", "is_correct": False}]
+THREE_PROCESS_APPLIED = [
+    {"probe_id": "DP-01-B", "is_correct": True},
+    {"probe_id": "DP-01-A", "is_correct": False},
+]
 
 
 class RecordingExecutor:
@@ -262,6 +269,78 @@ def test_pretest_hides_answer_key_and_scores_submitted_choices(
     assert [event["learning_contract"]["contract_id"] for event in contract_events] == [
         contract["contract_id"]
     ]
+
+
+def test_all_correct_pretest_requires_at_most_two_frozen_probes_before_t02(
+    tmp_path: Path,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=forbidden_llm,
+        executor_factory=RecordingExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+
+    pending = manager.submit_pretest(session_id, ALL_CORRECT)
+
+    assert pending["state"] == "S1_DIAGNOSIS"
+    assert pending["awaiting"] == "diagnostic_probe"
+    assert pending["interaction"]["kind"] == "supplemental_diagnosis"
+    questions = manager.get_diagnostic_probes(session_id)
+    assert len(questions) == 1
+    assert [item["probe_id"] for item in questions] == ["DP-01-B"]
+    assert all("answer" not in item for item in questions)
+
+    calibrated = manager.submit_diagnostic_probes(
+        session_id,
+        {"DP-01-B": "YCL→ZZTP→AZTP。"},
+    )
+    assert calibrated["awaiting"] == "diagnostic_probe"
+    assert [
+        item["probe_id"] for item in manager.get_diagnostic_probes(session_id)
+    ] == ["DP-01-A"]
+    routed = manager.submit_diagnostic_probes(
+        session_id,
+        {"DP-01-A": "不知道"},
+    )
+
+    content = routed["artifact"]["payload"]["content"]
+    assert routed["state"] == "S2_KNOWLEDGE"
+    assert routed["awaiting"] == "advance"
+    assert content["selected_knowledge_point"] == "三道工序与传导关系"
+    assert content["selected_difficulty"] == "applied"
+    assert content["diagnostic_probe_count"] == 2
+    assert routed["interaction"]["kind"] == "diagnostic_route"
+    transitions = [
+        message["payload"]["content"].get("transition_id")
+        for message in routed["messages"]
+        if message["payload"]["content"].get("transition_id")
+    ]
+    assert transitions == ["T01", "T02"]
+
+
+def test_failed_basic_probe_finishes_diagnosis_without_showing_applied_probe(
+    tmp_path: Path,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=forbidden_llm,
+        executor_factory=RecordingExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(session_id, ALL_CORRECT)
+
+    routed = manager.submit_diagnostic_probes(
+        session_id,
+        {"DP-01-B": "不知道"},
+    )
+
+    content = routed["artifact"]["payload"]["content"]
+    assert routed["awaiting"] == "advance"
+    assert content["selected_difficulty"] == "basic"
+    assert content["diagnostic_probe_count"] == 1
 
 
 def test_advance_returns_reviewed_lecture_then_reviewed_sql_task(
@@ -920,6 +999,7 @@ def test_terminal_review_fallback_closes_interactive_session_in_learning_languag
     (
         "profile_id",
         "answers",
+        "probe_results",
         "expected_knowledge_point",
         "expected_difficulty",
         "expected_template_id",
@@ -928,27 +1008,31 @@ def test_terminal_review_fallback_closes_interactive_session_in_learning_languag
         (
             "planner_new",
             {f"PT-{index}": "D" for index in range(1, 6)},
-            "三道工序与传导关系",
+            [],
+            "计划量与实际量口径",
             "basic",
-            "T-03",
+            "T-01",
         ),
         (
             "planner_new",
-            {"PT-1": "B", "PT-2": "B", "PT-3": "C", "PT-4": "B", "PT-5": "C"},
+            ALL_CORRECT,
+            THREE_PROCESS_APPLIED,
             "三道工序与传导关系",
             "applied",
             "T-03-A",
         ),
         (
             "craft_engineer",
-            {"PT-1": "B", "PT-2": "B", "PT-3": "C", "PT-4": "B", "PT-5": "C"},
-            "完成率计算",
-            "advanced",
-            "T-02-B",
+            ALL_CORRECT,
+            [{"probe_id": "DP-05-B", "is_correct": False}],
+            "跨工序归因方法",
+            "basic",
+            "T-08-ATTR",
         ),
         (
             "line_leader",
             {f"PT-{index}": "D" for index in range(1, 6)},
+            [],
             "计划量与实际量口径",
             "basic",
             "T-01",
@@ -959,6 +1043,7 @@ def test_diagnosis_result_routes_the_first_interactive_task(
     tmp_path: Path,
     profile_id: str,
     answers: dict[str, str],
+    probe_results: list[dict[str, Any]],
     expected_knowledge_point: str,
     expected_difficulty: str,
     expected_template_id: str,
@@ -971,14 +1056,18 @@ def test_diagnosis_result_routes_the_first_interactive_task(
     )
     session_id = manager.create_session(profile_id)["session_id"]
 
-    diagnosis = manager.submit_pretest(session_id, answers)
+    diagnosis = manager.submit_pretest(
+        session_id,
+        answers,
+        probe_results=probe_results,
+    )
     manager.advance(session_id)
     task = manager.advance(session_id)
 
     diagnosis_content = diagnosis["artifact"]["payload"]["content"]
     task_content = task["artifact"]["payload"]["content"]
-    assert diagnosis_content["blind_spots"][0] == expected_knowledge_point
-    assert diagnosis_content["difficulty"] == expected_difficulty
+    assert diagnosis_content["selected_knowledge_point"] == expected_knowledge_point
+    assert diagnosis_content["selected_difficulty"] == expected_difficulty
     assert task_content["template_id"] == expected_template_id
     assert task_content["knowledge_point"] == expected_knowledge_point
     assert task_content["difficulty"] == expected_difficulty
@@ -1059,7 +1148,8 @@ def test_non_q2_diagnosis_route_preserves_the_sandbox_retry_transition(
     session_id = manager.create_session("planner_new")["session_id"]
     manager.submit_pretest(
         session_id,
-        {f"PT-{index}": "D" for index in range(1, 6)},
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
     )
     manager.advance(session_id)
     task = manager.advance(session_id)
@@ -1094,7 +1184,8 @@ def test_diagnosis_routing_failure_uses_learning_language(
     session_id = manager.create_session("planner_new")["session_id"]
     manager.submit_pretest(
         session_id,
-        {f"PT-{index}": "D" for index in range(1, 6)},
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
     )
     manager.advance(session_id)
 
@@ -1396,11 +1487,9 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     continued_diagnosis = (
         manager._get_session(continued["session_id"]).diagnosis or {}
     )["payload"]["content"]
-    assert continued_diagnosis["knowledge_point_plan"][0] == {
-        "knowledge_point": "计划量与实际量口径",
-        "initial_difficulty": "basic",
-        "difficulty_source": "diagnosis_baseline",
-    }
+    assert continued_diagnosis["knowledge_point_plan"][0]["knowledge_point"] == "完成率计算"
+    assert continued_diagnosis["knowledge_point_plan"][0]["initial_difficulty"] == "basic"
+    assert continued_diagnosis["selected_knowledge_point"] == "完成率计算"
     assert continued["interaction"] == {
         "kind": "learning_notice",
         "message": "已沿用本轮画像与测评结果，下一知识点：完成率计算。",
@@ -1441,7 +1530,8 @@ def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(
     session_id = manager.create_session("planner_new")["session_id"]
     manager.submit_pretest(
         session_id,
-        {f"PT-{index}": "D" for index in range(1, 6)},
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
     )
     manager.advance(session_id)
     first_task = manager.advance(session_id)
@@ -1841,7 +1931,8 @@ def test_reviewed_field_and_value_correct_a_model_false_negative_with_feedback(
     session_id = manager.create_session("planner_new")["session_id"]
     manager.submit_pretest(
         session_id,
-        {f"PT-{index}": "D" for index in range(1, 6)},
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
     )
     manager.advance(session_id)
     task = manager.advance(session_id)
@@ -1884,7 +1975,8 @@ def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
     session_id = manager.create_session("planner_new")["session_id"]
     manager.submit_pretest(
         session_id,
-        {f"PT-{index}": "D" for index in range(1, 6)},
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
     )
     manager.advance(session_id)
     task = manager.advance(session_id)
@@ -1961,14 +2053,20 @@ def test_top_tier_answer_completes_without_claiming_a_fake_increase(
         executor_factory=lambda: executor,
     )
     session_id = manager.create_session("craft_engineer")["session_id"]
-    answers = {
-        "PT-1": "B",
-        "PT-2": "B",
-        "PT-3": "C",
-        "PT-4": "B",
-        "PT-5": "C",
-    }
-    manager.submit_pretest(session_id, answers)
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_APPLIED,
+    )
+    # Forced top-tier setup is retained only as an internal module regression;
+    # v3 formal cases never inject a difficulty, knowledge point, or template.
+    internal = manager._get_session(session_id)
+    assert internal.learning_contract is not None
+    internal.learning_contract = replace(internal.learning_contract, difficulty="advanced")
+    diagnosis_content = (internal.diagnosis or {})["payload"]["content"]
+    diagnosis_content["difficulty"] = "advanced"
+    diagnosis_content["selected_difficulty"] = "advanced"
+    diagnosis_content["knowledge_point_plan"][0]["initial_difficulty"] = "advanced"
     manager.advance(session_id)
     first_task = manager.advance(session_id)
     first_content = first_task["artifact"]["payload"]["content"]
@@ -1980,12 +2078,12 @@ def test_top_tier_answer_completes_without_claiming_a_fake_increase(
     manager.advance(session_id)
     manager.submit_follow_up(
         session_id,
-        "WSB责任单元完成率最低，为0.6218。",
+        "YCL完成率最低，为0.6236。",
         "top-tier-1",
     )
     manager.submit_follow_up(
         session_id,
-        "实际发生的数据能够说明完成情况。",
+        "AZTP完成率为0.9149，ZZTP完成率为1.0249。",
         "top-tier-2",
     )
 
@@ -2245,14 +2343,11 @@ def test_first_t17_creates_a_lower_difficulty_contract_revision(
         executor_factory=CatalogExecutor,
     )
     session_id = manager.create_session("planner_new")["session_id"]
-    answers = {
-        "PT-1": "B",
-        "PT-2": "B",
-        "PT-3": "C",
-        "PT-4": "B",
-        "PT-5": "C",
-    }
-    manager.submit_pretest(session_id, answers)
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_APPLIED,
+    )
     manager.advance(session_id)
     task = manager.advance(session_id)
     task_content = task["artifact"]["payload"]["content"]
@@ -2370,7 +2465,8 @@ def test_second_t17_defers_the_point_instead_of_repeating_forever(
     session_id = manager.create_session("planner_new")["session_id"]
     manager.submit_pretest(
         session_id,
-        {f"PT-{index}": "D" for index in range(1, 6)},
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_APPLIED,
     )
 
     for cycle in range(2):
@@ -2382,12 +2478,12 @@ def test_second_t17_defers_the_point_instead_of_repeating_forever(
                 if "oneOf" in call["json_schema"]
             )
             assert "第1次补学" in lecture_user["learning_report_summary"]
-            assert "更换讲解角度" in lecture_user["learning_report_summary"]
+            assert "降低认知负荷" in lecture_user["learning_report_summary"]
             assert (
                 lecture["evidence_bundle"]["sources"]["pedagogy"][
                     "remediation"
                 ]["action"]
-                == "refresh"
+                == "step_down"
             )
         task = manager.advance(session_id)
         content = task["artifact"]["payload"]["content"]

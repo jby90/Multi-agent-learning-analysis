@@ -241,6 +241,7 @@ class LearningContract:
         allowed_evidence_kinds: Sequence[str] = DEFAULT_EVIDENCE_KINDS,
         resource_requirements: Sequence[str] = DEFAULT_RESOURCE_REQUIREMENTS,
         quality_policy: QualityPolicy | None = None,
+        use_selected_route: bool = False,
     ) -> "LearningContract":
         content = _message_content(diagnosis)
         learner = LearnerProfileSnapshot.from_mapping(profile)
@@ -261,7 +262,18 @@ class LearningContract:
                 "diagnosis.hit_misconceptions",
             ),
             difficulty=_required_string(
-                content.get("difficulty"), "diagnosis.difficulty"
+                (
+                    content.get("selected_difficulty")
+                    if use_selected_route
+                    else content.get("difficulty")
+                )
+                or content.get("difficulty")
+                or content.get("selected_difficulty"),
+                (
+                    "diagnosis.selected_difficulty"
+                    if use_selected_route
+                    else "diagnosis.difficulty"
+                ),
             ),
             allowed_evidence_kinds=_unique_strings(
                 tuple(allowed_evidence_kinds), "allowed_evidence_kinds"
@@ -326,6 +338,10 @@ class LearningContract:
         if (
             payload_type == "profile_assessment"
             and self.revision == 1
-            and content.get("difficulty") != self.difficulty
+            and self.difficulty
+            not in {
+                content.get("difficulty"),
+                content.get("selected_difficulty"),
+            }
         ):
             raise ValueError("review difficulty does not match learning contract")

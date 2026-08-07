@@ -83,6 +83,13 @@ export interface InteractivePretestQuestion {
   options: Record<'A' | 'B' | 'C' | 'D', string>
 }
 
+export interface InteractiveDiagnosticProbe {
+  probe_id: string
+  knowledge_point: string
+  difficulty: 'basic' | 'applied'
+  stem: string
+}
+
 export type InteractiveOutcome =
   | 'completed'
   | 'completed_with_deferred'
@@ -137,6 +144,24 @@ type InteractiveFeedback = {
 }
 
 export type InteractiveInteraction =
+  | (InteractiveFeedback & {
+      kind: 'supplemental_diagnosis'
+      title: string
+      message: string
+      questions: InteractiveDiagnosticProbe[]
+      provisional_route?: {
+        knowledge_point?: string
+        difficulty?: string
+        reason?: string
+      }
+    })
+  | (InteractiveFeedback & {
+      kind: 'diagnostic_route'
+      knowledge_point?: string
+      difficulty?: string
+      reason?: string
+      evidence_ids?: string[]
+    })
   | (InteractiveFeedback & {
       kind: 'free_text_follow_up'
       prompt: string
@@ -250,7 +275,12 @@ export interface InteractiveApi {
   createSession(profileId: string): Promise<InteractiveState>
   getState(sessionId: string): Promise<InteractiveState>
   getPretest(sessionId: string): Promise<InteractivePretestQuestion[]>
+  getDiagnosticProbes(sessionId: string): Promise<InteractiveDiagnosticProbe[]>
   submitPretest(
+    sessionId: string,
+    answers: Record<string, string>,
+  ): Promise<InteractiveState>
+  submitDiagnosticProbes(
     sessionId: string,
     answers: Record<string, string>,
   ): Promise<InteractiveState>
@@ -350,6 +380,18 @@ export function createInteractiveApi(
     },
     submitPretest: (sessionId, answers) => request(
       `/api/sessions/${encodeURIComponent(sessionId)}/pretest`,
+      'POST',
+      { answers },
+    ),
+    getDiagnosticProbes: async (sessionId) => {
+      const response = await request<{ questions: InteractiveDiagnosticProbe[] }>(
+        `/api/sessions/${encodeURIComponent(sessionId)}/diagnostic-probes`,
+        'GET',
+      )
+      return response.questions
+    },
+    submitDiagnosticProbes: (sessionId, answers) => request(
+      `/api/sessions/${encodeURIComponent(sessionId)}/diagnostic-probes`,
       'POST',
       { answers },
     ),

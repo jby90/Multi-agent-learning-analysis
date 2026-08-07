@@ -16,6 +16,11 @@ from uuid import uuid4
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from agents.diagnosis_agent import load_pretest
+from agents.diagnostic_router import (
+    ProbeResult,
+    grade_probe_answer,
+    probes_for_knowledge_point,
+)
 from agents.kb_loader import KnowledgeChunk
 from agents.follow_up_agent import (
     MAX_FOLLOW_UP_ROUNDS,
@@ -387,6 +392,10 @@ class _InteractiveSession:
     prefetched_assessment_generator: Any = None
     resource_bundle: ResourceBundle | None = None
     training_report: dict[str, Any] | None = None
+    pretest_answers: dict[str, str] | None = None
+    pending_diagnostic_probes: tuple[dict[str, Any], ...] = ()
+    diagnostic_probe_queue: tuple[dict[str, Any], ...] = ()
+    diagnostic_probe_results: list[ProbeResult] = field(default_factory=list)
 
 
 class InteractiveSessionManager:
@@ -509,11 +518,25 @@ class InteractiveSessionManager:
             next_knowledge_point,
         )
         diagnosis_content = dict(previous_content)
+        continued_plan = [
+            dict(item)
+            for item in previous_content.get("knowledge_point_plan", [])
+            if isinstance(item, Mapping)
+            and item.get("knowledge_point") in remaining
+            and item.get("mastery_status") in {"needs_training", "pending_training"}
+        ]
+        selected_item = continued_plan[0] if continued_plan else None
         diagnosis_content.update(
             {
                 "event": "diagnosis_ready",
                 "blind_spots": remaining,
                 "difficulty": next_difficulty,
+                "knowledge_point_plan": continued_plan,
+                "selected_plan_item_id": (
+                    selected_item.get("plan_item_id") if selected_item else None
+                ),
+                "selected_knowledge_point": next_knowledge_point,
+                "selected_difficulty": next_difficulty,
                 "diagnosis_narrative": "",
                 "suggestions": [],
                 "narrative_fallback": True,
@@ -542,6 +565,7 @@ class InteractiveSessionManager:
             diagnosis=diagnosis,
             domain_id=next_session.runtime.task.domain_id,
             domain_package_sha256=next_session.runtime.task.domain_package_sha256,
+            use_selected_route=True,
         )
         next_session.runtime.audit(
             learning_contract.control_draft(next_session.runtime.options.trace_id)
@@ -589,6 +613,8 @@ class InteractiveSessionManager:
         self,
         session_id: str,
         answers: dict[str, str],
+        *,
+        probe_results: list[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         session = self._get_session(session_id)
         if session.awaiting != "pretest":
@@ -601,12 +627,10 @@ class InteractiveSessionManager:
             "正在计算知识盲区与难度",
         )
         try:
-            diagnosis = session.runtime.transition(
-                session.runtime.diagnosis.assess(
-                    session.runtime.options.profile_id,
-                    answers,
-                ),
-                "T02",
+            preliminary = session.runtime.diagnosis.assess(
+                session.runtime.options.profile_id,
+                answers,
+                probe_results=probe_results or (),
             )
         except Exception:
             self._publish_activity(
@@ -617,18 +641,151 @@ class InteractiveSessionManager:
                 "诊断未能安全完成",
             )
             raise
+        session.pretest_answers = dict(answers)
+        if probe_results is None:
+            preliminary_content = _payload_content(preliminary)
+            has_wrong_pretest = any(
+                item.get("evidence_source") == "pretest"
+                and item.get("is_correct") is False
+                for item in preliminary_content.get("route_evidence", [])
+                if isinstance(item, Mapping)
+            )
+            selected_point = preliminary_content.get("selected_knowledge_point")
+            pending = (
+                probes_for_knowledge_point(str(selected_point))
+                if not has_wrong_pretest
+                and isinstance(selected_point, str)
+                and selected_point.strip()
+                else ()
+            )
+            if pending:
+                session.diagnostic_probe_queue = pending
+                session.diagnostic_probe_results = []
+                session.pending_diagnostic_probes = pending[:1]
+                session.artifact = preliminary
+                session.awaiting = "diagnostic_probe"
+                session.interaction = {
+                    "kind": "supplemental_diagnosis",
+                    "title": "补充诊断",
+                    "message": "基础前测未暴露明确错题，需完成最多2道固定探针以校准路由与初始难度。",
+                    "questions": [
+                        {
+                            "probe_id": str(item["probe_id"]),
+                            "knowledge_point": str(item["knowledge_point"]),
+                            "difficulty": str(item["difficulty"]),
+                            "stem": str(item["stem"]),
+                        }
+                        for item in pending[:1]
+                    ],
+                    "provisional_route": {
+                        "knowledge_point": selected_point,
+                        "difficulty": preliminary_content.get("selected_difficulty"),
+                        "reason": (
+                            preliminary_content.get("knowledge_point_plan") or [{}]
+                        )[0].get("route_reason"),
+                    },
+                }
+                self._publish_activity(
+                    session,
+                    "diagnosis",
+                    "working",
+                    "supplemental_diagnosis",
+                    "等待完成固定诊断探针",
+                )
+                return self.get_state(session_id)
+        return self._finalize_diagnosis(session, preliminary)
+
+    def get_diagnostic_probes(self, session_id: str) -> list[dict[str, Any]]:
+        session = self._get_session(session_id)
+        if session.awaiting != "diagnostic_probe":
+            raise InteractiveSessionError("当前步骤不是补充诊断。")
+        return [
+            {
+                "probe_id": str(item["probe_id"]),
+                "knowledge_point": str(item["knowledge_point"]),
+                "difficulty": str(item["difficulty"]),
+                "stem": str(item["stem"]),
+            }
+            for item in session.pending_diagnostic_probes
+        ]
+
+    def submit_diagnostic_probes(
+        self,
+        session_id: str,
+        answers: Mapping[str, str],
+    ) -> dict[str, Any]:
+        session = self._get_session(session_id)
+        if session.awaiting != "diagnostic_probe":
+            raise InteractiveSessionError("当前步骤不能提交补充诊断。")
+        expected = {
+            str(item["probe_id"]): item for item in session.pending_diagnostic_probes
+        }
+        if set(answers) != set(expected):
+            raise InteractiveSessionError("请完成当前展示的全部固定诊断探针。")
+        if session.pretest_answers is None:
+            raise InteractiveSessionError("缺少基础前测答案，无法完成补充诊断。")
+        results = [
+            ProbeResult(probe_id, grade_probe_answer(expected[probe_id], answers[probe_id]))
+            for probe_id in expected
+        ]
+        session.diagnostic_probe_results.extend(results)
+        completed_ids = {
+            item.probe_id for item in session.diagnostic_probe_results
+        }
+        remaining = tuple(
+            item
+            for item in session.diagnostic_probe_queue
+            if str(item["probe_id"]) not in completed_ids
+        )
+        # A failed basic probe already establishes a basic blind spot.  The
+        # applied probe is shown only after the basic probe passes, matching
+        # the frozen formal input and avoiding an unnecessary second item.
+        if all(item.is_correct for item in results) and remaining:
+            session.pending_diagnostic_probes = remaining[:1]
+            session.interaction = {
+                "kind": "supplemental_diagnosis",
+                "title": "补充诊断",
+                "message": "基础探针已通过，请完成应用级校准探针以确定起始难度。",
+                "questions": [
+                    {
+                        "probe_id": str(item["probe_id"]),
+                        "knowledge_point": str(item["knowledge_point"]),
+                        "difficulty": str(item["difficulty"]),
+                        "stem": str(item["stem"]),
+                    }
+                    for item in remaining[:1]
+                ],
+            }
+            return self.get_state(session_id)
+        diagnosis = session.runtime.diagnosis.assess(
+            session.runtime.options.profile_id,
+            session.pretest_answers,
+            probe_results=session.diagnostic_probe_results,
+        )
+        session.pending_diagnostic_probes = ()
+        session.diagnostic_probe_queue = ()
+        session.diagnostic_probe_results = []
+        return self._finalize_diagnosis(session, diagnosis)
+
+    def _finalize_diagnosis(
+        self,
+        session: _InteractiveSession,
+        diagnosis_draft: dict[str, Any],
+    ) -> dict[str, Any]:
+        diagnosis = session.runtime.transition(diagnosis_draft, "T02")
         self._publish_activity(
             session,
             "diagnosis",
             "done",
             "profile_assessment",
-            "知识盲区与起始难度已确定",
+            "知识路由与起始难度已确定",
         )
         learning_contract = LearningContract.from_diagnosis(
             profile=session.runtime.profile,
             diagnosis=diagnosis,
             domain_id=session.runtime.task.domain_id,
             domain_package_sha256=session.runtime.task.domain_package_sha256,
+            use_selected_route=True,
         )
         session.runtime.audit(
             learning_contract.control_draft(session.runtime.options.trace_id)
@@ -645,7 +802,20 @@ class InteractiveSessionManager:
         session.artifact = diagnosis
         session.awaiting = "advance"
         session.outcome = None
-        return self.get_state(session_id)
+        session.interaction = {
+            "kind": "diagnostic_route",
+            "knowledge_point": _payload_content(diagnosis).get(
+                "selected_knowledge_point"
+            ),
+            "difficulty": _payload_content(diagnosis).get("selected_difficulty"),
+            "reason": (
+                _payload_content(diagnosis).get("knowledge_point_plan") or [{}]
+            )[0].get("route_reason"),
+            "evidence_ids": (
+                _payload_content(diagnosis).get("knowledge_point_plan") or [{}]
+            )[0].get("evidence_ids", []),
+        }
+        return self.get_state(session.session_id)
 
     def _produce_reviewed_product(
         self,
@@ -1667,11 +1837,25 @@ class InteractiveSessionManager:
     def _effective_blind_spots(session: _InteractiveSession) -> list[str]:
         if session.diagnosis is None:
             return []
-        blind_spots = [
-            item.strip()
-            for item in _payload_content(session.diagnosis).get("blind_spots", [])
-            if isinstance(item, str) and item.strip()
-        ]
+        content = _payload_content(session.diagnosis)
+        plan = content.get("knowledge_point_plan")
+        blind_spots = (
+            [
+                str(item["knowledge_point"]).strip()
+                for item in plan
+                if isinstance(item, Mapping)
+                and item.get("mastery_status")
+                in {"needs_training", "pending_training"}
+                and isinstance(item.get("knowledge_point"), str)
+                and str(item["knowledge_point"]).strip()
+            ]
+            if isinstance(plan, list)
+            else [
+                item.strip()
+                for item in content.get("blind_spots", [])
+                if isinstance(item, str) and item.strip()
+            ]
+        )
         deferred = set(session.deferred_knowledge_points)
         return [item for item in blind_spots if item not in deferred]
 
@@ -3872,6 +4056,16 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
                     {"questions": self.manager.get_pretest(parts[2])},
                 )
                 return
+            if (
+                len(parts) == 4
+                and parts[:2] == ["api", "sessions"]
+                and parts[3] == "diagnostic-probes"
+            ):
+                self._send_json(
+                    200,
+                    {"questions": self.manager.get_diagnostic_probes(parts[2])},
+                )
+                return
             self._send_json(404, {"error": "未找到请求的交互接口。"})
         except (BrokenPipeError, ConnectionResetError):
             return
@@ -3946,6 +4140,19 @@ class _InteractiveRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     200,
                     self.manager.submit_pretest(parts[2], answers),
+                )
+                return
+            if (
+                len(parts) == 4
+                and parts[:2] == ["api", "sessions"]
+                and parts[3] == "diagnostic-probes"
+            ):
+                answers = body.get("answers")
+                if not isinstance(answers, dict):
+                    raise ValueError("请完成当前补充诊断题目。")
+                self._send_json(
+                    200,
+                    self.manager.submit_diagnostic_probes(parts[2], answers),
                 )
                 return
             if len(parts) == 4 and parts[:2] == ["api", "sessions"]:
