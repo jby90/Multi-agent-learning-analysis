@@ -81,6 +81,7 @@ def _human_template(
                 "reviewer_b": None,
                 "adjudicator": None,
                 "reason": "",
+                "rule_hits": [],
             }
             for row in facts
         ],
@@ -100,6 +101,8 @@ def _human_template(
         ],
         "coverage_cells": [
             {
+                "coverage_cell_id": row["coverage_cell_id"],
+                "seed_id": row["seed_id"],
                 "case_id": row["case_id"],
                 "knowledge_point": row["knowledge_point"],
                 "difficulty": row["difficulty"],
@@ -148,14 +151,7 @@ def recompute(
     for seed in sorted(seeds):
         seed_facts = [row for row in facts if row["seed_id"] == seed]
         seed_nodes = [row for row in nodes if row["seed_id"] == seed]
-        seed_cells = [
-            row
-            for row in cells
-            if any(
-                run.get("seed_id") == seed and run.get("case_id") == row["case_id"]
-                for run in runs
-            )
-        ]
+        seed_cells = [row for row in cells if row["seed_id"] == seed]
         # Final labels were applied to the shared rows above, so no second
         # human merge is needed for a per-seed report.
         seed_reports[seed] = compute_v3_metrics(
@@ -185,25 +181,28 @@ def recompute(
         },
     }
     output_dir = Path(output_dir)
-    _write_json(output_dir / "facts_v3.json", facts)
-    _write_json(output_dir / "adaptation_nodes_v3.json", nodes)
-    _write_json(output_dir / "coverage_30_cells_v3.json", cells)
-    _write_json(output_dir / f"metrics_{mode.lower()}_v3.json", report)
+    _write_json(output_dir / "facts_v3_2.json", facts)
+    _write_json(output_dir / "adaptation_nodes_v3_2.json", nodes)
+    _write_json(output_dir / "coverage_30_cells_v3_2.json", cells)
+    _write_json(output_dir / f"metrics_{mode.lower()}_v3_2.json", report)
     if mode == "AUTO_PRELIMINARY":
-        _write_json(output_dir / "human_review_template_v3.json", _human_template(facts, nodes, cells))
+        _write_json(
+            output_dir / "human_review_template_v3_2.json",
+            _human_template(facts, nodes, cells),
+        )
     return report
 
 
 def render_markdown(report: Mapping[str, Any]) -> str:
     labels = {
         "final_hallucination_rate": "最终发布幻觉率",
-        "difficulty_adaptation_accuracy": "画像—资源难度适配准确率",
-        "strict_closed_loop_coverage": "主域严格闭环覆盖率",
+        "effective_automatic_adaptation_rate": "有效自动适配率",
+        "strict_closed_loop_coverage": "核心知识点完整闭环覆盖率",
         "hallucination_interception_rate": "幻觉拦截率（辅助）",
         "native_teaching_adaptation_mismatch_rate": "原生教学适配失配率（辅助，低为好）",
     }
     lines = [
-        f"# v3 五指标复算｜{report['mode']}",
+        f"# v3.2 五指标复算｜{report['mode']}",
         "",
         "> 自动初算不是最终成绩；最终模式仅在双人复核、必要仲裁和覆盖门禁齐全后生成。",
         "",
@@ -240,7 +239,7 @@ def main() -> int:
         )
     except FinalReviewIncomplete as exc:
         parser.error(str(exc))
-    markdown_path = args.output_dir / f"metrics_{args.mode.lower()}_v3.md"
+    markdown_path = args.output_dir / f"metrics_{args.mode.lower()}_v3_2.md"
     markdown_path.write_text(render_markdown(report), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0

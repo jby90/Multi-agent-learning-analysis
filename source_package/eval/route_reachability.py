@@ -219,7 +219,7 @@ def audit_route_reachability() -> dict[str, Any]:
         and all(not row["forced_template_id"] for row in formal_rows)
     )
     return {
-        "audit_type": "v3_1_production_route_reachability",
+        "audit_type": "v3_2_production_route_reachability",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "rules": {
             "forced_knowledge_point_allowed": False,
@@ -271,7 +271,7 @@ def audit_route_reachability() -> dict[str, Any]:
 def render_markdown(report: Mapping[str, Any]) -> str:
     summary = report["summary"]
     lines = [
-        "# v3.1 真实路由可达性门禁",
+        "# v3.2 真实路由可达性门禁",
         "",
         "> 正式输入仅包含岗位画像、5题前测和最多2道冻结探针；金标准仅在路由完成后离线合并。",
         "",
@@ -320,8 +320,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
 def write_report(output_dir: Path) -> tuple[Path, Path, dict[str, Any]]:
     report = audit_route_reachability()
     output_dir.mkdir(parents=True, exist_ok=True)
-    json_path = output_dir / "route_reachability_v3_1.json"
-    markdown_path = output_dir / "route_reachability_v3_1.md"
+    json_path = output_dir / "route_reachability_v3_2.json"
+    markdown_path = output_dir / "route_reachability_v3_2.md"
     json_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -334,7 +334,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=DEFAULT_RESULTS_DIR / "route_reachability_v3_1",
+        default=DEFAULT_RESULTS_DIR / "route_reachability_v3_2",
     )
     args = parser.parse_args()
     json_path, markdown_path, report = write_report(args.output_dir)

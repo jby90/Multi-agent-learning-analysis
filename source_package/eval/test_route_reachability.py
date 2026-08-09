@@ -3,7 +3,7 @@ from __future__ import annotations
 from eval.route_reachability import audit_route_reachability, render_markdown
 
 
-def test_v3_1_route_gate_resolves_probe_selection_from_profile_evidence() -> None:
+def test_v3_2_route_gate_resolves_probe_selection_from_profile_evidence() -> None:
     report = audit_route_reachability()
 
     assert report["scenario_space"]["profile_count"] == 3

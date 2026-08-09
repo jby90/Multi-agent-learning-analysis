@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from agents.knowledge_agent import KnowledgeAgent
+from agents.kb_loader import load_chunks
 from agents.misconception_relations import RelationIntegrityError
 from agents.rebuttal_generator import RebuttalGenerator
 from agents.sandbox import (
@@ -27,6 +28,7 @@ from orchestrator.demo_session import DemoSessionError
 from orchestrator.interactive_session import (
     InteractiveSessionError,
     InteractiveSessionManager,
+    _select_remediation_chunks,
     build_http_server,
     main,
 )
@@ -41,6 +43,21 @@ THREE_PROCESS_APPLIED = [
     {"probe_id": "DP-01-B", "is_correct": True},
     {"probe_id": "DP-01-A", "is_correct": False},
 ]
+
+
+def test_remediation_refresh_keeps_lower_band_target_chunk_when_it_was_a_prerequisite() -> None:
+    chunks_by_id = {
+        chunk.chunk_id: chunk
+        for chunk in load_chunks(Path("agents/knowledge_base/chunks")).chunks
+    }
+
+    selected = _select_remediation_chunks(
+        (chunks_by_id["KB-006"], chunks_by_id["KB-003"]),
+        excluded_chunk_ids={"KB-006-A", "KB-006"},
+        knowledge_point=chunks_by_id["KB-006"].knowledge_point,
+    )
+
+    assert [chunk.chunk_id for chunk in selected] == ["KB-006", "KB-003"]
 
 
 class RecordingExecutor:
@@ -394,6 +411,15 @@ def test_advance_returns_reviewed_lecture_then_reviewed_sql_task(
     assert lecture["state"] == "S3_TASK"
     assert task["artifact"]["payload"]["type"] == "quiz_set"
     assert task["artifact"]["payload"]["content"]["family"] == "Q2"
+    assert lecture["artifact"]["student_profile_ref"] == "line_leader"
+    assert task["artifact"]["student_profile_ref"] == "line_leader"
+    for artifact in (lecture["artifact"], task["artifact"]):
+        content = artifact["payload"]["content"]
+        assert content["learning_contract_id"] == lecture["learning_contract"][
+            "contract_id"
+        ]
+        assert content["lineage_id"].startswith("lin-")
+        assert content["artifact_id"].startswith("art-")
     assert task["state"] == "S7_STUDENT"
     assert task["awaiting"] == "sql"
     evidence_bundle = lecture["evidence_bundle"]
@@ -576,8 +602,28 @@ def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
         "readability_review",
     ]
     assert verdict_content["arbitration"]["mode"] == "deterministic_rule_table"
+    practice_guides = [
+        message
+        for message in lecture["messages"]
+        if message["payload"]["type"] == "practice_guide"
+    ]
+    assert len(practice_guides) == 1
+    practice_guide = practice_guides[0]
+    practice_content = practice_guide["payload"]["content"]
+    assert practice_guide["student_profile_ref"] == "line_leader"
+    assert practice_content["learning_contract_id"]
+    assert practice_content["evidence_bundle_ref"] == bundle_id
+    assert practice_content["lineage_id"]
+    assert practice_content["artifact_id"]
+    assert any(
+        message["payload"]["type"] == "review_verdict"
+        and message["payload"]["content"].get("reviewed_msg_id")
+        == practice_guide["msg_id"]
+        and message["verdict"]["decision"] in {"approve", "approve_with_fix"}
+        for message in lecture["messages"]
+    )
     assert all(
-        message["payload"]["type"] not in {"quiz_set", "practice_guide"}
+        message["payload"]["type"] != "quiz_set"
         for message in lecture["messages"]
     )
 
@@ -1481,6 +1527,51 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     assert upgraded_content["knowledge_point"] == conclusion_content["knowledge_point"]
     assert upgraded_content["difficulty"] == "applied"
     assert upgraded_content["query_authority"]["template_id"] == "T-01-A"
+    assert upgraded["learning_contract"]["difficulty"] == "applied"
+    assert upgraded["learning_contract"]["revision"] == 2
+    assert upgraded_content["learning_contract_id"] == upgraded["learning_contract"]["contract_id"]
+    assert upgraded_content["evidence_bundle_ref"] == upgraded["evidence_bundle"]["bundle_id"]
+    assert all(
+        branch["status"] == "ready"
+        and branch["difficulty"] == "applied"
+        for branch in upgraded["resource_bundle"]["branches"]
+    )
+    same_band_resources = [
+        message
+        for message in upgraded["messages"]
+        if message["payload"]["type"] in {"lecture_note", "practice_guide", "quiz_set"}
+        and message["payload"]["content"].get("difficulty") == "applied"
+        and message["payload"]["content"].get("learning_contract_id")
+        == upgraded["learning_contract"]["contract_id"]
+    ]
+    assert {message["payload"]["type"] for message in same_band_resources} == {
+        "lecture_note",
+        "practice_guide",
+        "quiz_set",
+    }
+    assert all(
+        resource.get("student_profile_ref") == "line_leader"
+        for resource in same_band_resources
+    )
+    assert any(
+        claim.get("kind") in {"fact", "statistic", "numeric_result", "data_fact"}
+        and any(
+            evidence.get("supports_claim") == claim.get("text")
+            for evidence in resource.get("evidence", [])
+        )
+        for resource in same_band_resources
+        for claim in resource.get("claims", [])
+    )
+    assert all(
+        any(
+            verdict["payload"]["type"] == "review_verdict"
+            and verdict["payload"]["content"].get("reviewed_msg_id")
+            == resource["msg_id"]
+            and verdict["verdict"]["decision"] in {"approve", "approve_with_fix"}
+            for verdict in upgraded["messages"]
+        )
+        for resource in same_band_resources
+    )
     upgraded_msg_id = upgraded["artifact"]["msg_id"]
     matching_verdicts = [
         message
@@ -1545,9 +1636,15 @@ def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(
         agent: TaskAgent,
         current_template_id: str,
         action: str,
+        **kwargs: Any,
     ) -> dict[str, Any] | None:
         strategy_calls.append((current_template_id, action))
-        return original_strategy(agent, current_template_id, action)
+        return original_strategy(
+            agent,
+            current_template_id,
+            action,
+            **kwargs,
+        )
 
     monkeypatch.setattr(
         TaskAgent,
@@ -2409,6 +2506,7 @@ def test_first_t17_creates_a_lower_difficulty_contract_revision(
     lecture = manager.advance(session_id)
     lecture_content = lecture["artifact"]["payload"]["content"]
     assert lecture_content["difficulty"] == "basic"
+    assert lecture["evidence_bundle"]["sources"]["knowledge"]["chunk_ids"][0] == "KB-001"
     assert lecture["evidence_bundle"]["sources"]["pedagogy"]["remediation"] == {
         "knowledge_point": "三道工序与传导关系",
         "attempt": 1,

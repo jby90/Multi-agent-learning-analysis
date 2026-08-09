@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -22,6 +23,7 @@ from agents.diagnostic_router import (
     probes_for_diagnosis,
 )
 from agents.kb_loader import KnowledgeChunk
+from agents.knowledge_scope import prerequisite_scaffolds, responsibility_scope
 from agents.follow_up_agent import (
     MAX_FOLLOW_UP_ROUNDS,
     FollowUpAgent,
@@ -89,6 +91,37 @@ from orchestrator.transitions import State
 
 class InteractiveSessionError(RuntimeError):
     """Raised when an interactive action is not valid for the current session."""
+
+
+def _select_remediation_chunks(
+    chunks: Sequence[KnowledgeChunk],
+    *,
+    excluded_chunk_ids: set[str],
+    knowledge_point: str,
+) -> tuple[KnowledgeChunk, ...]:
+    """Refresh teaching content without dropping the current knowledge point.
+
+    A lower-band chunk may already have appeared only as a prerequisite of the
+    previous higher-band lesson.  Such an appearance must not exclude it when
+    it becomes the primary chunk after T17; otherwise only a prerequisite from
+    another knowledge point can survive and the fail-closed knowledge gate will
+    correctly refuse the lesson.
+    """
+
+    original = tuple(chunks)
+    target_chunks = tuple(
+        chunk for chunk in original if chunk.knowledge_point == knowledge_point
+    )
+    fresh_targets = tuple(
+        chunk
+        for chunk in target_chunks
+        if chunk.chunk_id not in excluded_chunk_ids
+    )
+    selected_targets = fresh_targets or target_chunks[:1]
+    support_chunks = tuple(
+        chunk for chunk in original if chunk.knowledge_point != knowledge_point
+    )
+    return selected_targets + support_chunks
 
 
 @dataclass(frozen=True, slots=True)
@@ -1042,6 +1075,155 @@ class InteractiveSessionManager:
         return product
 
     @staticmethod
+    def _revise_auxiliary_approve_with_fix(
+        product: Mapping[str, Any],
+        verdict: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Create a new, traceable companion artifact for a fixable verdict.
+
+        The actual prerequisite text is deterministically bound before review.
+        This revision step preserves that content, records the requested fix and
+        gives Review a fresh message/artifact identity.  Exact approval is still
+        required; repeated ``approve_with_fix`` exhausts the normal review budget
+        and fails closed instead of being published as success.
+        """
+
+        revised = deepcopy(dict(product))
+        revised.pop("step", None)
+        revised.pop("msg_id", None)
+        revised.pop("rejected_by_bus", None)
+        revised.pop("bus_errors", None)
+        payload = revised.get("payload")
+        content = payload.get("content") if isinstance(payload, dict) else None
+        if not isinstance(content, dict):
+            raise ReviewFlowError("auxiliary revision requires payload.content")
+        original_msg_id = product.get("msg_id")
+        verdict_msg_id = verdict.get("msg_id")
+        if not isinstance(original_msg_id, str) or not isinstance(
+            verdict_msg_id, str
+        ):
+            raise ReviewFlowError("auxiliary revision requires canonical message ids")
+        original_artifact_id = str(content.get("artifact_id") or original_msg_id)
+        rule_hits = verdict.get("verdict", {}).get("rule_hits", ())
+        rule_ids = sorted(
+            {
+                str(hit.get("rule_id"))
+                for hit in rule_hits
+                if isinstance(hit, Mapping) and hit.get("rule_id")
+            }
+        )
+        content.update(
+            {
+                "generation_stage": "review_fix_revision",
+                "revises_msg_id": original_msg_id,
+                "revises_artifact_id": original_artifact_id,
+                "revision_reason_msg_id": verdict_msg_id,
+                "review_fix_rule_ids": rule_ids,
+            }
+        )
+        revision_digest = sha256(
+            f"{original_artifact_id}|{verdict_msg_id}|{'|'.join(rule_ids)}".encode(
+                "utf-8"
+            )
+        ).hexdigest()
+        content["artifact_id"] = f"art-{revision_digest[:24]}"
+        return revised
+
+    @staticmethod
+    def _review_auxiliary_resource(
+        session: _InteractiveSession,
+        producer: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Review a resource without adding a state-machine transition.
+
+        Parallel companion resources are evidence for the same learning
+        contract, but only the active task is allowed to drive T09/T10.  This
+        audit path preserves Review, selective rebuttal and fail-closed
+        publication while leaving the published 21 transitions untouched.
+        """
+
+        runtime = session.runtime
+        try:
+            return audit_and_review(
+                producer,
+                audit=runtime.passive_audit,
+                review=lambda product: runtime.review.review(
+                    product,
+                    learning_report=session.diagnosis,
+                    student_profile=runtime.profile,
+                    learned_knowledge_points=runtime.learned_knowledge_points,
+                    learning_contract=session.learning_contract,
+                ),
+                generate_rebuttal=runtime.rebuttal.generate,
+                re_review=lambda product, verdict, rebuttal: runtime.review.re_review(
+                    product,
+                    verdict,
+                    rebuttal,
+                    learning_report=session.diagnosis,
+                    student_profile=runtime.profile,
+                    learned_knowledge_points=runtime.learned_knowledge_points,
+                    learning_contract=session.learning_contract,
+                ),
+                revise_approve_with_fix=(
+                    InteractiveSessionManager._revise_auxiliary_approve_with_fix
+                ),
+                max_cycles=(
+                    session.learning_contract.quality_policy.max_review_cycles
+                    if session.learning_contract is not None
+                    else 4
+                ),
+                terminal_action="refuse",
+                quality_policy=(
+                    session.learning_contract.quality_policy
+                    if session.learning_contract is not None
+                    else None
+                ),
+            )
+        except (ReviewFlowError, ReviewFlowInterrupted, ReviewFlowTerminal):
+            return None
+
+    @staticmethod
+    def _companion_lecture_draft(
+        session: _InteractiveSession,
+        *,
+        evidence_bundle: EvidenceBundle,
+        evidence_chunks: Sequence[KnowledgeChunk],
+    ) -> dict[str, Any]:
+        """Generate a same-contract lecture for a non-transitioning branch."""
+
+        runtime = session.runtime
+        diagnosis_content = _payload_content(session.diagnosis or {})
+        knowledge_point = evidence_bundle.knowledge_point
+        blind_spots = [knowledge_point]
+        try:
+            return _generate_reviewable_lecture(
+                runtime,
+                knowledge_point=knowledge_point,
+                diagnosis_content=diagnosis_content,
+                blind_spots=blind_spots,
+                retrieved_chunks=evidence_chunks,
+                difficulty_fallback=bool(
+                    evidence_bundle.source("knowledge")["difficulty_fallback"]
+                ),
+                evidence_bundle=evidence_bundle,
+            )
+        except LLMCallError as generation_error:
+            fallback = runtime.knowledge.generate_evidence_projection(
+                knowledge_point=knowledge_point,
+                student_profile=runtime.profile,
+                difficulty=evidence_bundle.difficulty,
+                retrieved_chunks=evidence_chunks,
+                fallback_reason="companion_generation_unavailable",
+            )
+            fallback = evidence_bundle.bind(fallback)
+            if (
+                evaluate_hard_rules(fallback)
+                or runtime.review.preflight_r04(fallback) is not None
+            ):
+                raise generation_error
+            return fallback
+
+    @staticmethod
     def _settle_active_agent_events(
         session: _InteractiveSession,
         *,
@@ -1262,18 +1444,31 @@ class InteractiveSessionManager:
                 )
             original_chunks = tuple(chunks)
             if excluded_chunk_ids:
-                alternatives = tuple(
-                    chunk
-                    for chunk in original_chunks
-                    if chunk.chunk_id not in excluded_chunk_ids
+                chunks = _select_remediation_chunks(
+                    original_chunks,
+                    excluded_chunk_ids=excluded_chunk_ids,
+                    knowledge_point=knowledge_point,
                 )
-                if alternatives:
-                    chunks = alternatives
             return {
                 "chunks": chunks,
                 "summary": {
                     "chunk_ids": [chunk.chunk_id for chunk in chunks],
                     "chunk_count": len(chunks),
+                    "responsibility_scope": list(
+                        responsibility_scope(
+                            knowledge_point,
+                            difficulty,
+                            chunks=chunks,
+                        )
+                    ),
+                    "prerequisite_bindings": [
+                        dict(item)
+                        for item in prerequisite_scaffolds(
+                            knowledge_point,
+                            difficulty,
+                            chunks=chunks,
+                        )
+                    ],
                     "difficulty_fallback": difficulty_fallback,
                     "remediation_refresh": active_remediation is not None,
                     "excluded_previous_chunks": sorted(
@@ -1390,14 +1585,31 @@ class InteractiveSessionManager:
             )
             business_evidence = evidence_bundle.source("business_data")
             def prefetch_task() -> dict[str, Any]:
-                return evidence_bundle.bind(
-                    runtime.task.generate(str(business_evidence["template_id"]))
+                active_task = evidence_bundle.bind(
+                    runtime.task.generate(
+                        str(business_evidence["template_id"]),
+                        diagnostic_difficulty=evidence_bundle.difficulty,
+                        student_profile=runtime.profile,
+                    )
                 )
+                practice_guide = evidence_bundle.bind(
+                    runtime.task.generate_practice_guide(
+                        str(business_evidence["template_id"]),
+                        diagnostic_difficulty=evidence_bundle.difficulty,
+                        student_profile=runtime.profile,
+                    )
+                )
+                return {
+                    "active_task": active_task,
+                    "practice_guide": practice_guide,
+                }
 
             def prefetch_assessment() -> dict[str, Any]:
                 return evidence_bundle.bind(
                     runtime.task.generate_assessment(
-                        str(business_evidence["template_id"])
+                        str(business_evidence["template_id"]),
+                        diagnostic_difficulty=evidence_bundle.difficulty,
+                        student_profile=runtime.profile,
                     )
                 )
 
@@ -1477,7 +1689,7 @@ class InteractiveSessionManager:
             lecture = lecture_branch.value
             task_branch = resource_result.branch("practice")
             if task_branch.status == "succeeded":
-                session.prefetched_task = task_branch.value
+                session.prefetched_task = task_branch.value["active_task"]
                 session.prefetched_task_generator = type(
                     runtime.task
                 ).generate
@@ -1509,15 +1721,21 @@ class InteractiveSessionManager:
                 )
             if lecture is None:
                 return self.get_state(session_id)
+            approved_practice = (
+                self._review_auxiliary_resource(
+                    session,
+                    lambda: task_branch.value["practice_guide"],
+                )
+                if task_branch.status == "succeeded"
+                else None
+            )
             session.resource_bundle = ResourceBundle.build(
                 contract_id=evidence_bundle.contract_id,
                 evidence_bundle_id=evidence_bundle.bundle_id,
                 products={
                     "knowledge": lecture,
                     "practice": (
-                        task_branch.value
-                        if task_branch.status == "succeeded"
-                        else None
+                        approved_practice
                     ),
                     "assessment": (
                         assessment_branch.value
@@ -1566,10 +1784,18 @@ class InteractiveSessionManager:
                             "business_data"
                         )["template_id"]
                         return session.evidence_bundle.bind(
-                            runtime.task.generate(str(template_id))
+                            runtime.task.generate(
+                                str(template_id),
+                                diagnostic_difficulty=(
+                                    session.evidence_bundle.difficulty
+                                ),
+                                student_profile=runtime.profile,
+                            )
                         )
                     return runtime.task.generate_for_diagnosis(
-                        blind_spots[0], diagnosis_content.get("difficulty")
+                        blind_spots[0],
+                        diagnosis_content.get("difficulty"),
+                        student_profile=runtime.profile,
                     )
                 except ValueError as exc:
                     raise InteractiveSessionError(
@@ -1709,12 +1935,64 @@ class InteractiveSessionManager:
             raise InteractiveSessionError("请先完成当前练习，再查看下一步训练。")
         if session.diagnosis is None:
             raise InteractiveSessionError("岗前测评结果缺失。")
-        task_draft = self._learning_task_draft(session, "step_up")
-        if task_draft is None:
+        raw_task_draft = self._learning_task_draft(session, "step_up")
+        if raw_task_draft is None:
             return self._complete_training(session)
         current_content = _payload_content(session.learning_task or {})
-        target_content = _payload_content(task_draft)
+        target_content = _payload_content(raw_task_draft)
         runtime = session.runtime
+        if session.learning_contract is None:
+            raise InteractiveSessionError("learning contract is unavailable")
+        target_knowledge_point = target_content.get("knowledge_point")
+        target_difficulty = target_content.get("difficulty")
+        if (
+            not isinstance(target_knowledge_point, str)
+            or not target_knowledge_point.strip()
+            or target_difficulty not in {"basic", "applied", "advanced"}
+        ):
+            raise InteractiveSessionError("progression target is incomplete")
+
+        # A learning contract is immutable.  Progression therefore creates a
+        # new revision and a new evidence bundle instead of silently reusing
+        # the initial-difficulty context for the higher-difficulty artefacts.
+        session.learning_contract = replace(
+            session.learning_contract,
+            difficulty=str(target_difficulty),
+            revision=session.learning_contract.revision + 1,
+        )
+        runtime.passive_audit(
+            session.learning_contract.control_draft(runtime.options.trace_id)
+        )
+        session.evidence_bundle = None
+        session.evidence_chunks = ()
+        evidence_bundle, evidence_chunks = self._prepare_evidence_bundle(
+            session,
+            _payload_content(session.diagnosis),
+            [target_knowledge_point],
+        )
+        task_draft = evidence_bundle.bind(raw_task_draft)
+
+        companion_lecture = self._review_auxiliary_resource(
+            session,
+            lambda: self._companion_lecture_draft(
+                session,
+                evidence_bundle=evidence_bundle,
+                evidence_chunks=evidence_chunks,
+            ),
+        )
+        companion_practice = self._review_auxiliary_resource(
+            session,
+            lambda: evidence_bundle.bind(
+                runtime.task.generate_practice_guide(
+                    str(target_content["template_id"]),
+                    diagnostic_difficulty=str(target_difficulty),
+                    student_profile=runtime.profile,
+                )
+            ),
+        )
+        if companion_lecture is None or companion_practice is None:
+            self._finish_system_error(session)
+            return self.get_state(session.session_id)
         path = runtime.transition(
             _path_update_draft(
                 runtime.options.trace_id,
@@ -1748,6 +2026,16 @@ class InteractiveSessionManager:
             return self.get_state(session.session_id)
         session.active_task = task
         session.learning_task = task
+        session.lecture = companion_lecture
+        session.resource_bundle = ResourceBundle.build(
+            contract_id=evidence_bundle.contract_id,
+            evidence_bundle_id=evidence_bundle.bundle_id,
+            products={
+                "knowledge": companion_lecture,
+                "practice": companion_practice,
+                "assessment": task,
+            },
+        )
         session.task_phase = "progression"
         session.pending_learning_action = None
         session.artifact = task
@@ -1934,6 +2222,7 @@ class InteractiveSessionManager:
             return session.runtime.task.generate_for_learning_action(
                 template_id,
                 action,
+                student_profile=session.runtime.profile,
             )
         except ValueError as exc:
             raise InteractiveSessionError(
@@ -1949,7 +2238,10 @@ class InteractiveSessionManager:
         if not isinstance(template_id, str) or not template_id.strip():
             raise InteractiveSessionError("当前训练内容不完整，请稍后重试。")
         try:
-            draft = session.runtime.task.generate_assessment(template_id)
+            draft = session.runtime.task.generate_assessment(
+                template_id,
+                student_profile=session.runtime.profile,
+            )
             return (
                 session.evidence_bundle.bind(draft)
                 if session.evidence_bundle is not None

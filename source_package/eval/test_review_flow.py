@@ -97,6 +97,43 @@ def test_audit_and_review_returns_only_a_matching_approved_product() -> None:
     )
 
 
+def test_audit_and_review_revises_approve_with_fix_and_requires_exact_approval() -> None:
+    audit = AuditLog()
+    review_decisions = iter(("approve_with_fix", "approve"))
+
+    def revise(
+        product: Mapping[str, Any],
+        verdict: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        revised = _product("已补齐前置知识的修订版")
+        revised["payload"]["content"].update(
+            {
+                "generation_stage": "review_fix_revision",
+                "revises_msg_id": product["msg_id"],
+                "revision_reason_msg_id": verdict["msg_id"],
+            }
+        )
+        return revised
+
+    approved = audit_and_review(
+        lambda: _product("仍缺少前置铺垫的首版"),
+        audit=audit,
+        review=lambda product: _verdict(product, next(review_decisions)),
+        revise_approve_with_fix=revise,
+        generate_rebuttal=lambda *_: pytest.fail("approve_with_fix must revise, not rebut"),
+        re_review=lambda *_: pytest.fail("approve_with_fix must revise, not rebut"),
+    )
+
+    assert approved["payload"]["content"]["question"] == "已补齐前置知识的修订版"
+    assert approved["payload"]["content"]["revises_msg_id"] == "trace-001"
+    assert [message["role"] for message in audit.messages] == [
+        "probe",
+        "verdict",
+        "probe",
+        "verdict",
+    ]
+
+
 def test_audit_and_review_routes_reject_through_rebuttal_and_re_review() -> None:
     audit = AuditLog()
 

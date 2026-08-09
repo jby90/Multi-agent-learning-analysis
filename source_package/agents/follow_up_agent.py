@@ -63,17 +63,17 @@ _FAMILY_FALLBACK_QUESTIONS = {
     ),
     "Q5": (
         "船号对比中哪艘船的完成率最低，你依据的船号和值是什么？",
-        "其他船号的完成率分别是多少，它们与最低值有何差异？",
+        "请逐行列出查询结果中的船号和完成率？",
         "请引用船号和完成率说明当前比较结论？",
     ),
     "Q6": (
         "三道工序中哪一道完成率最低，你依据的工序和值是什么？",
-        "另外两道工序的完成率分别是多少？",
-        "按完成率从低到高，三道工序应怎样排序？",
+        "请逐行列出查询结果中的工序和完成率？",
+        "请引用查询结果中的一行，说明该行的工序和完成率？",
     ),
     "Q7": (
         "责任单元对比中哪个单元完成率最低，你依据的单元和值是什么？",
-        "其他责任单元的完成率分别是多少？",
+        "请逐行列出查询结果中的责任单元和完成率？",
         "请引用责任单元和完成率说明当前比较结论？",
     ),
 }
@@ -124,10 +124,25 @@ _EVIDENCE_FIELD_QUESTION_TERMS = {
     "workshop_code": ("责任单元", "单元"),
 }
 _TEMPLATE_FALLBACK_QUESTIONS = {
+    "T-02": (
+        "查询结果中的完成率数值是多少？",
+        "请复述查询结果给出的完成率数值？",
+        "查询结果给出的完成率具体是多少？",
+    ),
     "T-03": (
         "查询结果中AZTP和ZZTP的完成率分别是多少？",
         "按完成率从低到高，三道工序应怎样排序？",
         "请引用当前查询结果中的字段和值说明你的判断？",
+    ),
+    "T-03-A": (
+        "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
+        "查询结果中YCL、ZZTP、AZTP各自最低的月份和完成率分别是什么？",
+        "查询结果中2025-05、2025-06、2025-07每个月完成率最低的工序和对应值分别是什么？",
+    ),
+    "T-03-B": (
+        "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
+        "查询结果中YCL、ZZTP、AZTP各自最低的月份和完成率分别是什么？",
+        "查询结果中2025-04至2025-07每个月完成率最低的工序和对应值分别是什么？",
     ),
     "T-10": (
         "查询结果中的月偏差率是多少？",
@@ -399,6 +414,55 @@ def _expected_rows(
                 continue
             values.append({str(key): value for key, value in row.items()})
     return tuple(values)
+
+
+def _row_bound_fallback_questions(
+    family: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[str, ...]:
+    """Build three probes from identifiers that literally occur in evidence.
+
+    It avoids unresolved references (for example, "the other two processes")
+    and does not invent sorting, causal or field-mapping operations that R-02
+    cannot verify from the active task evidence.
+    """
+
+    if family == "Q2":
+        rows = _expected_rows(evidence)
+        if any(
+            row.get("plan_qty") is not None
+            and row.get("actual_qty") is not None
+            for row in rows
+        ):
+            return (
+                "查询结果中的计划量和实际完成量分别是多少？",
+                "查询结果给出的计划量数值是多少？",
+                "查询结果给出的实际完成量数值是多少？",
+            )
+
+    identifier_key = {
+        "Q5": "ship_no",
+        "Q6": "process_code",
+        "Q7": "workshop_code",
+    }.get(family)
+    if identifier_key is None:
+        return ()
+    questions: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for row in _expected_rows(evidence):
+        identifier = str(row.get(identifier_key) or "").strip()
+        if not identifier or row.get("complete_rate") is None:
+            continue
+        month = str(row.get("month_label") or "").strip()
+        key = (identifier, month)
+        if key in seen:
+            continue
+        seen.add(key)
+        subject = f"{identifier}在{month}" if month else identifier
+        questions.append(f"查询结果中{subject}的完成率是多少？")
+        if len(questions) == 3:
+            break
+    return tuple(questions) if len(questions) == 3 else ()
 
 
 def _answer_requirements(
@@ -1059,9 +1123,16 @@ class FollowUpAgent:
         template_questions = _TEMPLATE_FALLBACK_QUESTIONS.get(template_id)
         family = str(target_content.get("family") or "").strip()
         family_questions = _FAMILY_FALLBACK_QUESTIONS.get(family)
+        row_bound_questions = _row_bound_fallback_questions(
+            family,
+            target_evidence,
+        )
         standard_stem = source_standard_stem
         fallback_questions = (
-            template_questions or family_questions or _DEFAULT_FALLBACK_QUESTIONS
+            template_questions
+            or row_bound_questions
+            or family_questions
+            or _DEFAULT_FALLBACK_QUESTIONS
         )
         previous_keys = {
             _question_history_key(item)
@@ -1157,7 +1228,15 @@ class FollowUpAgent:
             product["student_profile_ref"] = profile_ref
         return FollowUpTurn(
             assessment=assessment,
-            diagnosed_misconception=UNKNOWN_MISCONCEPTION,
+            # A fallback that is explicitly correcting an already-open
+            # misconception ticket must keep that target in both the
+            # diagnosis and next-route fields.  Reporting UNKNOWN here while
+            # routing to ``required_target`` makes the backend's independent
+            # route recomputation disagree and safely reject the same turn
+            # forever without advancing the learner round.
+            diagnosed_misconception=(
+                required_target or UNKNOWN_MISCONCEPTION
+            ),
             next_target_misconception=(
                 required_target or UNKNOWN_MISCONCEPTION
             ),

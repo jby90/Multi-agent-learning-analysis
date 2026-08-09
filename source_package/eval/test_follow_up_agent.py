@@ -604,21 +604,31 @@ def test_reviewed_completion_interpretation_overrides_an_unknown_false_negative(
     assert turn.diagnosed_misconception == "UNKNOWN"
 
 
-def test_generic_fallback_uses_the_task_family_instead_of_an_unresolved_reference() -> None:
+def test_completion_rate_template_fallback_stays_within_single_value_evidence() -> None:
     task_agent = _task_agent()
     agent = FollowUpAgent("trace-production-progress")
-
-    turn = agent.deterministic_fallback(
-        current_task=_current_task(task_agent, "T-02"),
-        round_index=2,
+    current_task = _current_task(task_agent, "T-02")
+    expected = (
+        "查询结果中的完成率数值是多少？",
+        "请复述查询结果给出的完成率数值？",
+        "查询结果给出的完成率具体是多少？",
     )
+    previous_questions: list[str] = []
 
-    assert turn.product is not None
-    question = turn.product["payload"]["content"]["question"]
-    assert "题目中的问题" not in question
-    assert "完成率" in question
-    assert question == "该工序完成率是多少，换算为百分比后是多少？"
-    assert "计划目标" not in question
+    for round_index, expected_question in enumerate(expected, start=2):
+        turn = agent.deterministic_fallback(
+            current_task=current_task,
+            round_index=round_index,
+            previous_questions=tuple(previous_questions),
+        )
+        assert turn.product is not None
+        question = turn.product["payload"]["content"]["question"]
+        assert question == expected_question
+        assert "工序" not in question
+        assert "计划" not in question
+        assert "换算" not in question
+        assert "说明" not in question
+        previous_questions.append(question)
 
 
 def test_high_risk_count_fallback_uses_the_template_output_contract() -> None:
@@ -662,7 +672,7 @@ def test_deterministic_fallback_targets_the_missing_evidence_field() -> None:
     agent = FollowUpAgent("trace-production-progress")
 
     turn = agent.deterministic_fallback(
-        current_task=_current_task(task_agent, "T-02"),
+        current_task=_current_task(task_agent, "T-03"),
         round_index=3,
         required_evidence_fields=("process_code",),
     )
@@ -670,6 +680,50 @@ def test_deterministic_fallback_targets_the_missing_evidence_field() -> None:
     assert turn.product is not None
     question = turn.product["payload"]["content"]["question"]
     assert "工序" in question
+
+
+def test_deterministic_fallback_preserves_required_correction_target() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=_current_task(task_agent, "T-05-A"),
+        round_index=4,
+        task_agent=task_agent,
+        required_target="M-03",
+    )
+
+    assert turn.assessment == "unknown"
+    assert turn.diagnosed_misconception == "M-03"
+    assert turn.next_target_misconception == "M-03"
+    assert turn.route_support_points == ()
+
+
+def test_plan_actual_correction_uses_only_reviewed_scalar_fields() -> None:
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress")
+    current_task = _current_task(task_agent, "T-03-A")
+    expected = (
+        "查询结果中的计划量和实际完成量分别是多少？",
+        "查询结果给出的计划量数值是多少？",
+        "查询结果给出的实际完成量数值是多少？",
+    )
+    previous_questions: list[str] = []
+
+    for round_index, expected_question in enumerate(expected, start=2):
+        turn = agent.deterministic_fallback(
+            current_task=current_task,
+            round_index=round_index,
+            previous_questions=tuple(previous_questions),
+            task_agent=task_agent,
+            required_target="M-01",
+        )
+        assert turn.product is not None
+        question = turn.product["payload"]["content"]["question"]
+        assert question == expected_question
+        assert "业务含义" not in question
+        assert "区别" not in question
+        previous_questions.append(question)
 
 
 def test_generate_passes_missing_evidence_fields_to_the_model() -> None:
@@ -774,6 +828,48 @@ def test_advanced_delay_fallback_uses_template_specific_questions() -> None:
     ]
 
 
+def test_applied_three_process_fallback_never_uses_an_unresolved_process_reference() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-03-A")
+    agent = FollowUpAgent("trace-production_progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=4,
+    )
+
+    assert turn.product is not None
+    question = turn.product["payload"]["content"]["question"]
+    assert "另外两道工序" not in question
+    assert "每个月完成率最低的工序" in question
+    assert "因果" not in question
+    assert all(month in question for month in ("2025-05", "2025-06", "2025-07"))
+
+
+def test_generic_three_process_fallback_only_requests_fields_in_the_active_evidence() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-08-DECAY-A")
+    agent = FollowUpAgent("trace-production_progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=3,
+    )
+
+    assert turn.product is not None
+    question = turn.product["payload"]["content"]["question"]
+    assert question == "查询结果中AZTP在2025-06的完成率是多少？"
+
+    final_turn = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=4,
+    )
+    assert final_turn.product is not None
+    assert final_turn.product["payload"]["content"]["question"] == (
+        "查询结果中AZTP在2025-07的完成率是多少？"
+    )
+
+
 @pytest.mark.parametrize("domain_id", ("production_progress", "first_segment"))
 def test_every_template_has_three_distinct_fallback_questions(
     domain_id: str,
@@ -793,6 +889,11 @@ def test_every_template_has_three_distinct_fallback_questions(
             assert turn.product is not None
             questions.append(turn.product["payload"]["content"]["question"])
         assert len(set(questions)) == 3, template_id
+        assert not any(
+            unresolved in question
+            for question in questions
+            for unresolved in ("另外两道工序", "其他船号", "其他责任单元")
+        ), template_id
 
 
 def test_mastered_turn_discards_an_unneeded_model_question() -> None:

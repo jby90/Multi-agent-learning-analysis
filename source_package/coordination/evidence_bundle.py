@@ -92,14 +92,73 @@ class EvidenceBundle:
             raise KeyError(f"unknown evidence source: {source_id}") from exc
 
     def bind(self, draft: Mapping[str, Any]) -> dict[str, Any]:
-        """Stamp a resource draft with the exact shared blackboard identity."""
+        """Stamp and validate the complete shared resource lineage.
+
+        The evidence bundle is the single deterministic binding boundary for
+        all parallel resource branches.  Producers may render different
+        payloads, but they cannot silently drift to another learner, contract,
+        knowledge point, difficulty, or evidence snapshot.
+        """
         bound = deepcopy(dict(draft))
         payload = bound.get("payload")
         content = payload.get("content") if isinstance(payload, dict) else None
         if not isinstance(content, dict):
             raise ValueError("resource draft must contain payload.content")
+        payload_type = _required_string(payload.get("type"), "resource payload.type")
+        profile_id = _required_string(
+            self.source("pedagogy").get("profile_id"),
+            "sources.pedagogy.profile_id",
+        )
+        exact_fields = {
+            "knowledge_point": self.knowledge_point,
+            "difficulty": self.difficulty,
+            "learning_contract_id": self.contract_id,
+        }
+        for field_name, expected in exact_fields.items():
+            current = content.get(field_name)
+            if current not in {None, "", expected}:
+                raise ValueError(
+                    f"resource {field_name} does not match evidence bundle: "
+                    f"expected={expected!r}, actual={current!r}"
+                )
+            content[field_name] = expected
+        current_profile = bound.get("student_profile_ref")
+        if current_profile not in {None, "", profile_id}:
+            raise ValueError(
+                "resource student_profile_ref does not match evidence bundle: "
+                f"expected={profile_id!r}, actual={current_profile!r}"
+            )
+        bound["student_profile_ref"] = profile_id
         content["evidence_bundle_ref"] = self.bundle_id
         content["evidence_source_ids"] = list(EVIDENCE_SOURCES)
+        if payload_type == "practice_guide":
+            expected_scaffolds = _thaw(
+                self.source("knowledge").get("prerequisite_bindings", ())
+            )
+            current_scaffolds = content.get("prerequisite_scaffolds", [])
+            if current_scaffolds != expected_scaffolds:
+                raise ValueError(
+                    "resource prerequisite_scaffolds do not match evidence bundle"
+                )
+            content["prerequisite_scaffolds"] = expected_scaffolds
+        resource_kind = str(content.get("resource_kind") or payload_type)
+        lineage_material = json.dumps(
+            {
+                "contract_id": self.contract_id,
+                "evidence_bundle_id": self.bundle_id,
+                "knowledge_point": self.knowledge_point,
+                "difficulty": self.difficulty,
+                "payload_type": payload_type,
+                "resource_kind": resource_kind,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        lineage_digest = hashlib.sha256(lineage_material).hexdigest()
+        content.setdefault("lineage_id", f"lin-{lineage_digest[:24]}")
+        content.setdefault("artifact_id", f"art-{lineage_digest[24:48]}")
+        content.setdefault("generation_stage", "first_generation")
         return bound
 
     def control_draft(self, trace_id: str) -> dict[str, Any]:

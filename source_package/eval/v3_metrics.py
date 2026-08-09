@@ -257,16 +257,30 @@ def _submission_events(messages: Sequence[Mapping[str, Any]]) -> list[Mapping[st
 
 def _expected_submission_actions(gold: Mapping[str, Any]) -> list[list[str]]:
     sequence = str(gold.get("预期适配序列") or "")
+    normalized_sequence = "".join(sequence.split())
     count = int(gold.get("预期适配节点数") or 2) - 1
-    if sequence.count("wrong") >= 2 and "step_down" in sequence:
+    if normalized_sequence.count("wrong") >= 2 and "step_down" in normalized_sequence:
         actions = [["targeted_followup"], ["step_down"], ["keep"]]
-    elif "wrong→targeted_followup/rebuttal" in sequence:
+    elif "wrong→targeted_followup/rebuttal" in normalized_sequence:
         actions = [["targeted_followup", "rebuttal"], ["keep"]]
     else:
         actions = [[_expected_post_action(sequence)]]
     while len(actions) < count:
         actions.append(["keep"])
     return actions[:count]
+
+
+def _difficulty_from_content(content: Mapping[str, Any]) -> str:
+    direct = content.get("difficulty") or content.get("new_difficulty")
+    if isinstance(direct, str) and direct:
+        return direct
+    for key in ("learning_contract", "evidence_bundle"):
+        nested = content.get(key)
+        if isinstance(nested, Mapping):
+            difficulty = nested.get("difficulty")
+            if isinstance(difficulty, str) and difficulty:
+                return difficulty
+    return ""
 
 
 def _adaptation_candidates(
@@ -355,9 +369,36 @@ def _adaptation_candidates(
             action = "rebuttal" if rebuttal is not None else "targeted_followup"
             consequence = rebuttal or follow_up or assessment_message
         consequence_content = _content(consequence)
-        after_difficulty = str(
-            consequence_content.get("difficulty")
-            or consequence_content.get("new_difficulty")
+        downstream = consequence
+        difficulty_evidence = consequence
+        if path_event is not None:
+            path_step = int(path_event.get("step") or 0)
+            later_events = [
+                item
+                for item in consequence_window
+                if int(item.get("step") or 0) > path_step
+            ]
+            downstream = next(
+                (
+                    item
+                    for item in later_events
+                    if _content(item).get("event")
+                    in {"product_ready", "assessment_ready"}
+                ),
+                consequence,
+            )
+            difficulty_evidence = next(
+                (
+                    item
+                    for item in later_events
+                    if _difficulty_from_content(_content(item))
+                ),
+                downstream,
+            )
+        after_difficulty = (
+            _difficulty_from_content(consequence_content)
+            or _difficulty_from_content(_content(difficulty_evidence))
+            or _difficulty_from_content(_content(downstream))
             or current_difficulty
         )
         candidates.append(
@@ -365,6 +406,7 @@ def _adaptation_candidates(
                 "action": action,
                 "trigger": trigger,
                 "consequence": consequence,
+                "downstream": downstream,
                 "before_difficulty": current_difficulty,
                 "after_difficulty": after_difficulty,
                 "assessment": assessment,
@@ -471,6 +513,7 @@ def build_adaptation_nodes(
                 "downstream_executed": int(first_product is not None),
                 "node_success": int(route_ok and first_product is not None),
                 "non_keep": 1,
+                "effective_adaptation": int(route_ok and first_product is not None),
             }
         )
 
@@ -488,6 +531,7 @@ def build_adaptation_nodes(
                     break
             submission = candidate.get("trigger") if candidate else {}
             consequence = candidate.get("consequence") if candidate else None
+            downstream = candidate.get("downstream") if candidate else consequence
             consequence_content = _content(consequence or {})
             actual_action = str(candidate.get("action") or "")
             actual_before = str(candidate.get("before_difficulty") or actual_initial)
@@ -502,6 +546,14 @@ def build_adaptation_nodes(
                 if actual_action in {"step_up", "step_down", "keep"}
                 else True
             )
+            node_success = int(
+                bool(submission)
+                and action_match
+                and after_consistent
+                and consequence is not None
+                and downstream is not None
+            )
+            non_keep = int(actual_action not in {"", "keep"})
             rows.append(
                 {
                     **base,
@@ -520,16 +572,22 @@ def build_adaptation_nodes(
                         or candidate.get("assessment")
                         or ""
                     ),
-                    "downstream_artifact_id": str((consequence or {}).get("msg_id") or ""),
+                    "downstream_artifact_id": str((downstream or {}).get("msg_id") or ""),
                     "expected_downstream_difficulty": expected_after,
                     "actual_downstream_difficulty": actual_after,
                     "due_node": 1,
                     "trigger_binding_valid": int(bool(submission)),
                     "action_gold_match": int(action_match),
                     "after_state_consistent": int(after_consistent),
-                    "downstream_executed": int(consequence is not None),
-                    "node_success": int(bool(submission) and action_match and after_consistent),
-                    "non_keep": int(actual_action not in {"", "keep"}),
+                    "downstream_executed": int(downstream is not None),
+                    "node_success": node_success,
+                    "non_keep": non_keep,
+                    # Earlier approved KPI definition: a due node is effective
+                    # only when real interaction triggers an actual path,
+                    # difficulty, task-complexity or follow-up change. A
+                    # correct no-op/keep remains auditable but is not counted
+                    # in the numerator.
+                    "effective_adaptation": int(node_success == 1 and non_keep == 1),
                 }
             )
     return sorted(rows, key=lambda row: (row["seed_id"], row["case_id"], row["node_type"]))
@@ -555,7 +613,9 @@ def build_coverage_cells(
 
     if mode not in VALID_MODES:
         raise ValueError(f"unsupported v3 recomputation mode: {mode}")
-    run_by_case = {_run_value(run, "case_id"): run for run in runs}
+    runs_by_case: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for run in runs:
+        runs_by_case[_run_value(run, "case_id")].append(run)
     rows: list[dict[str, Any]] = []
     difficulty_map = {"BASIC": "basic", "APPLIED": "applied", "ADVANCED": "advanced"}
     for gold in gold_rows:
@@ -565,70 +625,127 @@ def build_coverage_cells(
         coverage_key = str(gold.get("覆盖格") or "")
         if not coverage_key:
             continue
-        run = run_by_case.get(case_id)
-        messages = list(_items(run.get("messages"))) if run else []
-        diagnosis = _diagnosis(messages)
-        plan = diagnosis.get("knowledge_point_plan")
-        selected_plan = plan[0] if isinstance(plan, list) and plan and isinstance(plan[0], Mapping) else {}
-        expected_point = str(gold.get("目标知识点") or "")
-        difficulty = difficulty_map.get(coverage_key.rsplit("-", 1)[-1], str(gold.get("预期最终难度") or ""))
-        route_reachable = int(
-            run is not None
-            and _run_value(run, "route_mode") == "production"
-            and diagnosis.get("selected_knowledge_point") == expected_point
-        )
-        route_evidence_valid = int(
-            route_reachable == 1
-            and isinstance(selected_plan.get("evidence_ids"), list)
-            and bool(selected_plan.get("evidence_ids"))
-            and bool(selected_plan.get("route_reason"))
-        )
-        approved = _approved_types(messages)
-        lecture = int("lecture_note" in approved)
-        practice = int("practice_guide" in approved)
-        quiz = int("quiz_set" in approved)
-        feedback = int(
-            any(
-                _content(message).get("event") in {
-                    "follow_up_feedback",
-                    "student_answer_reviewed",
-                    "path_updated",
-                }
-                or _payload_type(message) == "feedback"
-                for message in messages
+        for run in runs_by_case.get(case_id, []):
+            messages = list(_items(run.get("messages")))
+            diagnosis = _diagnosis(messages)
+            plan = diagnosis.get("knowledge_point_plan")
+            selected_plan = (
+                plan[0]
+                if isinstance(plan, list) and plan and isinstance(plan[0], Mapping)
+                else {}
             )
-        )
-        review_pass = int(bool(approved.intersection({"lecture_note", "practice_guide", "quiz_set"})))
-        evidence_pass = int(
-            any(
-                claim.get("kind") in FACT_KINDS
+            expected_point = str(gold.get("目标知识点") or "")
+            difficulty = difficulty_map.get(
+                coverage_key.rsplit("-", 1)[-1],
+                str(gold.get("预期最终难度") or ""),
+            )
+            expected_initial = str(gold.get("预期初始难度") or "")
+            route_reachable = int(
+                _run_value(run, "route_mode") == "production"
+                and diagnosis.get("selected_knowledge_point") == expected_point
+            )
+            route_evidence_valid = int(
+                route_reachable == 1
+                and isinstance(selected_plan.get("evidence_ids"), list)
+                and bool(selected_plan.get("evidence_ids"))
+                and bool(selected_plan.get("route_reason"))
+            )
+            contract_messages = [
+                _content(message).get("learning_contract")
+                for message in messages
+                if _content(message).get("event") == "learning_contract_ready"
+                and isinstance(_content(message).get("learning_contract"), Mapping)
+            ]
+            latest_contract = contract_messages[-1] if contract_messages else {}
+            contract_points = latest_contract.get("target_knowledge_points")
+            learning_contract_match = int(
+                expected_point
+                in (contract_points if isinstance(contract_points, list) else [])
+                and str(latest_contract.get("difficulty") or "")
+                in {expected_initial, difficulty}
+            )
+            profile_id = _run_value(run, "profile_id")
+            reviews = _reviews(messages)
+            approved_products = [
+                message
+                for message in messages
+                if _payload_type(message)
+                in {"lecture_note", "practice_guide", "quiz_set"}
                 and any(
-                    evidence.get("supports_claim") == claim.get("text")
-                    for evidence in _items(message.get("evidence"))
+                    _decision(review) == "approve"
+                    for review in reviews.get(str(message.get("msg_id") or ""), [])
                 )
-                for message in messages
-                for claim in _items(message.get("claims"))
+                and str(_content(message).get("knowledge_point") or "")
+                == expected_point
+                and str(_content(message).get("difficulty") or "") == difficulty
+            ]
+            approved_types = {_payload_type(message) for message in approved_products}
+            profile_resource_match = int(
+                bool(profile_id)
+                and bool(approved_products)
+                and all(
+                    str(message.get("student_profile_ref") or "") == profile_id
+                    for message in approved_products
+                )
             )
-        )
-        gates = [route_reachable, route_evidence_valid, lecture, practice, quiz, feedback, review_pass, evidence_pass]
-        rows.append(
-            {
-                "knowledge_point": expected_point,
-                "difficulty": difficulty,
-                "case_id": case_id,
-                "route_mode": _run_value(run, "route_mode") if run else "",
-                "route_reachable": route_reachable,
-                "route_evidence_valid": route_evidence_valid,
-                "lecture_pass": lecture,
-                "practice_pass": practice,
-                "quiz_pass": quiz,
-                "feedback_pass": feedback,
-                "review_pass": review_pass,
-                "evidence_pass": evidence_pass,
-                "cell_pass": int(all(gates)),
-                "human_gate": "PENDING_HUMAN",
-            }
-        )
+            lecture = int("lecture_note" in approved_types)
+            practice = int("practice_guide" in approved_types)
+            quiz = int("quiz_set" in approved_types)
+            feedback = int(
+                any(
+                    _content(message).get("event")
+                    in {"follow_up_feedback", "student_answer_reviewed", "path_updated"}
+                    or _payload_type(message) == "feedback"
+                    for message in messages
+                )
+            )
+            review_pass = int(lecture == practice == quiz == 1)
+            evidence_pass = int(
+                any(
+                    claim.get("kind") in FACT_KINDS
+                    and any(
+                        evidence.get("supports_claim") == claim.get("text")
+                        for evidence in _items(message.get("evidence"))
+                    )
+                    for message in approved_products
+                    for claim in _items(message.get("claims"))
+                )
+            )
+            gates = [
+                route_reachable,
+                route_evidence_valid,
+                learning_contract_match,
+                profile_resource_match,
+                lecture,
+                practice,
+                quiz,
+                feedback,
+                review_pass,
+                evidence_pass,
+            ]
+            seed_id = _run_value(run, "seed_id")
+            rows.append(
+                {
+                    "coverage_cell_id": _stable_id(seed_id, case_id, prefix="CC"),
+                    "seed_id": seed_id,
+                    "knowledge_point": expected_point,
+                    "difficulty": difficulty,
+                    "case_id": case_id,
+                    "route_mode": _run_value(run, "route_mode"),
+                    "route_reachable": route_reachable,
+                    "route_evidence_valid": route_evidence_valid,
+                    "learning_contract_match": learning_contract_match,
+                    "profile_resource_match": profile_resource_match,
+                    "lecture_pass": lecture,
+                    "practice_pass": practice,
+                    "quiz_pass": quiz,
+                    "feedback_pass": feedback,
+                    "review_pass": review_pass,
+                    "evidence_pass": evidence_pass,
+                    "cell_pass": int(all(gates)),
+                    "human_gate": "PENDING_HUMAN",
+                }
+            )
     return rows
 
 
@@ -689,6 +806,15 @@ def _apply_final_review(
         row["human_label"] = label
         row["adjudicator"] = str(review.get("adjudicator") or "AGREED")
         row["hallucination_reason"] = str(review.get("reason") or "")
+        human_rule_hits = {
+            str(item) for item in review.get("rule_hits", []) if str(item) in FACT_RULES
+        }
+        if label == "HALLUCINATION" and not human_rule_hits:
+            raise FinalReviewIncomplete(
+                f"hallucination fact unit {row['content_unit_id']} requires an R-01/R-02/R-04/R-05/R-06 rule hit"
+            )
+        if human_rule_hits:
+            row["rule_hits"] = sorted(human_rule_hits)
         row["final_fact_denominator"] = int(row["published_final"] == 1)
         row["final_hallucination_numerator"] = int(
             row["published_final"] == 1 and label == "HALLUCINATION"
@@ -728,22 +854,26 @@ def _apply_final_review(
                 row["adjudicator"] = str(review.get("adjudicator_mismatch") or "AGREED")
 
     cell_labels = {
-        str(row.get("case_id")): row
+        str(row.get("coverage_cell_id") or row.get("case_id")): row
         for row in _items(human_review.get("coverage_cells"))
     }
     for row in coverage_rows:
-        review = cell_labels.get(row["case_id"])
+        review = cell_labels.get(row["coverage_cell_id"])
         if review is None:
-            raise FinalReviewIncomplete(f"missing coverage gate for {row['case_id']}")
+            raise FinalReviewIncomplete(
+                f"missing coverage gate for {row['seed_id']}/{row['case_id']}"
+            )
         value = _resolve_pair(
             review,
             "reviewer_a_pass",
             "reviewer_b_pass",
             "adjudicator_pass",
-            label=f"coverage cell {row['case_id']}",
+            label=f"coverage cell {row['seed_id']}/{row['case_id']}",
         )
         if value not in {0, 1, False, True}:
-            raise FinalReviewIncomplete(f"invalid coverage gate for {row['case_id']}")
+            raise FinalReviewIncomplete(
+                f"invalid coverage gate for {row['seed_id']}/{row['case_id']}"
+            )
         row["human_gate"] = int(bool(value))
         row["cell_pass"] = int(row["cell_pass"] == 1 and bool(value))
 
@@ -768,13 +898,26 @@ def compute_v3_metrics(
     final_fact_denominator = sum(int(row["final_fact_denominator"]) for row in fact_rows)
     final_hallucinations = sum(int(row["final_hallucination_numerator"]) for row in fact_rows)
     due_nodes = sum(int(row["due_node"]) for row in adaptation_rows)
-    successful_nodes = sum(int(row["node_success"]) for row in adaptation_rows)
-    by_point: dict[str, set[str]] = defaultdict(set)
+    effective_nodes = sum(int(row.get("effective_adaptation", 0)) for row in adaptation_rows)
+    by_seed_point: dict[str, dict[str, set[str]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
     for row in coverage_rows:
         if int(row["cell_pass"]) == 1:
-            by_point[str(row["knowledge_point"])].add(str(row["difficulty"]))
+            by_seed_point[str(row.get("seed_id") or "single")][
+                str(row["knowledge_point"])
+            ].add(str(row["difficulty"]))
+    seeds = sorted({str(row.get("seed_id") or "single") for row in coverage_rows})
     covered_points = sum(
-        1 for values in by_point.values() if values == {"basic", "applied", "advanced"}
+        1
+        for point in {
+            str(row["knowledge_point"]) for row in coverage_rows
+        }
+        if seeds
+        and all(
+            by_seed_point[seed][point] == {"basic", "applied", "advanced"}
+            for seed in seeds
+        )
     )
     native_errors = sum(int(row["native_error_denominator"]) for row in fact_rows)
     intercepted = sum(int(row["interception_numerator"]) for row in fact_rows)
@@ -816,7 +959,7 @@ def compute_v3_metrics(
         ),
         "metrics": {
             "final_hallucination_rate": _rate(final_hallucinations, final_fact_denominator),
-            "difficulty_adaptation_accuracy": _rate(successful_nodes, due_nodes),
+            "effective_automatic_adaptation_rate": _rate(effective_nodes, due_nodes),
             "strict_closed_loop_coverage": _rate(covered_points, 10),
             "hallucination_interception_rate": _rate(intercepted, native_errors),
             "native_teaching_adaptation_mismatch_rate": _rate(

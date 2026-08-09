@@ -16,10 +16,11 @@ import json
 import os
 from pathlib import Path
 import random
+import re
 import subprocess
 from typing import Any, Mapping
 
-from eval.v3_cases import load_formal_cases, load_gold_standard
+from eval.v3_cases import GOLD_PATH, INPUT_PATH, load_formal_cases, load_gold_standard
 from orchestrator.interactive_session import InteractiveSessionManager
 
 
@@ -33,6 +34,7 @@ TASK_TEMPLATE_PATH = (
 # finite ceiling, but leave enough room for four learner rounds plus one T17
 # remediation cycle without turning review retries into false case failures.
 MAX_ACTIONS = 160
+MAX_FORMAL_LEARNER_TEXT_LENGTH = 500
 
 
 @lru_cache(maxsize=1)
@@ -66,8 +68,19 @@ def _runtime_task_sql() -> dict[str, str]:
     }
 
 
+@lru_cache(maxsize=1)
+def _runtime_demo_parameters() -> dict[str, Any]:
+    raw = json.loads(TASK_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    value = raw.get("demo_parameters") if isinstance(raw, Mapping) else None
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
 def _normalized_sql(value: Any) -> str:
     return " ".join(str(value or "").split()).casefold()
+
+
+def _normalized_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
 
 
 def validate_frozen_task_gold(
@@ -106,32 +119,80 @@ def validate_frozen_task_gold(
                 }
             )
             continue
-        template_id = str(expected.get("预期初始模板") or "").strip()
-        contract = contracts.get(template_id)
-        if not isinstance(contract, Mapping):
-            conflicts.append(
-                {
-                    "case_id": case_id,
-                    "conflict_type": "missing_declared_template",
-                    "declared_template": template_id,
-                    "sql_matching_templates": [],
-                }
-            )
-            continue
-        gold_sql = _normalized_sql(expected.get("标准SQL"))
-        template_sql = _normalized_sql(contract.get("standard_sql"))
-        if gold_sql != template_sql:
-            conflicts.append(
-                {
-                    "case_id": case_id,
-                    "conflict_type": "initial_template_sql_mismatch",
-                    "knowledge_point": str(expected.get("目标知识点") or ""),
-                    "declared_difficulty": str(expected.get("预期初始难度") or ""),
-                    "declared_template": template_id,
-                    "business_task": str(expected.get("业务任务") or ""),
-                    "sql_matching_templates": sorted(sql_to_templates.get(gold_sql, [])),
-                }
-            )
+        for stage in ("初始", "最终"):
+            template_id = str(expected.get(f"预期{stage}模板") or "").strip()
+            contract = contracts.get(template_id)
+            if not isinstance(contract, Mapping):
+                conflicts.append(
+                    {
+                        "case_id": case_id,
+                        "stage": stage,
+                        "conflict_type": "missing_declared_template",
+                        "declared_template": template_id,
+                        "sql_matching_templates": [],
+                    }
+                )
+                continue
+            gold_sql = _normalized_sql(expected.get(f"{stage}标准SQL"))
+            template_sql = _normalized_sql(contract.get("standard_sql"))
+            try:
+                expected_task = str(contract.get("question_template") or "").format(
+                    **_runtime_demo_parameters()
+                )
+            except (KeyError, ValueError) as exc:
+                raise ValueError(f"invalid production task template {template_id}: {exc}") from exc
+            expected_rows = contract.get("expected_rows")
+            gold_rows = expected.get(f"{stage}expected_rows")
+            expected_points = "；".join(str(item) for item in contract.get("expected_points", []))
+            field_mismatches: list[str] = []
+            checks = {
+                "knowledge_point": (
+                    str(expected.get("目标知识点") or ""),
+                    str(contract.get("knowledge_point") or ""),
+                ),
+                "difficulty": (
+                    str(expected.get(f"{stage}难度") or expected.get(f"预期{stage}难度") or ""),
+                    str(contract.get("difficulty") or ""),
+                ),
+                "payload_type": (
+                    str(expected.get(f"{stage}题型") or ""),
+                    str(contract.get("payload_type") or ""),
+                ),
+                "family": (
+                    str(expected.get(f"{stage}family") or ""),
+                    str(contract.get("family") or ""),
+                ),
+                "business_task": (
+                    _normalized_text(expected.get(f"{stage}业务任务")),
+                    _normalized_text(expected_task),
+                ),
+                "standard_sql": (gold_sql, template_sql),
+                "expected_rows": (gold_rows, expected_rows),
+                "expected_points": (
+                    _normalized_text(expected.get(f"{stage}预期要点")),
+                    _normalized_text(expected_points),
+                ),
+            }
+            for field, (actual, wanted) in checks.items():
+                if actual != wanted:
+                    field_mismatches.append(field)
+            if field_mismatches:
+                conflicts.append(
+                    {
+                        "case_id": case_id,
+                        "stage": stage,
+                        "conflict_type": "template_contract_mismatch",
+                        "knowledge_point": str(expected.get("目标知识点") or ""),
+                        "declared_difficulty": str(
+                            expected.get(f"{stage}难度")
+                            or expected.get(f"预期{stage}难度")
+                            or ""
+                        ),
+                        "declared_template": template_id,
+                        "mismatched_fields": field_mismatches,
+                        "sql_matching_templates": sorted(sql_to_templates.get(gold_sql, [])),
+                    }
+                )
     return conflicts
 
 
@@ -229,7 +290,45 @@ class GoldLearnerActor:
             return self._evidence_bearing_wrong_answer(evidence)
 
         point = str(self._gold.get("预期要点") or "")
-        return f"根据刚才查询结果中的字段和值：{evidence}。据此判断：{point}。"
+        return self._bounded_answer(evidence, point)
+
+    @staticmethod
+    def _bounded_answer(evidence: str, point: str) -> str:
+        """Keep the external learner turn admissible without changing gold.
+
+        Production accepts at most 500 visible characters.  Wide result tables
+        can otherwise make the frozen actor fail at the input gate before the
+        answer reaches any Agent.  Preserve the frozen conclusion verbatim and
+        select only whole evidence rows, prioritising rows whose numeric values
+        are cited by that conclusion.
+        """
+
+        prefix = "根据刚才查询结果中的字段和值："
+        conclusion = f"。据此判断：{point.strip().rstrip('。')}。"
+        available = MAX_FORMAL_LEARNER_TEXT_LENGTH - len(prefix) - len(conclusion)
+        if available < 1:
+            conclusion = conclusion[: MAX_FORMAL_LEARNER_TEXT_LENGTH - len(prefix)]
+            return f"{prefix}{conclusion}"[:MAX_FORMAL_LEARNER_TEXT_LENGTH]
+
+        segments = [item.strip() for item in evidence.split("；") if item.strip()]
+        cited_numbers = set(re.findall(r"\d+(?:\.\d+)?", point))
+        ordered = sorted(
+            enumerate(segments),
+            key=lambda item: (
+                not any(number in item[1] for number in cited_numbers),
+                item[0],
+            ),
+        )
+        selected: list[str] = []
+        used = 0
+        for _, segment in ordered:
+            added = len(segment) + (1 if selected else 0)
+            if used + added > available:
+                continue
+            selected.append(segment)
+            used += added
+        rendered_evidence = "；".join(selected)
+        return f"{prefix}{rendered_evidence}{conclusion}"
 
     @staticmethod
     def _evidence_bearing_wrong_answer(evidence: str) -> str:
@@ -552,10 +651,10 @@ def run_seed(
             "failed_count": len(failures),
             "code_version": code_version,
             "formal_input_sha256": _sha256(
-                ROOT / "eval" / "cases" / "v3_1" / "formal_50_inputs_v3_1.json"
+                INPUT_PATH
             ),
             "gold_sha256": _sha256(
-                ROOT / "eval" / "gold" / "v3_1" / "formal_50_gold_v3_1.json"
+                GOLD_PATH
             ),
             "cases": [
                 {

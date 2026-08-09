@@ -48,6 +48,10 @@ ReReviewCall = Callable[
     [Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]],
     dict[str, Any],
 ]
+ApproveWithFixRevision = Callable[
+    [Mapping[str, Any], Mapping[str, Any]],
+    dict[str, Any],
+]
 FallbackResolver = Callable[
     [Mapping[str, Any], Mapping[str, Any]],
     dict[str, Any] | None,
@@ -98,6 +102,7 @@ def audit_and_review(
     review: ReviewCall,
     generate_rebuttal: RebuttalCall,
     re_review: ReReviewCall,
+    revise_approve_with_fix: ApproveWithFixRevision | None = None,
     max_cycles: int = 4,
     terminal_action: str = "refuse",
     on_event: ReviewEventCallback | None = None,
@@ -116,10 +121,14 @@ def audit_and_review(
     if terminal_action not in {"human_review", "refuse"}:
         raise ValueError("terminal_action must be human_review or refuse")
     last_message: dict[str, Any] | None = None
+    pending_revision: dict[str, Any] | None = None
     for cycle in range(1, max_cycles + 1):
         try:
             _notify(on_event, "producer_started", cycle=cycle)
-            product = audit(producer())
+            product = audit(
+                pending_revision if pending_revision is not None else producer()
+            )
+            pending_revision = None
             _notify(on_event, "product_ready", cycle=cycle)
             _notify(on_event, "review_started", cycle=cycle)
             original = audit(review(product))
@@ -133,8 +142,15 @@ def audit_and_review(
                 decision=decision,
                 **dispute_plan.as_event_details(),
             )
-            if decision in {"approve", "approve_with_fix"}:
+            if decision == "approve":
                 return product
+            if decision == "approve_with_fix":
+                if revise_approve_with_fix is None:
+                    return product
+                _notify(on_event, "revision_started", cycle=cycle)
+                pending_revision = revise_approve_with_fix(product, original)
+                _notify(on_event, "revision_completed", cycle=cycle)
+                continue
 
             if dispute_plan.route == "local_regeneration":
                 _notify(

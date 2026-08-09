@@ -63,6 +63,100 @@ def test_evidence_bundle_binds_all_resource_drafts_to_one_identity() -> None:
         "business_data",
         "pedagogy",
     ]
+    assert bound["student_profile_ref"] == "line_leader"
+    assert bound["payload"]["content"]["learning_contract_id"] == (
+        evidence.contract_id
+    )
+    assert bound["payload"]["content"]["knowledge_point"] == (
+        evidence.knowledge_point
+    )
+    assert bound["payload"]["content"]["difficulty"] == evidence.difficulty
+    assert bound["payload"]["content"]["lineage_id"].startswith("lin-")
+    assert bound["payload"]["content"]["artifact_id"].startswith("art-")
+    assert bound["payload"]["content"]["generation_stage"] == "first_generation"
+
+
+def test_evidence_bundle_rejects_cross_target_resource_draft() -> None:
+    evidence = bundle()
+    draft = {
+        "payload": {
+            "type": "quiz_set",
+            "content": {
+                "knowledge_point": "其他知识点",
+                "difficulty": "advanced",
+            },
+        }
+    }
+
+    with pytest.raises(ValueError, match="knowledge_point"):
+        evidence.bind(draft)
+
+
+def test_evidence_bundle_requires_practice_scaffolds_to_match_bound_prerequisites() -> None:
+    evidence = EvidenceBundle(
+        contract_id="lc-advanced",
+        knowledge_point="完成率计算",
+        difficulty="advanced",
+        sources={
+            "knowledge": {
+                "chunk_ids": ["KB-003-B", "KB-009"],
+                "difficulty_fallback": False,
+                "prerequisite_bindings": [
+                    {
+                        "knowledge_point": "责任单元定位",
+                        "chunk_id": "KB-009",
+                        "learning_goal": "按执行单元下钻定位异常",
+                    }
+                ],
+            },
+            "business_data": {"template_id": "T-02-B"},
+            "pedagogy": {
+                "profile_id": "line_leader",
+                "lecture_style": "步骤化短句",
+                "misconceptions": [],
+            },
+        },
+    )
+    exact = {
+        "payload": {
+            "type": "practice_guide",
+            "content": {
+                "prerequisite_scaffolds": [
+                    {
+                        "knowledge_point": "责任单元定位",
+                        "chunk_id": "KB-009",
+                        "learning_goal": "按执行单元下钻定位异常",
+                    }
+                ]
+            },
+        }
+    }
+
+    bound = evidence.bind(exact)
+    assert bound["payload"]["content"]["prerequisite_scaffolds"] == [
+        {
+            "knowledge_point": "责任单元定位",
+            "chunk_id": "KB-009",
+            "learning_goal": "按执行单元下钻定位异常",
+        }
+    ]
+
+    mismatched = {
+        "payload": {
+            "type": "practice_guide",
+            "content": {
+                "prerequisite_scaffolds": [
+                    {
+                        "knowledge_point": "责任单元定位",
+                        "chunk_id": "KB-UNKNOWN",
+                        "learning_goal": "自行编造的前置要求",
+                    }
+                ]
+            },
+        }
+    }
+    with pytest.raises(ValueError, match="prerequisite_scaffolds"):
+        evidence.bind(mismatched)
 
 
 def test_evidence_bundle_control_message_contains_only_auditable_summary() -> None:

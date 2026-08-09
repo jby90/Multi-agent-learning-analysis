@@ -1,20 +1,30 @@
 from __future__ import annotations
 
-import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 
+from eval.v3_cases import load_formal_cases, load_gold_standard
 from eval.v3_formal_runner import (
     FormalCaseRunner,
     GoldLearnerActor,
-    run_seed,
     validate_frozen_task_gold,
 )
 from orchestrator.interactive_session import _is_vacuous_follow_up_answer
 
 
 def test_frozen_specification_gate_reports_declared_template_sql_mismatch():
+    contract = {
+        "knowledge_point": "异常识别标准",
+        "difficulty": "applied",
+        "payload_type": "practice_guide",
+        "family": "Q5",
+        "question_template": "查询各船排名",
+        "standard_sql": "SELECT month_label, complete_rate FROM monthly_rates",
+        "expected_rows": [{"month_label": "2025-05", "complete_rate": 0.9}],
+        "expected_points": ["按月比较"],
+    }
     conflicts = validate_frozen_task_gold(
         [{"case_id": "E2E-X"}],
         {
@@ -22,46 +32,47 @@ def test_frozen_specification_gate_reports_declared_template_sql_mismatch():
                 "目标知识点": "异常识别标准",
                 "预期初始难度": "applied",
                 "预期初始模板": "T-05-A",
-                "业务任务": "查询各船排名",
-                "标准SQL": "SELECT ship_no, complete_rate FROM ship_rates",
+                "初始难度": "applied",
+                "初始题型": "practice_guide",
+                "初始family": "Q5",
+                "初始业务任务": "查询各船排名",
+                "初始标准SQL": "SELECT ship_no, complete_rate FROM ship_rates",
+                "初始expected_rows": [{"month_label": "2025-05", "complete_rate": 0.9}],
+                "初始预期要点": "按月比较",
+                "预期最终难度": "applied",
+                "预期最终模板": "T-05-A",
+                "最终难度": "applied",
+                "最终题型": "practice_guide",
+                "最终family": "Q5",
+                "最终业务任务": "查询各船排名",
+                "最终标准SQL": "SELECT month_label, complete_rate FROM monthly_rates",
+                "最终expected_rows": [{"month_label": "2025-05", "complete_rate": 0.9}],
+                "最终预期要点": "按月比较",
             }
         },
         task_contracts={
-            "T-05": {
-                "standard_sql": "SELECT ship_no, complete_rate FROM ship_rates"
-            },
-            "T-05-A": {
-                "standard_sql": "SELECT month_label, complete_rate FROM monthly_rates"
-            },
+            "T-05": {**contract, "standard_sql": "SELECT ship_no, complete_rate FROM ship_rates"},
+            "T-05-A": contract,
         },
     )
 
     assert conflicts == [
         {
             "case_id": "E2E-X",
-            "conflict_type": "initial_template_sql_mismatch",
+            "stage": "初始",
+            "conflict_type": "template_contract_mismatch",
             "knowledge_point": "异常识别标准",
             "declared_difficulty": "applied",
             "declared_template": "T-05-A",
-            "business_task": "查询各船排名",
+            "mismatched_fields": ["standard_sql"],
             "sql_matching_templates": ["T-05"],
         }
     ]
 
 
-def test_formal_seed_stops_before_live_calls_when_frozen_case_is_incompatible(
-    tmp_path: Path,
-):
-    with pytest.raises(ValueError, match="blocked before live calls"):
-        run_seed("seed_A", tmp_path, mode="live", case_id="E2E-027")
-
-    report = json.loads(
-        (tmp_path / "frozen_specification_conflicts.json").read_text(encoding="utf-8")
-    )
-    assert report["status"] == "blocked_frozen_specification_conflict"
-    assert report["conflict_count"] == 1
-    assert report["conflicts"][0]["case_id"] == "E2E-027"
-    assert not (tmp_path / "raw_traces").exists()
+def test_v3_2_frozen_specification_matches_all_initial_and_final_templates():
+    cases = [asdict(case) for case in load_formal_cases()]
+    assert validate_frozen_task_gold(cases, load_gold_standard()) == []
 
 
 class FakeManager:
@@ -248,6 +259,44 @@ def test_wrong_formal_learner_answer_is_evidence_bearing_and_accepted_by_input_g
     assert "工序" in answer
     assert "完成率" in answer
     assert "9999" in answer
+
+
+def test_formal_learner_answer_respects_the_production_input_limit():
+    point = (
+        "数据可见范围内，YCL 2025-05=0.6236是最早的时序候选，"
+        "ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501构成后续候选节点；"
+        "只到候选链，不确认传导；须补同一工作包、物量依赖路径、下游齐套暴露、"
+        "源头与落点执行单元、共同因素及下游本地异常证据，才能收窄候选。"
+    )
+    actor = GoldLearnerActor(
+        {"case_id": "E2E-047", "标准SQL": "SELECT 1", "预期要点": point}
+    )
+    rows = [
+        {
+            "process_code": process,
+            "month_label": f"2025-{month:02d}",
+            "complete_rate": f"{rate:.4f}",
+        }
+        for process, month, rate in (
+            (process, month, 0.6 + month / 100)
+            for process in ("AZTP", "YCL", "ZZTP")
+            for month in range(4, 8)
+        )
+    ]
+    state = {
+        "messages": [
+            {
+                "payload": {
+                    "content": {"event": "query_completed", "rows": rows}
+                }
+            }
+        ]
+    }
+
+    answer = actor.follow_up_answer(state, "S-KEEP-A")
+
+    assert len(answer) <= 500
+    assert "YCL 2025-05=0.6236" in answer
 
 
 def test_formal_runner_tolerates_bounded_quality_review_retries(tmp_path: Path):

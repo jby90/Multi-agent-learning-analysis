@@ -674,6 +674,40 @@ def test_learning_action_selects_a_task_from_the_same_catalog_strategy(
     assert message["evidence"][0]["ref"] == expected_template_id
 
 
+def test_learning_action_preserves_the_learner_profile_binding() -> None:
+    message = _task_module().TaskAgent(
+        "trace-learning-action-profile",
+    ).generate_for_learning_action(
+        "T-01-A",
+        "step_up",
+        student_profile=_planner_profile(),
+    )
+
+    assert message is not None
+    assert message["student_profile_ref"] == "planner_new"
+    assert message["payload"]["content"]["difficulty"] == "advanced"
+
+
+def test_quiz_anchor_can_project_an_answer_safe_practice_guide() -> None:
+    guide = _task_module().TaskAgent(
+        "trace-practice-projection",
+    ).generate_practice_guide(
+        "T-01",
+        diagnostic_difficulty="basic",
+        student_profile=_planner_profile(),
+    )
+
+    content = guide["payload"]["content"]
+    assert guide["payload"]["type"] == "practice_guide"
+    assert guide["student_profile_ref"] == "planner_new"
+    assert content["template_id"] == "T-01"
+    assert content["difficulty"] == "basic"
+    assert len(content["guide_steps"]) == 3
+    assert len(content["completion_criteria"]) == 2
+    serialized = json.dumps(guide, ensure_ascii=False)
+    assert "SELECT ship_no" not in serialized
+
+
 def test_learning_action_reports_catalog_boundaries_without_fake_tiers() -> None:
     module = _task_module()
     production_agent = module.TaskAgent("trace-production-learning-boundary")
@@ -1498,6 +1532,36 @@ def test_remaining_transmission_tasks_limit_r03_to_direct_prerequisite_blind_spo
     for (template_id, difficulty), expected_scope in expected_scopes.items():
         message = agent.generate(template_id, diagnostic_difficulty=difficulty)
         assert message["payload"]["content"]["responsibility_scope"] == expected_scope
+
+
+def test_advanced_practice_guides_bind_external_prerequisites_into_visible_scaffolds() -> None:
+    agent = _task_module().TaskAgent("trace-advanced-prerequisite-scaffolds")
+
+    expected = {
+        "T-02-B": ("责任单元定位", "KB-009"),
+        "T-08-DECAY-B": ("三道工序与传导关系", "KB-001-B"),
+        "T-06-B": ("三道工序与传导关系", "KB-001-B"),
+    }
+    for template_id, (knowledge_point, chunk_id) in expected.items():
+        guide = agent.generate_practice_guide(
+            template_id,
+            diagnostic_difficulty="advanced",
+        )
+        content = guide["payload"]["content"]
+        assert content["prerequisite_scaffolds"] == [
+            {
+                "knowledge_point": knowledge_point,
+                "chunk_id": chunk_id,
+                "learning_goal": content["prerequisite_scaffolds"][0][
+                    "learning_goal"
+                ],
+            }
+        ]
+        assert content["prerequisite_scaffolds"][0]["learning_goal"]
+        assert knowledge_point in content["guide_md"]
+        assert content["prerequisite_scaffolds"][0]["learning_goal"] in content[
+            "guide_md"
+        ]
 
 
 def test_task_exposes_template_sql_shape_as_structured_query_authority() -> None:

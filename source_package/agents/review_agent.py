@@ -313,9 +313,52 @@ def _grounded_coverage(
     product: Mapping[str, Any],
     chunks: Sequence[KnowledgeChunk],
 ) -> tuple[str, ...]:
-    if _payload(product).get("type") != "lecture_note":
-        return ()
+    payload_type = _payload(product).get("type")
     content = _content(product)
+    if payload_type == "practice_guide":
+        guide = content.get("guide_md")
+        scaffolds = content.get("prerequisite_scaffolds")
+        if not isinstance(guide, str) or not isinstance(scaffolds, list):
+            return ()
+        knowledge_point = content.get("knowledge_point")
+        difficulty = content.get("difficulty")
+        if not isinstance(knowledge_point, str):
+            return ()
+        candidates = tuple(
+            chunk
+            for chunk in chunks
+            if chunk.knowledge_point == knowledge_point
+            and (difficulty is None or chunk.difficulty == difficulty)
+        )
+        chunks_by_id = _catalog_by_id(chunks)
+        allowed_ids = {
+            prerequisite_id
+            for chunk in candidates
+            for prerequisite_id in chunk.prerequisites
+        }
+        grounded: list[str] = []
+        for scaffold in scaffolds:
+            if not isinstance(scaffold, Mapping):
+                continue
+            chunk_id = scaffold.get("chunk_id")
+            point = scaffold.get("knowledge_point")
+            learning_goal = scaffold.get("learning_goal")
+            chunk = chunks_by_id.get(str(chunk_id))
+            if (
+                chunk is None
+                or chunk.chunk_id not in allowed_ids
+                or point != chunk.knowledge_point
+                or learning_goal != chunk.learning_goal
+                or chunk.knowledge_point == knowledge_point
+                or chunk.knowledge_point not in guide
+                or chunk.learning_goal not in guide
+            ):
+                continue
+            if chunk.knowledge_point not in grounded:
+                grounded.append(chunk.knowledge_point)
+        return tuple(grounded)
+    if payload_type != "lecture_note":
+        return ()
     lecture = content.get("lecture_md")
     if not isinstance(lecture, str):
         return ()

@@ -346,6 +346,23 @@ class _DemoRuntime:
             )
         return result.bus_result.message
 
+    def passive_audit(self, draft: Mapping[str, Any]) -> dict[str, Any]:
+        """Validate and append companion evidence without driving the FSM.
+
+        Some resources are generated and reviewed in parallel with the active
+        learning artefact.  They must remain visible in the append-only TRACE,
+        but they are not state-machine inputs and therefore must not be sent to
+        ``OrchestratorEngine.send``.  The message bus still assigns the
+        envelope, validates the canonical schema and rejects closed traces.
+        """
+
+        result = self.bus.send(self.prepare(draft))
+        if not result.accepted:
+            raise DemoSessionError(
+                f"passive audit message rejected: {result.errors}"
+            )
+        return result.message
+
     def resolve_review_fallback(
         self,
         product: Mapping[str, Any],

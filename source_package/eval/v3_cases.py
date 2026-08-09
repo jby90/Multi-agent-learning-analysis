@@ -10,8 +10,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT_PATH = ROOT / "eval" / "cases" / "v3_1" / "formal_50_inputs_v3_1.json"
-GOLD_PATH = ROOT / "eval" / "gold" / "v3_1" / "formal_50_gold_v3_1.json"
+INPUT_PATH = ROOT / "eval" / "cases" / "v3_2" / "formal_50_inputs_v3_2.json"
+GOLD_PATH = ROOT / "eval" / "gold" / "v3_2" / "formal_50_gold_v3_2.json"
 _FORBIDDEN_RUNTIME_KEYS = {
     "knowledge_point",
     "template_id",

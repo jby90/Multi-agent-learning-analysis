@@ -49,3 +49,50 @@ def responsibility_scope(
             ):
                 scope.append(prerequisite.knowledge_point)
     return tuple(scope)
+
+
+def prerequisite_scaffolds(
+    knowledge_point: str,
+    difficulty: str | None = None,
+    *,
+    chunks: Sequence[KnowledgeChunk] | None = None,
+) -> tuple[dict[str, str], ...]:
+    """Return auditable direct prerequisites outside the current point.
+
+    Lower difficulty chunks of the same point remain part of the knowledge
+    lineage, but R-03 only needs an explicit bridge when the advanced resource
+    crosses into another knowledge point.  Each bridge is copied from approved
+    chunk metadata so a guide cannot invent its own prerequisite description.
+    """
+
+    if not isinstance(knowledge_point, str) or not knowledge_point.strip():
+        raise ValueError("knowledge_point must be a non-empty string")
+    point = knowledge_point.strip()
+    catalog = tuple(chunks) if chunks is not None else _approved_chunks()
+    candidates = tuple(
+        chunk
+        for chunk in catalog
+        if chunk.knowledge_point == point
+        and (difficulty is None or chunk.difficulty == difficulty)
+    )
+    by_id = {chunk.chunk_id: chunk for chunk in catalog}
+    seen_points: set[str] = set()
+    scaffolds: list[dict[str, str]] = []
+    for chunk in sorted(candidates, key=lambda item: item.chunk_id):
+        for prerequisite_id in chunk.prerequisites:
+            prerequisite = by_id.get(prerequisite_id)
+            if (
+                prerequisite is None
+                or prerequisite.knowledge_point == point
+                or prerequisite.knowledge_point in seen_points
+            ):
+                continue
+            scaffolds.append(
+                {
+                    "knowledge_point": prerequisite.knowledge_point,
+                    "chunk_id": prerequisite.chunk_id,
+                    "learning_goal": prerequisite.learning_goal,
+                }
+            )
+            seen_points.add(prerequisite.knowledge_point)
+    return tuple(scaffolds)

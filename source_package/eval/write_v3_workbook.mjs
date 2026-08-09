@@ -21,12 +21,13 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv);
 const dataDir = path.resolve(args["data-dir"]);
-const reportFiles = (await fs.readdir(dataDir)).filter((name) => /^metrics_.*_v3\.json$/.test(name));
+const reportFiles = (await fs.readdir(dataDir)).filter((name) => /^metrics_.*_v3(?:_2)?\.json$/.test(name));
 if (reportFiles.length !== 1) throw new Error(`expected one metrics JSON in ${dataDir}`);
+const versionSuffix = (await fs.readdir(dataDir)).includes("facts_v3_2.json") ? "v3_2" : "v3";
 const [facts, nodes, cells, report] = await Promise.all([
-  fs.readFile(path.join(dataDir, "facts_v3.json"), "utf8").then(JSON.parse),
-  fs.readFile(path.join(dataDir, "adaptation_nodes_v3.json"), "utf8").then(JSON.parse),
-  fs.readFile(path.join(dataDir, "coverage_30_cells_v3.json"), "utf8").then(JSON.parse),
+  fs.readFile(path.join(dataDir, `facts_${versionSuffix}.json`), "utf8").then(JSON.parse),
+  fs.readFile(path.join(dataDir, `adaptation_nodes_${versionSuffix}.json`), "utf8").then(JSON.parse),
+  fs.readFile(path.join(dataDir, `coverage_30_cells_${versionSuffix}.json`), "utf8").then(JSON.parse),
   fs.readFile(path.join(dataDir, reportFiles[0]), "utf8").then(JSON.parse),
 ]);
 
@@ -96,15 +97,16 @@ const nodeHeaders = [
   "downstream_artifact_id","expected_downstream_difficulty","actual_downstream_difficulty","due_node","trigger_binding_valid",
   "action_gold_match","after_state_consistent","downstream_executed","node_success","first_gen_transaction_id",
   "r03_reviewed_first_gen","r03_rejected_first_gen","human_mismatch_confirmed","r03_repair_approved","final_residual_mismatch",
-  "non_keep","adjudicator",
+  "non_keep","effective_adaptation","adjudicator",
 ];
 const coverageHeaders = [
-  "knowledge_point","difficulty","case_id","route_mode","route_reachable","route_evidence_valid","lecture_pass","practice_pass",
-  "quiz_pass","feedback_pass","review_pass","evidence_pass","cell_pass",
+  "coverage_cell_id","seed_id","knowledge_point","difficulty","case_id","route_mode","route_reachable","route_evidence_valid",
+  "learning_contract_match","profile_resource_match","lecture_pass","practice_pass","quiz_pass","feedback_pass","review_pass",
+  "evidence_pass","cell_pass","human_gate",
 ];
 writeRows("02_事实内容单元", factHeaders, facts, 3003, ["auto_label", "auto_hallucination_reason"]);
 writeRows("03_适配节点", nodeHeaders, nodes, 1003);
-writeRows("04_覆盖30格", coverageHeaders, cells, 200, ["human_gate"]);
+writeRows("04_覆盖30格", coverageHeaders, cells, 200);
 
 const summary = workbook.worksheets.getItem("00_指标汇总");
 summary.getRange("A1:J40").clear({ applyTo: "contents" });
@@ -120,7 +122,7 @@ const headers = ["层级","指标","自动分子","自动分母","自动结果",
 summary.getRange("A4:J4").values = [headers];
 const metricDefs = [
   ["核心","最终发布幻觉率","final_hallucination_rate","<5%","最终批准发布且经复核为幻觉的事实单元 / 最终发布事实单元"],
-  ["核心","画像—资源难度适配准确率","difficulty_adaptation_accuracy",">=85%","成功适配节点 / 全部应适配节点"],
+  ["核心","有效自动适配率","effective_automatic_adaptation_rate",">=85%","发生有效自动适配的交互节点 / 全部需适配交互节点"],
   ["核心","主域严格闭环覆盖率","strict_closed_loop_coverage",">=90%","三档完整闭环知识点 / 10"],
   ["辅助","幻觉拦截率","hallucination_interception_rate","高为好","首次生成错误且自动阻断 / 首次生成错误"],
   ["辅助","原生教学适配失配率","native_teaching_adaptation_mismatch_rate","低为好","R-03首轮确认失配事务 / 首次R-03审核事务"],
@@ -152,7 +154,14 @@ summary.getRange("A5:J9").format.borders = { preset: "all", style: "thin", color
 summary.getRange("A12:E12").format = { fill: "#EAF2F8", font: { bold: true } };
 summary.getRange("A15:D15").format = { fill: "#EAF2F8", font: { bold: true } };
 summary.getRange("A1:J20").format.autofitColumns();
+summary.getRange("A5:J9").format.wrapText = true;
+summary.getRange("A5:J9").format.rowHeight = 34;
+summary.getRange("A1:A20").format.columnWidth = 12;
 summary.getRange("B1:B20").format.columnWidth = 30;
+summary.getRange("C1:D20").format.columnWidth = 12;
+summary.getRange("E1:E20").format.columnWidth = 13;
+summary.getRange("F1:H20").format.columnWidth = 16;
+summary.getRange("I1:I20").format.columnWidth = 14;
 summary.getRange("J1:J20").format.columnWidth = 55;
 
 const errorScan = await workbook.inspect({
@@ -177,9 +186,9 @@ await fs.mkdir(path.resolve(args["preview-dir"]), { recursive: true });
 const previewRanges = {
   "00_指标汇总": "A1:J17",
   "01_TRACE字段": "A1:H80",
-  "02_事实内容单元": `A1:${columnName(factHeaders.length + 2)}${Math.max(8, facts.length + 4)}`,
-  "03_适配节点": `A1:${columnName(nodeHeaders.length)}${Math.max(8, nodes.length + 4)}`,
-  "04_覆盖30格": `A1:${columnName(coverageHeaders.length + 1)}${Math.max(8, cells.length + 4)}`,
+  "02_事实内容单元": `A1:${columnName(factHeaders.length + 2)}${Math.min(40, Math.max(8, facts.length + 4))}`,
+  "03_适配节点": `A1:${columnName(nodeHeaders.length)}${Math.min(40, Math.max(8, nodes.length + 4))}`,
+  "04_覆盖30格": `A1:${columnName(coverageHeaders.length)}${Math.min(70, Math.max(8, cells.length + 4))}`,
 };
 for (const sheetName of Object.keys(previewRanges)) {
   const preview = await workbook.render({

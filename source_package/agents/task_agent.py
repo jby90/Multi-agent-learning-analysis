@@ -15,7 +15,7 @@ from typing import Any, Callable, Mapping
 from orchestrator.llm import LLMResult
 
 from agents.domain_config import DomainConfig, active_domain_config
-from agents.knowledge_scope import responsibility_scope
+from agents.knowledge_scope import prerequisite_scaffolds, responsibility_scope
 from agents.query_authority import QueryAuthority, build_query_authority
 
 
@@ -519,12 +519,20 @@ class TaskAgent:
         self,
         knowledge_point: str,
         diagnostic_difficulty: str,
+        *,
+        student_profile: Mapping[str, Any] | None = None,
+        learning_report_summary: str | None = None,
     ) -> dict[str, Any]:
         anchor = self.diagnosis_evidence(
             knowledge_point,
             diagnostic_difficulty,
         )
-        return self.generate(str(anchor["template_id"]))
+        return self.generate(
+            str(anchor["template_id"]),
+            diagnostic_difficulty=diagnostic_difficulty,
+            student_profile=student_profile,
+            learning_report_summary=learning_report_summary,
+        )
 
     def diagnosis_evidence(
         self,
@@ -562,6 +570,9 @@ class TaskAgent:
         self,
         current_template_id: str,
         action: str,
+        *,
+        student_profile: Mapping[str, Any] | None = None,
+        learning_report_summary: str | None = None,
     ) -> dict[str, Any] | None:
         template_id = _string(current_template_id, "current template_id")
         learning_action = _string(action, "learning action")
@@ -589,6 +600,8 @@ class TaskAgent:
         return self.generate_for_diagnosis(
             current.knowledge_point,
             target_difficulty,
+            student_profile=student_profile,
+            learning_report_summary=learning_report_summary,
         )
 
     def generate(
@@ -658,6 +671,21 @@ class TaskAgent:
                 _render(step, self._catalog.demo_parameters)
                 for step in entry.guide_steps
             ]
+            scaffolds = [
+                dict(item)
+                for item in prerequisite_scaffolds(
+                    entry.knowledge_point,
+                    entry.difficulty,
+                )
+            ]
+            scaffold_steps = [
+                "前置检查："
+                + str(item["knowledge_point"])
+                + "——"
+                + str(item["learning_goal"])
+                for item in scaffolds
+            ]
+            guide_steps = [*scaffold_steps, *guide_steps]
             completion_criteria = [
                 _render(criterion, self._catalog.demo_parameters)
                 for criterion in entry.completion_criteria
@@ -668,6 +696,7 @@ class TaskAgent:
             content.update(
                 {
                     "guide_intro": guide_intro,
+                    "prerequisite_scaffolds": scaffolds,
                     "guide_steps": guide_steps,
                     "completion_criteria": completion_criteria,
                     "guide_md": "\n\n".join(
@@ -763,6 +792,104 @@ class TaskAgent:
             }
         )
         payload["type"] = "quiz_set"
+        return draft
+
+    def generate_practice_guide(
+        self,
+        template_id: str,
+        *,
+        diagnostic_difficulty: str | None = None,
+        student_profile: Mapping[str, Any] | None = None,
+        learning_report_summary: str | None = None,
+    ) -> dict[str, Any]:
+        """Return a guide-shaped resource for every deterministic task anchor.
+
+        Some frozen task anchors are graded ``quiz_set`` products.  The strict
+        learning loop also requires an answer-safe practice guide.  This
+        projection adds method scaffolding only; it never exposes standard SQL
+        or expected rows and does not change template routing.
+        """
+
+        draft = deepcopy(
+            self._generate(
+                template_id,
+                diagnostic_difficulty=diagnostic_difficulty,
+                student_profile=student_profile,
+                learning_report_summary=learning_report_summary,
+            )
+        )
+        payload = draft["payload"]
+        content = payload["content"]
+        scaffolds = [
+            dict(item)
+            for item in prerequisite_scaffolds(
+                str(content["knowledge_point"]),
+                str(content["difficulty"]),
+            )
+        ]
+        scaffold_steps = [
+            "前置检查："
+            + str(item["knowledge_point"])
+            + "——"
+            + str(item["learning_goal"])
+            for item in scaffolds
+        ]
+        if payload["type"] == "practice_guide":
+            content.setdefault("resource_kind", "guided_practice")
+            if scaffolds and not content.get("prerequisite_scaffolds"):
+                content["prerequisite_scaffolds"] = scaffolds
+                content["guide_steps"] = [
+                    *scaffold_steps,
+                    *list(content.get("guide_steps", ())),
+                ]
+                content["guide_md"] = "\n\n".join(
+                    (
+                        str(content.get("guide_md", "")),
+                        "## 前置知识检查\n\n"
+                        + "\n".join(f"- {step}" for step in scaffold_steps),
+                    )
+                ).strip()
+            return draft
+        question = content.get("question") or content.get("contextualized_stem")
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("practice guide question must be a non-empty string")
+        content.pop("questions", None)
+        guide_intro = "先确认题目对象、时间范围、比较维度和统计口径，再开始查询。"
+        guide_steps = [
+            *scaffold_steps,
+            "从题目中识别需要返回的字段、筛选条件和分组维度。",
+            "使用只读查询获得结果，并核对行数、单位与统计口径。",
+            "依据查询结果中的字段和值形成结论，区分数据事实与业务推断。",
+        ]
+        completion_criteria = [
+            "查询结果与题目对象、范围和统计口径一致。",
+            "结论明确引用查询结果中的字段和值，且未把相关性写成因果性。",
+        ]
+        content.update(
+            {
+                "resource_kind": "guided_practice",
+                "prerequisite_scaffolds": scaffolds,
+                "guide_intro": guide_intro,
+                "guide_steps": guide_steps,
+                "completion_criteria": completion_criteria,
+                "guide_md": "\n\n".join(
+                    (
+                        f"## 实操目标\n\n{question}",
+                        f"## 开始前\n\n{guide_intro}",
+                        "## 操作步骤\n\n"
+                        + "\n".join(
+                            f"{index}. {step}"
+                            for index, step in enumerate(guide_steps, start=1)
+                        ),
+                        "## 完成标准\n\n"
+                        + "\n".join(
+                            f"- {criterion}" for criterion in completion_criteria
+                        ),
+                    )
+                ),
+            }
+        )
+        payload["type"] = "practice_guide"
         return draft
 
     def counter_evidence(

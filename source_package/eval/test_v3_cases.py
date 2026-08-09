@@ -26,3 +26,5 @@ def test_v3_gold_is_separate_and_covers_the_same_case_ids() -> None:
     assert set(gold) == {case.case_id for case in cases}
     assert all("目标知识点" in row for row in gold.values())
     assert all("标准SQL" in row for row in gold.values())
+    assert all("初始标准SQL" in row and "最终标准SQL" in row for row in gold.values())
+    assert all("预期初始模板" in row and "预期最终模板" in row for row in gold.values())
