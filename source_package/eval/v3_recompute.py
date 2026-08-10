@@ -195,23 +195,30 @@ def recompute(
 
 def render_markdown(report: Mapping[str, Any]) -> str:
     labels = {
-        "final_hallucination_rate": "最终发布幻觉率",
-        "effective_automatic_adaptation_rate": "有效自动适配率",
-        "strict_closed_loop_coverage": "核心知识点完整闭环覆盖率",
+        "final_hallucination_rate": "最终发布幻觉率（赛题核心）",
+        "profile_resource_difficulty_adaptation_accuracy": "学员画像—资源难度适配准确率（赛题核心）",
+        "strict_closed_loop_coverage": "核心知识点完整闭环覆盖率（赛题核心）",
+        "effective_automatic_adaptation_rate": "动态有效调整率（创新诊断，不作为赛题≥85%门槛）",
         "hallucination_interception_rate": "幻觉拦截率（辅助）",
         "native_teaching_adaptation_mismatch_rate": "原生教学适配失配率（辅助，低为好）",
     }
     lines = [
-        f"# v3.2 五指标复算｜{report['mode']}",
+        f"# v3.2 赛题三项核心指标与辅助诊断复算｜{report['mode']}",
         "",
         "> 自动初算不是最终成绩；最终模式仅在双人复核、必要仲裁和覆盖门禁齐全后生成。",
+        "> 赛题适配准确率按每会话初始画像—资源难度匹配节点计算；动态有效调整率仅用于观察后续交互中的真实路径/难度变化，不与赛题85%门槛混用。",
         "",
     ]
     for scope, result in [("两轮合并", report["combined"]), *report["by_seed"].items()]:
         lines.extend([f"## {scope}", "", "| 指标 | 分子 | 分母 | 百分比 |", "|---|---:|---:|---:|"])
         for key, value in result["metrics"].items():
+            rendered_percentage = (
+                "N/A"
+                if value.get("denominator_zero")
+                else f"{value['percentage']:.4f}%"
+            )
             lines.append(
-                f"| {labels[key]} | {value['numerator']} | {value['denominator']} | {value['percentage']:.4f}% |"
+                f"| {labels[key]} | {value['numerator']} | {value['denominator']} | {rendered_percentage} |"
             )
         lines.append("")
     return "\n".join(lines)

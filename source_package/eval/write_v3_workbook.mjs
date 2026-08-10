@@ -111,7 +111,7 @@ writeRows("04_覆盖30格", coverageHeaders, cells, 200);
 const summary = workbook.worksheets.getItem("00_指标汇总");
 summary.getRange("A1:J40").clear({ applyTo: "contents" });
 summary.getRange("A1:J1").merge();
-summary.getRange("A1").values = [["TRACE v3｜三项核心指标 + 两项辅助KPI"]];
+summary.getRange("A1").values = [["TRACE v3｜赛题三项核心指标 + 三项辅助/创新诊断"]];
 summary.getRange("A2:J2").merge();
 summary.getRange("A2").values = [[
   report.mode === "AUTO_PRELIMINARY"
@@ -122,8 +122,9 @@ const headers = ["层级","指标","自动分子","自动分母","自动结果",
 summary.getRange("A4:J4").values = [headers];
 const metricDefs = [
   ["核心","最终发布幻觉率","final_hallucination_rate","<5%","最终批准发布且经复核为幻觉的事实单元 / 最终发布事实单元"],
-  ["核心","有效自动适配率","effective_automatic_adaptation_rate",">=85%","发生有效自动适配的交互节点 / 全部需适配交互节点"],
+  ["核心","画像—资源难度适配准确率","profile_resource_difficulty_adaptation_accuracy",">=85%","画像诊断后知识点、初始难度、证据绑定与下游资源均命中冻结金标的会话 / 全部正式会话"],
   ["核心","主域严格闭环覆盖率","strict_closed_loop_coverage",">=90%","三档完整闭环知识点 / 10"],
+  ["创新诊断","动态有效调整率","effective_automatic_adaptation_rate","诊断项，不设赛题门槛","真实交互后实际改变路径、难度、任务复杂度或追问的有效节点 / 全部需适配节点；keep可正确但不计分子"],
   ["辅助","幻觉拦截率","hallucination_interception_rate","高为好","首次生成错误且自动阻断 / 首次生成错误"],
   ["辅助","原生教学适配失配率","native_teaching_adaptation_mismatch_rate","低为好","R-03首轮确认失配事务 / 首次R-03审核事务"],
 ];
@@ -132,11 +133,13 @@ const finalResult = report.mode === "FINAL_HUMAN_REVIEWED" ? report.combined : n
 const summaryRows = metricDefs.map(([level,label,key,direction,note]) => {
   const a = auto.metrics[key];
   const f = finalResult?.metrics[key];
-  return [level,label,a.numerator,a.denominator,a.percentage / 100,f?.numerator ?? "PENDING_HUMAN",f?.denominator ?? "PENDING_HUMAN",f ? f.percentage / 100 : "PENDING_HUMAN",direction,note];
+  const automaticDisplay = a.denominator_zero ? "N/A" : a.percentage / 100;
+  const finalDisplay = f ? (f.denominator_zero ? "N/A" : f.percentage / 100) : "PENDING_HUMAN";
+  return [level,label,a.numerator,a.denominator,automaticDisplay,f?.numerator ?? "PENDING_HUMAN",f?.denominator ?? "PENDING_HUMAN",finalDisplay,direction,note];
 });
-summary.getRange("A5:J9").values = summaryRows;
-summary.getRange("E5:E9").format.numberFormat = "0.00%";
-if (finalResult) summary.getRange("H5:H9").format.numberFormat = "0.00%";
+summary.getRange("A5:J10").values = summaryRows;
+summary.getRange("E5:E10").format.numberFormat = "0.00%";
+if (finalResult) summary.getRange("H5:H10").format.numberFormat = "0.00%";
 summary.getRange("A12:E12").values = [["运行范围","案例数","事实单元","适配节点","覆盖格"]];
 summary.getRange("A13:E13").values = [["Seed A + Seed B",Object.values(report.seed_case_counts).reduce((a,b)=>a+b,0),report.row_counts.fact_units,report.row_counts.adaptation_nodes,report.row_counts.coverage_cells]];
 summary.getRange("A15:D15").values = [["辅助链路","首次错误/事务","成功拦截/修复","最终残留"]];
@@ -150,12 +153,12 @@ summary.freezePanes.freezeRows(4);
 summary.getRange("A1:J1").format = { fill: "#123A5A", font: { bold: true, color: "#FFFFFF", size: 16 }, rowHeight: 34 };
 summary.getRange("A2:J2").format = { fill: report.mode === "AUTO_PRELIMINARY" ? "#FFF4CE" : "#DCFCE7", font: { bold: true, color: "#5B4B00" }, wrapText: true, rowHeight: 30 };
 summary.getRange("A4:J4").format = { fill: "#DCEAF7", font: { bold: true, color: "#17324D" }, wrapText: true, borders: { preset: "all", style: "thin", color: "#B7C9D8" } };
-summary.getRange("A5:J9").format.borders = { preset: "all", style: "thin", color: "#D7E0E8" };
+summary.getRange("A5:J10").format.borders = { preset: "all", style: "thin", color: "#D7E0E8" };
 summary.getRange("A12:E12").format = { fill: "#EAF2F8", font: { bold: true } };
 summary.getRange("A15:D15").format = { fill: "#EAF2F8", font: { bold: true } };
 summary.getRange("A1:J20").format.autofitColumns();
-summary.getRange("A5:J9").format.wrapText = true;
-summary.getRange("A5:J9").format.rowHeight = 34;
+summary.getRange("A5:J10").format.wrapText = true;
+summary.getRange("A5:J10").format.rowHeight = 38;
 summary.getRange("A1:A20").format.columnWidth = 12;
 summary.getRange("B1:B20").format.columnWidth = 30;
 summary.getRange("C1:D20").format.columnWidth = 12;

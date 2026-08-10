@@ -11,6 +11,7 @@ from eval.v3_metrics import (
     build_fact_units,
     compute_v3_metrics,
 )
+from eval.v3_recompute import render_markdown
 
 
 def _message(step: int, *, role: str, payload_type: str, content: dict, **extra):
@@ -360,6 +361,12 @@ def test_final_mode_uses_agreed_human_labels_without_overwriting_auto():
     assert facts[0]["auto_label"] == "SUPPORTED"
     assert facts[0]["human_label"] == "SUPPORTED"
     assert result["metrics"]["final_hallucination_rate"]["numerator"] == 0
+    assert result["metrics"]["profile_resource_difficulty_adaptation_accuracy"] == {
+        "numerator": 1,
+        "denominator": 1,
+        "percentage": 100.0,
+        "denominator_zero": False,
+    }
     assert result["metrics"]["effective_automatic_adaptation_rate"] == {
         "numerator": 1,
         "denominator": 2,
@@ -414,3 +421,22 @@ def test_final_hallucination_label_requires_an_eligible_rule_hit():
             mode="FINAL_HUMAN_REVIEWED",
             human_review=review,
         )
+
+
+def test_markdown_renders_zero_denominator_as_not_applicable():
+    report = {
+        "mode": "AUTO_PRELIMINARY",
+        "combined": {
+            "metrics": {
+                "hallucination_interception_rate": {
+                    "numerator": 0,
+                    "denominator": 0,
+                    "percentage": 0.0,
+                    "denominator_zero": True,
+                }
+            }
+        },
+        "by_seed": {},
+    }
+
+    assert "| 幻觉拦截率（辅助） | 0 | 0 | N/A |" in render_markdown(report)

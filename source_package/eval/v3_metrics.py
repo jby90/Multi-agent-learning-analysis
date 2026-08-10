@@ -886,7 +886,7 @@ def compute_v3_metrics(
     mode: str,
     human_review: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Compute three core metrics and two auxiliary KPIs with provenance."""
+    """Compute competition core metrics plus auxiliary diagnostic KPIs."""
 
     if mode not in VALID_MODES:
         raise ValueError(f"unsupported v3 recomputation mode: {mode}")
@@ -899,6 +899,23 @@ def compute_v3_metrics(
     final_hallucinations = sum(int(row["final_hallucination_numerator"]) for row in fact_rows)
     due_nodes = sum(int(row["due_node"]) for row in adaptation_rows)
     effective_nodes = sum(int(row.get("effective_adaptation", 0)) for row in adaptation_rows)
+    initial_route_nodes = [
+        row
+        for row in adaptation_rows
+        if int(row.get("due_node", 0)) == 1
+        and str(row.get("node_type") or "") == "initial_route"
+    ]
+    profile_resource_matches = sum(
+        int(
+            int(row.get("trigger_binding_valid", 0)) == 1
+            and int(row.get("action_gold_match", 0)) == 1
+            and int(row.get("after_state_consistent", 0)) == 1
+            and int(row.get("downstream_executed", 0)) == 1
+            and str(row.get("expected_downstream_difficulty") or "")
+            == str(row.get("actual_downstream_difficulty") or "")
+        )
+        for row in initial_route_nodes
+    )
     by_seed_point: dict[str, dict[str, set[str]]] = defaultdict(
         lambda: defaultdict(set)
     )
@@ -959,8 +976,11 @@ def compute_v3_metrics(
         ),
         "metrics": {
             "final_hallucination_rate": _rate(final_hallucinations, final_fact_denominator),
-            "effective_automatic_adaptation_rate": _rate(effective_nodes, due_nodes),
+            "profile_resource_difficulty_adaptation_accuracy": _rate(
+                profile_resource_matches, len(initial_route_nodes)
+            ),
             "strict_closed_loop_coverage": _rate(covered_points, 10),
+            "effective_automatic_adaptation_rate": _rate(effective_nodes, due_nodes),
             "hallucination_interception_rate": _rate(intercepted, native_errors),
             "native_teaching_adaptation_mismatch_rate": _rate(
                 mismatch_numerator, mismatch_denominator
@@ -970,6 +990,8 @@ def compute_v3_metrics(
             "first_generation_errors": native_errors,
             "automatically_intercepted": intercepted,
             "final_residual_hallucinations": final_hallucinations,
+            "official_initial_adaptation_nodes": len(initial_route_nodes),
+            "official_profile_resource_matches": profile_resource_matches,
             "first_generation_r03_transactions": mismatch_denominator,
             "confirmed_r03_mismatches": mismatch_numerator,
             "r03_repaired_and_approved": sum(item["repair"] for item in first_gen_transactions.values()),
