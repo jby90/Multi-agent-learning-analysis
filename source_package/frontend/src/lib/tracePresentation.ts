@@ -436,10 +436,14 @@ export function verificationFailureCopy(
     }
   }
   if (event === 'template_authority_rejected') {
+    const fallback = '查询结构与本题目标尚未完全对应，请核对对象、月份、筛选条件和分组维度后重试。'
     return {
       event,
       title: '查询内容需要调整',
-      learnerMessage: '本题的查询未通过数据安全检查，请调整后重试。',
+      learnerMessage: learnerTextOr(
+        typeof content.student_message === 'string' ? content.student_message : fallback,
+        fallback,
+      ),
     }
   }
   if (event === 'query_empty') {

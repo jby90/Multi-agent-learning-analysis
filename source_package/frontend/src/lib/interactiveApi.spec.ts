@@ -32,7 +32,7 @@ describe('interactiveApi', () => {
     vi.stubGlobal('fetch', fetchMock)
     const api = createInteractiveApi('http://127.0.0.1:8765')
 
-    const created = await api.createSession('planner_new')
+    const created = await api.createSession('planner_new', ['variance_risk_monitoring'])
     const polled = await api.getState('session-1')
 
     expect(created).toEqual(state)
@@ -42,7 +42,10 @@ describe('interactiveApi', () => {
       'http://127.0.0.1:8765/api/sessions',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ profile_id: 'planner_new' }),
+        body: JSON.stringify({
+          profile_id: 'planner_new',
+          experience_tags: ['variance_risk_monitoring'],
+        }),
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(

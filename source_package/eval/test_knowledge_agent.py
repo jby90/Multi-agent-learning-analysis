@@ -464,6 +464,50 @@ def test_missing_direct_prerequisite_gets_one_grounded_foundation_atom() -> None
     assert "模型自报的不可信覆盖" not in draft["payload"]["content"]["coverage"]
 
 
+def test_prerequisite_identity_sentence_cannot_rename_the_current_lesson() -> None:
+    target = make_chunk(
+        "KB-TARGET",
+        "跨工序归因方法",
+        body="跨工序归因需要编排异常、时序与证据缺口。",
+        prerequisites=("KB-PREREQ",),
+    )
+    prerequisite = make_chunk(
+        "KB-PREREQ",
+        "异常衰减规律",
+        body=(
+            '（本知识点名为"异常衰减规律"，实际指异常强度沿链变化。）'
+            "异常判断需要比较相邻工序的强度变化。"
+        ),
+        sentences=(
+            '（本知识点名为"异常衰减规律"，实际指异常强度沿链变化。）',
+            "异常判断需要比较相邻工序的强度变化。",
+        ),
+    )
+    data = {
+        "lecture_md": "# 跨工序归因方法\n先编排目标工序的证据。",
+        "claims": [
+            {
+                "text": "跨工序归因需要编排证据。",
+                "kind": "fact",
+                "chunk_id": "KB-TARGET",
+                "sentence_ref": [1],
+            }
+        ],
+        "coverage": ["跨工序归因方法"],
+    }
+    agent, _, _ = build_agent(llm_data=data, chunks=(target, prerequisite))
+
+    draft = agent.generate(
+        knowledge_point="跨工序归因方法",
+        student_profile=PLANNER_PROFILE,
+        learning_report_summary="需要补充跨工序证据编排。",
+    )
+
+    lecture = draft["payload"]["content"]["lecture_md"]
+    assert '本知识点名为"异常衰减规律"' not in lecture
+    assert "异常判断需要比较相邻工序的强度变化。" in lecture
+
+
 def test_structural_lead_ref_expands_original_list_sentences_as_evidence() -> None:
     sentences = (
         "引言。",

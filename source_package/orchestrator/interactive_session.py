@@ -58,7 +58,9 @@ from agents.verification_agent import (
     _output_aliases,
     _render_claims,
     _result_is_empty,
+    query_authority_issue,
 )
+from agents.query_authority import query_authority_from_mapping
 from coordination.contracts import LearningContract
 from coordination.evidence_bundle import EvidenceBundle
 from coordination.evaluation import build_coordination_evidence
@@ -814,6 +816,13 @@ class InteractiveSessionManager:
                     }
                     for item in remaining[:1]
                 ],
+                "provisional_route": {
+                    "knowledge_point": str(remaining[0]["knowledge_point"]),
+                    "difficulty": str(remaining[0]["difficulty"]),
+                    "reason": "基础探针已通过，继续用同一知识点的应用探针校准起始难度。",
+                    "evidence_source": "diagnostic_probe",
+                    "evidence_ids": sorted(completed_ids),
+                },
             }
             return self.get_state(session_id)
         diagnosis = session.runtime.diagnosis.assess(
@@ -1990,7 +1999,34 @@ class InteractiveSessionManager:
                 )
             ),
         )
-        if companion_lecture is None or companion_practice is None:
+        companion_assessment = self._review_auxiliary_resource(
+            session,
+            lambda: evidence_bundle.bind(
+                runtime.task.generate_assessment(
+                    str(target_content["template_id"]),
+                    diagnostic_difficulty=str(target_difficulty),
+                    student_profile=runtime.profile,
+                )
+            ),
+        )
+        if (
+            companion_lecture is None
+            or companion_practice is None
+            or companion_assessment is None
+        ):
+            self._finish_system_error(session)
+            return self.get_state(session.session_id)
+        try:
+            resource_bundle = ResourceBundle.build(
+                contract_id=evidence_bundle.contract_id,
+                evidence_bundle_id=evidence_bundle.bundle_id,
+                products={
+                    "knowledge": companion_lecture,
+                    "practice": companion_practice,
+                    "assessment": companion_assessment,
+                },
+            )
+        except ValueError:
             self._finish_system_error(session)
             return self.get_state(session.session_id)
         path = runtime.transition(
@@ -2027,15 +2063,7 @@ class InteractiveSessionManager:
         session.active_task = task
         session.learning_task = task
         session.lecture = companion_lecture
-        session.resource_bundle = ResourceBundle.build(
-            contract_id=evidence_bundle.contract_id,
-            evidence_bundle_id=evidence_bundle.bundle_id,
-            products={
-                "knowledge": companion_lecture,
-                "practice": companion_practice,
-                "assessment": task,
-            },
-        )
+        session.resource_bundle = resource_bundle
         session.task_phase = "progression"
         session.pending_learning_action = None
         session.artifact = task
@@ -3512,6 +3540,23 @@ class InteractiveSessionManager:
                     "S-04",
                     f"output columns do not match the {family} contract",
                 )
+            if query_authority is not None:
+                try:
+                    authority_issue = query_authority_issue(
+                        str(sql),
+                        query_authority_from_mapping(query_authority),
+                    )
+                except ValueError as exc:
+                    authority_issue = str(exc)
+                if authority_issue is not None:
+                    return self._record_template_authority_rejection(
+                        session,
+                        question=question,
+                        family=family,
+                        sql=str(sql),
+                        query_authority=query_authority,
+                        reason=authority_issue,
+                    )
             executed_sql = str(decision.executed_sql)
             session.query_count += 1
             query_id = (
@@ -3633,6 +3678,67 @@ class InteractiveSessionManager:
             str(decision.rule_id),
             str(decision.reason),
         )
+
+    def _record_template_authority_rejection(
+        self,
+        session: _InteractiveSession,
+        *,
+        question: str,
+        family: str,
+        sql: str,
+        query_authority: Mapping[str, Any],
+        reason: str,
+    ) -> dict[str, Any]:
+        """Return an immutable learner SQL draft for correction, not regeneration.
+
+        The ordinary Review loop can regenerate model-authored resources.  A
+        learner submission is immutable, so repeatedly reviewing the same SQL
+        cannot repair a missing task filter.  The existing T21 verification
+        failure route returns control to S7 without changing the state graph or
+        weakening any Review rule.
+        """
+
+        failure = self._record_verification_failure(
+            session,
+            {
+                "trace_id": session.runtime.options.trace_id,
+                "agent": "verification",
+                "role": "produce",
+                "payload": {
+                    "type": "sql_result",
+                    "content": {
+                        "event": "template_authority_rejected",
+                        "question": question,
+                        "family": family,
+                        "generated_sql": sql,
+                        "sql_source": "student",
+                        "query_authority": dict(query_authority),
+                        "student_message": (
+                            "查询结构与本题目标尚未完全对应，请核对题目指定的"
+                            "对象、月份、筛选条件和分组维度后重试。"
+                        ),
+                    },
+                },
+                "evidence": [
+                    {
+                        "kind": "review_rule",
+                        "ref": "QUERY_AUTHORITY",
+                        "quote": reason,
+                    }
+                ],
+                "claims": [],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        session.artifact = failure
+        self._register_sql_failure(
+            session,
+            student_message=str(
+                _payload_content(failure).get("student_message")
+                or "查询结构与本题目标尚未完全对应，请修改后重试。"
+            ),
+        )
+        return self.get_state(session.session_id)
 
     def _record_sql_rejection(
         self,

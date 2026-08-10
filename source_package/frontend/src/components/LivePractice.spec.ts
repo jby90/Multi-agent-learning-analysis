@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   InteractiveApi,
+  InteractiveDiagnosticProbe,
   InteractivePretestQuestion,
   InteractiveState,
 } from '../lib/interactiveApi'
@@ -95,6 +96,63 @@ describe('LivePractice', () => {
     vi.useRealTimers()
   })
 
+  it('refreshes the next diagnostic probe and clears the previous answer', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const diagnosticState = sessionState({
+      awaiting: 'diagnostic_probe',
+      interaction: {
+        kind: 'supplemental_diagnosis',
+        title: '补充诊断',
+        message: '需要完成两道校准探针。',
+        questions: [],
+      },
+    })
+    const basic: InteractiveDiagnosticProbe = {
+      probe_id: 'DP-02-B',
+      knowledge_point: '偏差率与风险等级',
+      difficulty: 'basic',
+      stem: '基础探针',
+    }
+    const applied: InteractiveDiagnosticProbe = {
+      probe_id: 'DP-02-A',
+      knowledge_point: '偏差率与风险等级',
+      difficulty: 'applied',
+      stem: '应用探针',
+    }
+    vi.mocked(api.getState).mockResolvedValue(diagnosticState)
+    vi.mocked(api.getDiagnosticProbes)
+      .mockResolvedValueOnce([basic])
+      .mockResolvedValueOnce([applied])
+    vi.mocked(api.submitDiagnosticProbes).mockResolvedValue(diagnosticState)
+
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+    await wrapper.get('.diagnostic-probe-question textarea').setValue('基础探针答案')
+    await wrapper.get('.diagnostic-probe-form').trigger('submit')
+    await flushPromises()
+
+    expect(api.getDiagnosticProbes).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('应用探针')
+    expect(wrapper.text()).not.toContain('基础探针答案')
+    expect(wrapper.get('.diagnostic-probe-question textarea').element)
+      .toHaveProperty('value', '')
+  })
+
+  it('passes the optional learner experience focus into session creation', async () => {
+    const api = fakeApi()
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+
+    await wrapper.get('#experience-focus').setValue('decay_pattern_review')
+    await wrapper.findAll('.profile-choice')[0]!.trigger('click')
+    await flushPromises()
+
+    expect(api.createSession).toHaveBeenCalledWith(
+      'planner_new',
+      ['decay_pattern_review'],
+    )
+  })
+
   it('shows progressive teacher hints without revealing a complete SQL answer', async () => {
     sessionStorage.setItem('ref-interactive-session', 'session-live')
     const api = fakeApi()
@@ -108,10 +166,10 @@ describe('LivePractice', () => {
           knowledge_point: '三道工序与传导关系',
           difficulty: 'basic',
           query_authority: {
-            output_columns: ['process_code', 'completion_rate'],
-            filter_columns: ['ship_no', 'period_date'],
+            output_columns: ['process_code', 'complete_rate'],
+            filter_columns: ['ship_no', 'process_code', 'period_date'],
             group_by_columns: ['process_code'],
-            time_values: ['2025-05'],
+            time_values: ['2025-05', '2025-06', '2025-07'],
           },
         } },
       }],
@@ -123,6 +181,9 @@ describe('LivePractice', () => {
     await wrapper.get('.sql-teacher-hint button').trigger('click')
     await wrapper.get('.sql-teacher-hint button').trigger('click')
     expect(wrapper.get('.sql-teacher-hint').text()).toContain('工序、完成率')
+    await wrapper.get('.sql-teacher-hint button').trigger('click')
+    await wrapper.get('.sql-teacher-hint button').trigger('click')
+    expect(wrapper.get('.sql-teacher-hint').text()).toContain('工序与月份一一对应')
     expect(wrapper.get('.sql-teacher-hint').text()).not.toContain('SELECT process_code')
   })
 
@@ -413,6 +474,8 @@ describe('LivePractice', () => {
     await button.trigger('click')
 
     expect(api.advance).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[role="status"]').text()).toContain('并行生成并通过专业审核')
+    expect(button.text()).toContain('正在生成并审核')
     finishAdvance(sessionState({ state: 'S3_TASK', awaiting: 'advance' }))
     await flushPromises()
   })
@@ -1028,7 +1091,7 @@ describe('LivePractice', () => {
     {
       event: 'template_authority_rejected',
       outcome: 'safe_rejected',
-      expected: '本题的查询未通过数据安全检查，请调整后重试。',
+      expected: '查询结构与本题目标尚未完全对应，请核对对象、月份、筛选条件和分组维度后重试。',
     },
     {
       event: 'query_empty',
@@ -1434,6 +1497,52 @@ describe('LivePractice', () => {
 
     expect(api.getState).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('第 2 / 最多 4 轮')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('reconciles a quality-interrupted follow-up that stays on the same round', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const before = sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '请引用查询结果说明判断。',
+        round: 2,
+        max_rounds: 4,
+        turns: [{ round: 1, question: '上一题', answer: '上一答' }],
+      },
+    })
+    const retained = sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '请引用查询结果说明判断。',
+        round: 2,
+        max_rounds: 4,
+        turns: [{ round: 1, question: '上一题', answer: '上一答' }],
+        feedback: '本轮新追问暂时未能通过质量检查，请按原问题重试。',
+        next_step_reason: '质量门保持当前轮次，未丢失会话进度。',
+        retry_required: true,
+      },
+    })
+    vi.mocked(api.getState)
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(retained)
+    vi.mocked(api.submitFollowUp).mockRejectedValue(new InteractiveApiError(
+      '服务暂时不可用，请稍后再试。',
+      'external_unavailable',
+    ))
+
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+    await wrapper.get('textarea[aria-label="输入你的判断"]').setValue('YCL完成率为0.6236。')
+    await wrapper.get('button[aria-label="提交本轮判断"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('本轮新追问暂时未能通过质量检查')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 

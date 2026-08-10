@@ -492,7 +492,7 @@ const practiceHints = computed(() => {
   const filters = guideStringList(record?.filter_columns).map(dataFieldLabel)
   const groups = guideStringList(record?.group_by_columns).map(dataFieldLabel)
   const timeValues = guideStringList(record?.time_values)
-  return [
+  const hints = [
     '先确认题目对象、时间范围和需要比较的指标，再开始查询。',
     outputs.length
       ? `结果至少应包含：${outputs.join('、')}。`
@@ -503,6 +503,10 @@ const practiceHints = computed(() => {
       groups.length ? `结果需要按${groups.join('、')}进行比较` : '',
     ].filter(Boolean).join('；') || '提交前核对结果行数、单位和统计口径。',
   ]
+  if (filters.includes('工序') && timeValues.length > 1) {
+    hints.push('题目把多个工序与月份一一对应时，筛选条件也要保留这种对应关系，不能只查询整个总时间范围。')
+  }
+  return hints
 })
 
 const taskMisconception = computed(() => {

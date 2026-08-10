@@ -976,6 +976,36 @@ select {
   text-align: right;
 }
 
+.profile-route-focus {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 6px;
+}
+
+.profile-route-focus label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.profile-route-focus select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 34px 0 12px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  background: #f5f7fa;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.profile-route-focus small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .live-practice,
 .live-step-guide {
   padding: 22px;

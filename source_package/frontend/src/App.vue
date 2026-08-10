@@ -570,7 +570,12 @@ onMounted(() => {
         :coordination-evidence="liveState?.coordination_evidence"
         learner-workspace-target="#collaboration-learner-workspace"
       />
-      <LearningPath v-if="liveView" :view="liveView" :catalog="knowledgeCatalog" />
+      <LearningPath
+        v-if="liveView"
+        :view="liveView"
+        :catalog="knowledgeCatalog"
+        :state="liveState"
+      />
       <FloatingAgentAssistant
         v-if="viewMode === 'student' && liveView"
         :view="liveView"

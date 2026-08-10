@@ -4,6 +4,7 @@ WORKDIR /workspace/source_package/frontend
 COPY source_package/frontend/package.json source_package/frontend/package-lock.json ./
 RUN npm ci
 COPY source_package/agents/ /workspace/source_package/agents/
+COPY source_package/config/ /workspace/source_package/config/
 COPY source_package/traces/ /workspace/source_package/traces/
 COPY source_package/frontend/ ./
 RUN npm run build

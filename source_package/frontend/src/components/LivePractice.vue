@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import profiles from 'virtual:profile-catalog'
+import diagnosticExperienceTags from 'virtual:diagnostic-experience-tags'
 
 import {
   createInteractiveApi,
@@ -46,6 +47,7 @@ const session = ref<InteractiveState>()
 const questions = ref<InteractivePretestQuestion[]>([])
 const answers = ref<Record<string, string>>({})
 const diagnosticProbes = ref<InteractiveDiagnosticProbe[]>([])
+const selectedExperienceTag = ref('')
 const diagnosticAnswers = ref<Record<string, string>>({})
 const pretestPage = ref(0)
 const sqlText = ref('')
@@ -237,6 +239,7 @@ function fieldLabel(value: string): string {
   const labels: Record<string, string> = {
     ship_no: '船号', process_code: '工序', period_date: '月份',
     plan_qty: '计划量', actual_qty: '实际完成量', completion_rate: '完成率',
+    complete_rate: '完成率', month_label: '月份', workshop_code: '责任单元',
   }
   return labels[value] ?? value
 }
@@ -250,7 +253,7 @@ const sqlHints = computed(() => {
   const filters = stringList(record?.filter_columns).map(fieldLabel)
   const groups = stringList(record?.group_by_columns).map(fieldLabel)
   const times = stringList(record?.time_values)
-  return [
+  const hints = [
     '先确定题目要求返回什么，再写一条 SELECT 查询；输入错误不会修改数据库，也不会丢失当前训练进度。',
     outputs.length
       ? `结果列应能回答题目，重点检查：${outputs.join('、')}。`
@@ -261,6 +264,10 @@ const sqlHints = computed(() => {
       groups.length ? `需要按${groups.join('、')}分组比较` : '',
     ].filter(Boolean).join('；') + '。',
   ]
+  if (filters.includes('工序') && times.length > 1) {
+    hints.push('题目把多个工序与月份一一对应时，筛选条件也要保留这种对应关系，不能只查询整个总时间范围。')
+  }
+  return hints
 })
 
 watch(activeTaskIdentity, (current, previous) => {
@@ -355,6 +362,9 @@ function followUpProgressed(
     previousInteraction?.kind !== 'free_text_follow_up'
     || currentInteraction?.kind !== 'free_text_follow_up'
   ) return false
+  if (currentInteraction.retry_required) return true
+  if (currentInteraction.feedback !== previousInteraction.feedback) return true
+  if (currentInteraction.next_step_reason !== previousInteraction.next_step_reason) return true
   return currentInteraction.round > previousInteraction.round
     || currentInteraction.turns.length > previousInteraction.turns.length
 }
@@ -393,7 +403,10 @@ async function selectProfile(profileId: string): Promise<void> {
   busy.value = true
   errorMessage.value = ''
   try {
-    const created = await api.createSession(profileId)
+    const created = await api.createSession(
+      profileId,
+      selectedExperienceTag.value ? [selectedExperienceTag.value] : [],
+    )
     sessionStorage.setItem(sessionStorageKey, created.session_id)
     connectAgentEvents(created.session_id)
     applyState(created)
@@ -466,10 +479,15 @@ async function submitDiagnosticProbes(): Promise<void> {
   busy.value = true
   errorMessage.value = ''
   try {
-    applyState(await api.submitDiagnosticProbes(
+    const value = await api.submitDiagnosticProbes(
       session.value.session_id,
       diagnosticAnswers.value,
-    ))
+    )
+    applyState(value)
+    if (value.awaiting === 'diagnostic_probe') {
+      diagnosticProbes.value = await api.getDiagnosticProbes(value.session_id)
+      diagnosticAnswers.value = {}
+    }
   } catch (error) {
     errorMessage.value = publicRequestError(error, '补充诊断暂时无法提交。')
   } finally {
@@ -670,7 +688,18 @@ onBeforeUnmount(() => {
         <span class="section-kicker">选择训练路径</span>
         <h2>哪一种经历最接近你？</h2>
       </div>
-      <p>三个岗位共享相同培养目标，但学习内容与难度会因人而异。</p>
+      <div class="profile-route-focus">
+        <label for="experience-focus">训练关注点（可选）</label>
+        <select id="experience-focus" v-model="selectedExperienceTag" :disabled="busy">
+          <option value="">由岗前测评自动诊断</option>
+          <option
+            v-for="tag in diagnosticExperienceTags"
+            :key="tag.tag_id"
+            :value="tag.tag_id"
+          >{{ learnerText(tag.label) }} · {{ learnerText(tag.knowledge_point) }}</option>
+        </select>
+        <small>仅用于选择固定诊断探针，不直接指定知识点或答案。</small>
+      </div>
     </header>
 
     <div v-if="!session" class="profile-choice-grid">
@@ -836,7 +865,10 @@ onBeforeUnmount(() => {
         :aria-label="advanceAction"
         :disabled="busy"
         @click="advance"
-      >{{ advanceAction }}</button>
+      >{{ busy ? '正在生成并审核，请稍候…' : advanceAction }}</button>
+      <p v-if="busy" class="generation-progress" role="status" aria-live="polite">
+        领域知识、实操任务与分阶测验正在并行生成并通过专业审核，请保持页面打开。
+      </p>
     </div>
 
     <div

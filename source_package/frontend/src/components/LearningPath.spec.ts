@@ -7,6 +7,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import catalog from 'virtual:knowledge-catalog'
+import type { InteractiveState } from '../lib/interactiveApi'
 import { buildTraceView } from '../lib/traceModel'
 import { parseTraceJsonl } from '../lib/traceParser'
 import type { TraceMessage, TraceView } from '../types/trace'
@@ -108,5 +109,74 @@ describe('LearningPath', () => {
     expect(wrapper.get('.path-node.is-planned').text()).toContain('下一步：完成率计算')
     expect(wrapper.get('.path-node.is-planned').text()).toContain('应用档')
     expect(wrapper.findAll('.path-node').length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('prefers the current live artifact over an older trace path summary', () => {
+    const state: InteractiveState = {
+      session_id: 'live-route',
+      trace_id: 'interactive-live-route',
+      trace_path: 'traces/interactive-live-route.jsonl',
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages: [],
+      artifact: {
+        payload: {
+          type: 'lecture_note',
+          content: { knowledge_point: '异常衰减规律', difficulty: 'basic' },
+        },
+      },
+      interaction: null,
+      current_difficulty: 'basic',
+    }
+    const stale = pathView({
+      ...update,
+      content: {
+        ...update.content,
+        summary: '下一步：三道工序与传导关系。',
+        current_node: '三道工序与传导关系',
+      },
+    })
+
+    const wrapper = mount(LearningPath, {
+      props: { view: stale, catalog, state },
+    })
+
+    expect(wrapper.text()).toContain('当前训练：异常衰减规律')
+    expect(wrapper.text()).not.toContain('下一步：三道工序与传导关系')
+  })
+
+  it('shows the provisional probe route instead of the preliminary fallback', () => {
+    const state: InteractiveState = {
+      session_id: 'probe-route',
+      trace_id: 'interactive-probe-route',
+      trace_path: 'traces/interactive-probe-route.jsonl',
+      state: 'S1_DIAGNOSIS',
+      awaiting: 'diagnostic_probe',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages: [],
+      artifact: {
+        payload: {
+          type: 'diagnosis_report',
+          content: { selected_knowledge_point: '三道工序与传导关系' },
+        },
+      },
+      interaction: {
+        kind: 'supplemental_diagnosis',
+        title: '补充诊断',
+        message: '等待探针',
+        questions: [],
+        provisional_route: { knowledge_point: '偏差率与风险等级' },
+      },
+    }
+
+    const wrapper = mount(LearningPath, {
+      props: { view: pathView(update), catalog, state },
+    })
+
+    expect(wrapper.text()).toContain('当前训练：偏差率与风险等级')
+    expect(wrapper.text()).not.toContain('当前训练：三道工序与传导关系')
   })
 })

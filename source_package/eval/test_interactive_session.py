@@ -23,6 +23,7 @@ from agents.sandbox import (
 )
 from agents.review_agent import ReviewAgent
 from agents.task_agent import TaskAgent, load_task_catalog
+from coordination.resource_bundle import ResourceBundle
 from eval.test_demo_session import ScriptedLLM, _review_reject_fixture
 from orchestrator.demo_session import DemoSessionError
 from orchestrator.interactive_session import (
@@ -314,6 +315,13 @@ def test_all_correct_pretest_requires_at_most_two_frozen_probes_before_t02(
         {"DP-01-B": "YCL→ZZTP→AZTP。"},
     )
     assert calibrated["awaiting"] == "diagnostic_probe"
+    assert calibrated["interaction"]["provisional_route"] == {
+        "knowledge_point": "三道工序与传导关系",
+        "difficulty": "applied",
+        "reason": "基础探针已通过，继续用同一知识点的应用探针校准起始难度。",
+        "evidence_source": "diagnostic_probe",
+        "evidence_ids": ["DP-01-B"],
+    }
     assert [
         item["probe_id"] for item in manager.get_diagnostic_probes(session_id)
     ] == ["DP-01-A"]
@@ -1386,6 +1394,46 @@ def test_submit_sql_executes_student_sql_without_text2sql_and_takes_t11_to_t13(
     assert transitions[-3:] == ["T11", "T12", "T13"]
 
 
+def test_submit_sql_with_missing_task_filter_returns_to_student_without_review_loop(
+    tmp_path: Path,
+) -> None:
+    executor = RecordingExecutor()
+    manager, session_id = start_sql_session(tmp_path, executor)
+    task = manager.get_state(session_id)["artifact"]["payload"]["content"]
+    authority = task["query_authority"]
+    missing_filter = (
+        "process_code"
+        if "process_code" in authority["filter_columns"]
+        else str(authority["filter_columns"][0])
+    )
+    submitted_sql = load_task_catalog().templates[task["template_id"]].standard_sql
+    submitted_sql = submitted_sql.replace(
+        f"AND {missing_filter}='YCL' ",
+        "",
+    ).replace(
+        f"WHERE {missing_filter}='YCL' AND ",
+        "WHERE ",
+    )
+    assert missing_filter not in submitted_sql
+
+    outcome = manager.submit_sql(session_id, submitted_sql)
+
+    content = outcome["artifact"]["payload"]["content"]
+    assert content["event"] == "template_authority_rejected"
+    assert "对象、月份、筛选条件和分组维度" in content["student_message"]
+    assert outcome["state"] == "S7_STUDENT"
+    assert outcome["awaiting"] == "sql"
+    assert outcome["outcome"] == "safe_rejected"
+    assert executor.sql == []
+    transitions = [
+        message["payload"]["content"].get("transition_id")
+        for message in outcome["messages"]
+        if message["payload"]["content"].get("transition_id")
+    ]
+    assert transitions[-2:] == ["T11", "T21"]
+    assert not any(message["role"] == "rebuttal" for message in outcome["messages"])
+
+
 def test_submit_sql_keeps_empty_results_out_of_the_state_machine(
     tmp_path: Path,
 ) -> None:
@@ -1623,6 +1671,120 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     next_lecture = manager.advance(continued["session_id"])
     assert next_lecture["state"] == "S3_TASK"
     assert next_lecture["artifact"]["payload"]["content"]["knowledge_point"] == "完成率计算"
+
+
+def test_planner_three_process_progression_keeps_three_resource_branches_valid(
+    tmp_path: Path,
+) -> None:
+    executor = CatalogExecutor()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=mastered_follow_up(),
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
+    )
+    manager.advance(session_id)
+    initial_task = manager.advance(session_id)
+    initial_content = initial_task["artifact"]["payload"]["content"]
+    assert initial_content["template_id"] == "T-03"
+
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-03"].standard_sql,
+    )
+    manager.advance(session_id)
+    manager.submit_follow_up(
+        session_id,
+        "YCL工序完成率最低，为0.6236。",
+        "planner-progression-1",
+    )
+    answered = manager.submit_follow_up(
+        session_id,
+        "YCL工序完成率最低，为0.6236。",
+        "planner-progression-2",
+    )
+    assert answered["state"] == "S9_PATH_UPDATE"
+
+    upgraded = manager.advance(session_id)
+
+    upgraded_content = upgraded["artifact"]["payload"]["content"]
+    branches = {
+        branch["branch_id"]: branch
+        for branch in upgraded["resource_bundle"]["branches"]
+    }
+    assert upgraded["state"] == "S7_STUDENT"
+    assert upgraded["awaiting"] == "sql"
+    assert upgraded_content["template_id"] == "T-03-A"
+    assert upgraded_content["difficulty"] == "applied"
+    assert branches["knowledge"]["payload_type"] == "lecture_note"
+    assert branches["practice"]["payload_type"] == "practice_guide"
+    assert branches["assessment"]["payload_type"] == "quiz_set"
+    assert all(branch["status"] == "ready" for branch in branches.values())
+
+
+def test_progression_bundle_validation_failure_finishes_without_stuck_advance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executor = CatalogExecutor()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=mastered_follow_up(),
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-03"].standard_sql,
+    )
+    manager.advance(session_id)
+    manager.submit_follow_up(
+        session_id,
+        "YCL工序完成率最低，为0.6236。",
+        "bundle-failure-1",
+    )
+    answered = manager.submit_follow_up(
+        session_id,
+        "YCL工序完成率最低，为0.6236。",
+        "bundle-failure-2",
+    )
+    transitions_before = [
+        message["payload"]["content"].get("transition_id")
+        for message in answered["messages"]
+        if message["payload"]["content"].get("transition_id")
+    ]
+
+    def reject_bundle(*_: Any, **__: Any) -> ResourceBundle:
+        raise ValueError("invalid resource bundle")
+
+    monkeypatch.setattr(ResourceBundle, "build", reject_bundle)
+    stopped = manager.advance(session_id)
+    transitions_after = [
+        message["payload"]["content"].get("transition_id")
+        for message in stopped["messages"]
+        if message["payload"]["content"].get("transition_id")
+    ]
+
+    assert stopped["awaiting"] == "done"
+    assert stopped["outcome"] == "system_error"
+    assert transitions_after == transitions_before
+    assert stopped["termination"]["reason_code"] == "model_unavailable"
 
 
 def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(

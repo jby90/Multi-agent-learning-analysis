@@ -499,6 +499,12 @@ class KnowledgeAgent:
                 and public_text
                 and not _MARKDOWN_HEADING_RE.match(raw_sentence)
                 and not _EXAMPLE_PREFIX_RE.match(public_text)
+                # A prerequisite may explain the current topic, but its own
+                # presentation metadata must never be injected as if it named
+                # the current lesson.  This keeps cross-topic scaffolding while
+                # preventing sentences such as “本知识点名为……” from changing
+                # the learner-visible topic identity.
+                and "本知识点名为" not in public_text
             ):
                 return reference
         return None

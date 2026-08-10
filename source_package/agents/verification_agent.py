@@ -191,7 +191,7 @@ def _authority_columns(node: exp.Expression | None) -> frozenset[str]:
     )
 
 
-def _query_authority_issue(
+def query_authority_issue(
     sql: str, authority: QueryAuthority
 ) -> str | None:
     try:
@@ -321,7 +321,7 @@ class VerificationAgent:
                 query_authority=authority_content,
             )
         if authority is not None:
-            authority_issue = _query_authority_issue(generated_sql, authority)
+            authority_issue = query_authority_issue(generated_sql, authority)
             if authority_issue is not None:
                 return self._failure_draft(
                     event="template_authority_rejected",

@@ -141,6 +141,7 @@ export interface InteractiveTrainingReport {
 type InteractiveFeedback = {
   feedback?: string
   next_step_reason?: string
+  retry_required?: boolean
 }
 
 export type InteractiveInteraction =
@@ -272,7 +273,7 @@ export interface AgentActivityEvent {
 }
 
 export interface InteractiveApi {
-  createSession(profileId: string): Promise<InteractiveState>
+  createSession(profileId: string, experienceTags?: string[]): Promise<InteractiveState>
   getState(sessionId: string): Promise<InteractiveState>
   getPretest(sessionId: string): Promise<InteractivePretestQuestion[]>
   getDiagnosticProbes(sessionId: string): Promise<InteractiveDiagnosticProbe[]>
@@ -362,10 +363,10 @@ export function createInteractiveApi(
   }
 
   return {
-    createSession: (profileId) => request(
+    createSession: (profileId, experienceTags = []) => request(
       '/api/sessions',
       'POST',
-      { profile_id: profileId },
+      { profile_id: profileId, experience_tags: experienceTags },
     ),
     getState: (sessionId) => request(
       `/api/sessions/${encodeURIComponent(sessionId)}`,
