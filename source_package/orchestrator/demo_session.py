@@ -715,6 +715,8 @@ def _summary(
     profile: Mapping[str, Any],
     diagnosis: Mapping[str, Any],
     probe_result: Mapping[str, Any],
+    *,
+    knowledge_point: str | None = None,
 ) -> str:
     diagnosis_content = _payload_content(diagnosis)
     score = diagnosis_content.get("pretest_score")
@@ -722,14 +724,33 @@ def _summary(
     if isinstance(score, Mapping):
         score_text = f"岗前测评{score.get('correct')}/{score.get('total')}"
     rows = _payload_content(probe_result).get("rows")
-    comparison = "已用真实查询区分计划量与实际完成量"
-    if isinstance(rows, list) and rows and isinstance(rows[0], Mapping):
-        plan = rows[0].get("plan_qty")
-        actual = rows[0].get("actual_qty")
-        comparison = f"反证查询显示计划量{plan}、实际完成量{actual}"
+    point = str(
+        knowledge_point
+        or diagnosis_content.get("selected_knowledge_point")
+        or "当前知识点"
+    )
+    result_rows = [row for row in rows if isinstance(row, Mapping)] if isinstance(rows, list) else []
+    plan_actual_row = next(
+        (
+            row
+            for row in result_rows
+            if row.get("plan_qty") is not None and row.get("actual_qty") is not None
+        ),
+        None,
+    )
+    if plan_actual_row is not None:
+        comparison = (
+            f"反证查询显示计划量{plan_actual_row['plan_qty']}、"
+            f"实际完成量{plan_actual_row['actual_qty']}，"
+            "完成了计划量与实际量口径核对"
+        )
+    elif result_rows:
+        comparison = f"已基于{len(result_rows)}行真实查询结果完成「{point}」的证据核对"
+    else:
+        comparison = f"已完成「{point}」的学习与理解核对"
     return (
         f"{profile['title']}完成{score_text}与岗位微课；{comparison}，"
-        "修正了计划量与实际量混淆，进入下一阶段培养。"
+        "进入下一阶段培养。"
     )
 
 

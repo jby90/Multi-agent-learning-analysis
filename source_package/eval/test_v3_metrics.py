@@ -125,6 +125,131 @@ def test_auto_preliminary_keeps_human_fact_label_pending():
     assert rows[0]["published_final"] == 1
 
 
+def test_rejected_fact_bearing_question_without_claims_enters_human_review_queue():
+    diagnosis = _run()["messages"][0]
+    product = _message(
+        2,
+        role="probe",
+        payload_type="quiz_set",
+        content={
+            "event": "follow_up_question_ready",
+            "follow_up_round": 1,
+            "template_id": "T-02-A",
+            "question": "YCL完成率最低，数值为0.6236，这说明了什么？",
+        },
+        agent="task",
+    )
+    review = _message(
+        3,
+        role="verdict",
+        payload_type="review_verdict",
+        content={"reviewed_msg_id": product["msg_id"]},
+        verdict={
+            "decision": "reject",
+            "rule_hits": [{"rule_id": "R-04", "reason": "数值缺少证据绑定"}],
+        },
+        agent="review",
+    )
+    run = {**_run(), "messages": [diagnosis, product, review]}
+
+    rows = build_fact_units([run], mode="AUTO_PRELIMINARY")
+
+    assert len(rows) == 1
+    assert rows[0]["unit_kind"] == "fact_candidate"
+    assert rows[0]["content_text"] == product["payload"]["content"]["question"]
+    assert rows[0]["human_label"] == "PENDING_HUMAN"
+    assert rows[0]["auto_label"] == "HALLUCINATION"
+    assert rows[0]["native_error_denominator"] == 1
+    assert rows[0]["interception_numerator"] == 1
+
+
+def test_rejected_then_approved_candidate_is_intercepted_but_not_final_residual():
+    diagnosis = _run()["messages"][0]
+    product = _message(
+        2,
+        role="probe",
+        payload_type="quiz_set",
+        content={
+            "event": "follow_up_question_ready",
+            "follow_up_round": 1,
+            "template_id": "T-02-A",
+            "question": "查询结果中AZTP在2025-05的完成率是多少？",
+        },
+        agent="task",
+    )
+    rejected = _message(
+        3,
+        role="verdict",
+        payload_type="review_verdict",
+        content={"reviewed_msg_id": product["msg_id"]},
+        verdict={
+            "decision": "reject",
+            "rule_hits": [{"rule_id": "R-02", "reason": "首次未绑定证据"}],
+        },
+        agent="review",
+    )
+    approved = _message(
+        4,
+        role="re_verdict",
+        payload_type="review_verdict",
+        content={"reviewed_msg_id": product["msg_id"]},
+        verdict={"decision": "approve", "rule_hits": []},
+        agent="review",
+    )
+    run = {**_run(), "messages": [diagnosis, product, rejected, approved]}
+
+    rows = build_fact_units([run], mode="AUTO_PRELIMINARY")
+
+    assert len(rows) == 1
+    assert rows[0]["published_final"] == 1
+    assert rows[0]["native_error_denominator"] == 1
+    assert rows[0]["interception_numerator"] == 1
+    assert rows[0]["final_hallucination_numerator"] == 0
+    assert rows[0]["auto_label"] == "SUPPORTED"
+
+
+def test_retried_question_counts_only_first_attempt_as_native_generation():
+    diagnosis = _run()["messages"][0]
+    products = []
+    messages = [diagnosis]
+    for offset, question in enumerate((
+        "YCL完成率最低，数值为0.6236，这说明了什么？",
+        "YCL完成率为0.6236，这说明了什么？",
+    )):
+        product = _message(
+            2 + offset * 2,
+            role="probe",
+            payload_type="quiz_set",
+            content={
+                "event": "follow_up_question_ready",
+                "follow_up_round": 1,
+                "template_id": "T-02-A",
+                "question": question,
+            },
+            agent="task",
+        )
+        review = _message(
+            3 + offset * 2,
+            role="verdict",
+            payload_type="review_verdict",
+            content={"reviewed_msg_id": product["msg_id"]},
+            verdict={
+                "decision": "reject",
+                "rule_hits": [{"rule_id": "R-04", "reason": "数值缺少证据绑定"}],
+            },
+            agent="review",
+        )
+        products.append(product)
+        messages.extend((product, review))
+    run = {**_run(), "messages": messages}
+
+    rows = build_fact_units([run], mode="AUTO_PRELIMINARY")
+
+    assert len(rows) == 2
+    assert [row["first_generation"] for row in rows] == [1, 0]
+    assert sum(row["native_error_denominator"] for row in rows) == 1
+
+
 def test_adaptation_nodes_are_merged_with_gold_after_the_run():
     rows = build_adaptation_nodes([_run()], [_gold()], mode="AUTO_PRELIMINARY")
     assert [row["node_type"] for row in rows] == ["initial_route", "post_answer"]

@@ -16,6 +16,7 @@ from typing import Any
 
 FACT_KINDS = frozenset({"fact", "data_conclusion"})
 FACT_RULES = frozenset({"R-01", "R-02", "R-04", "R-05", "R-06"})
+PUBLISHED_DECISIONS = frozenset({"approve", "approve_with_fix"})
 PRODUCT_TYPES = frozenset(
     {"lecture_note", "practice_guide", "quiz_set", "sql_result", "feedback"}
 )
@@ -83,6 +84,50 @@ def _decision(review: Mapping[str, Any] | None) -> str:
     return str(verdict.get("decision") or "") if isinstance(verdict, Mapping) else ""
 
 
+def _fact_candidate_text(product: Mapping[str, Any]) -> str:
+    """Return a bounded factual premise for rejected products lacking claims.
+
+    Question-like products can contain a factual premise that Review correctly
+    rejects before the producer has emitted structured ``claims``.  Keeping the
+    whole question as one reviewable candidate is conservative: human reviewers
+    still decide whether it is a hallucination, while the rejected content no
+    longer disappears from the auxiliary-KPI audit queue.
+    """
+
+    content = _content(product)
+    for key in ("question", "feedback", "summary", "lecture_md"):
+        value = content.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _implicit_generation_transaction(
+    run: Mapping[str, Any],
+    product: Mapping[str, Any],
+) -> tuple[str, ...] | None:
+    """Group retry products from one follow-up turn without reading gold.
+
+    Legacy follow-up messages do not carry ``generation_stage`` or a lineage
+    identifier.  Their round, template and event are nevertheless stable across
+    regeneration attempts, so they form a deterministic first-generation
+    transaction key.  Products outside a numbered follow-up keep the historical
+    one-product/one-transaction behaviour.
+    """
+
+    content = _content(product)
+    follow_up_round = content.get("follow_up_round")
+    if follow_up_round is None:
+        return None
+    return (
+        _run_value(run, "session_id"),
+        _payload_type(product),
+        str(content.get("event") or ""),
+        str(follow_up_round),
+        str(content.get("template_id") or ""),
+    )
+
+
 def build_fact_units(
     runs: Sequence[Mapping[str, Any]],
     *,
@@ -96,10 +141,11 @@ def build_fact_units(
     for run in runs:
         messages = list(_items(run.get("messages")))
         reviews = _reviews(messages)
+        seen_implicit_transactions: set[tuple[str, ...]] = set()
         products = [
             message
             for message in messages
-            if message.get("role") == "produce"
+            if message.get("role") in {"produce", "probe"}
             and _payload_type(message) in PRODUCT_TYPES
         ]
         for product in products:
@@ -109,6 +155,7 @@ def build_fact_units(
             first_review = product_reviews[0] if product_reviews else None
             latest_decision = _decision(latest_review)
             first_hits = _rule_hits(first_review)
+            latest_hits = _rule_hits(latest_review)
             all_hits = tuple(
                 sorted({hit for review in product_reviews for hit in _rule_hits(review)})
             )
@@ -126,10 +173,21 @@ def build_fact_units(
                 or _content(product).get("artifact_lineage_id")
                 or artifact_id
             )
-            generation_stage = str(
-                _content(product).get("generation_stage")
-                or ("first_generation" if not product_reviews or product_reviews[0] is latest_review else "revision")
+            declared_generation_stage = str(
+                _content(product).get("generation_stage") or ""
             )
+            implicit_transaction = _implicit_generation_transaction(run, product)
+            if declared_generation_stage:
+                generation_stage = declared_generation_stage
+            elif implicit_transaction is None:
+                generation_stage = "first_generation"
+            else:
+                generation_stage = (
+                    "revision"
+                    if implicit_transaction in seen_implicit_transactions
+                    else "first_generation"
+                )
+                seen_implicit_transactions.add(implicit_transaction)
             first_generation = int(generation_stage in {"first_generation", "initial", "native"})
             claims = [
                 claim
@@ -138,29 +196,43 @@ def build_fact_units(
                 and isinstance(claim.get("text"), str)
                 and str(claim.get("text")).strip()
             ]
+            candidate_text = _fact_candidate_text(product)
+            if (
+                not claims
+                and candidate_text
+                and FACT_RULES.intersection(all_hits)
+                and any(_decision(review) == "reject" for review in product_reviews)
+            ):
+                claims = [{"kind": "fact_candidate", "text": candidate_text}]
             for claim_index, claim in enumerate(claims, start=1):
                 text = str(claim["text"]).strip()
                 unit_id = _stable_id(msg_id, claim_index, text, prefix="CU")
                 lineage_unit_id = _stable_id(lineage_id, text, prefix="LU")
-                evidence_ids = sorted(
-                    {
-                        str(item.get("ref"))
-                        for item in _items(product.get("evidence"))
-                        if item.get("supports_claim") == text and item.get("ref")
-                    }
-                )
-                auto_hallucination = bool(FACT_RULES.intersection(all_hits))
-                auto_detected = int(bool(product_reviews) and auto_hallucination)
+                evidence_ids = sorted({
+                    str(item.get("ref"))
+                    for item in _items(product.get("evidence"))
+                    if item.get("ref")
+                    and (
+                        item.get("supports_claim") == text
+                        or claim.get("kind") == "fact_candidate"
+                    )
+                })
+                native_hallucination = bool(FACT_RULES.intersection(first_hits))
+                final_hallucination = bool(FACT_RULES.intersection(latest_hits))
+                auto_detected = int(bool(first_review) and native_hallucination)
                 auto_intercepted = int(
                     auto_detected == 1
                     and (
                         _decision(first_review) == "reject"
-                        or latest_decision == "reject"
-                        or first_review is not latest_review
                     )
                 )
-                published_final = int(latest_decision == "approve")
-                auto_label = "HALLUCINATION" if auto_hallucination else "SUPPORTED"
+                published_final = int(latest_decision in PUBLISHED_DECISIONS)
+                effective_hallucination = (
+                    final_hallucination if published_final else native_hallucination
+                )
+                auto_label = (
+                    "HALLUCINATION" if effective_hallucination else "SUPPORTED"
+                )
                 rows.append(
                     {
                         "run_id": _run_value(run, "run_id"),
@@ -189,20 +261,24 @@ def build_fact_units(
                         "adjudicator": "PENDING_HUMAN",
                         "final_fact_denominator": int(published_final == 1),
                         "final_hallucination_numerator": int(
-                            published_final == 1 and auto_label == "HALLUCINATION"
+                            published_final == 1 and final_hallucination
                         ),
                         "native_error_denominator": int(
-                            first_generation == 1 and auto_label == "HALLUCINATION"
+                            first_generation == 1 and native_hallucination
                         ),
                         "interception_numerator": int(
                             first_generation == 1
-                            and auto_label == "HALLUCINATION"
+                            and native_hallucination
                             and auto_detected == 1
                             and auto_intercepted == 1
                         ),
                         "auto_label": auto_label,
                         "auto_hallucination_reason": ",".join(
-                            sorted(FACT_RULES.intersection(all_hits))
+                            sorted(
+                                FACT_RULES.intersection(
+                                    latest_hits if published_final else first_hits
+                                )
+                            )
                         ),
                     }
                 )

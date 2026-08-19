@@ -2871,6 +2871,7 @@ class InteractiveSessionManager:
                         runtime.profile,
                         session.diagnosis,
                         evidence_result,
+                        knowledge_point=resolved_knowledge_point,
                     ),
                     "curriculum_has_next": bool(remaining_blind_spots),
                     "next_knowledge_point": (

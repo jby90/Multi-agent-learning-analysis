@@ -57,6 +57,70 @@ EXPECTED_NORMAL_TRANSITIONS = (
     "T16",
     "T20",
 )
+
+
+def test_training_summary_does_not_apply_plan_actual_copy_to_other_knowledge_points() -> None:
+    profile = {"title": "转岗数字化的工艺工程师"}
+    diagnosis = {
+        "payload": {
+            "content": {
+                "pretest_score": {"correct": 6, "total": 7},
+                "selected_knowledge_point": "完成率计算",
+            }
+        }
+    }
+    result = {
+        "payload": {
+            "content": {
+                "rows": [
+                    {"process_code": "YCL", "complete_rate": "0.6236"},
+                    {"process_code": "ZZTP", "complete_rate": "1.0249"},
+                ]
+            }
+        }
+    }
+
+    summary = demo_session_module._summary(
+        profile,
+        diagnosis,
+        result,
+        knowledge_point="完成率计算",
+    )
+
+    assert "完成率计算" in summary
+    assert "2行真实查询结果" in summary
+    assert "None" not in summary
+    assert "修正了计划量与实际量混淆" not in summary
+
+
+def test_training_summary_keeps_plan_actual_correction_when_both_values_exist() -> None:
+    profile = {"title": "新入职生产计划员"}
+    diagnosis = {
+        "payload": {
+            "content": {
+                "pretest_score": {"correct": 3, "total": 5},
+                "selected_knowledge_point": "计划量与实际量口径",
+            }
+        }
+    }
+    result = {
+        "payload": {
+            "content": {
+                "rows": [{"plan_qty": "1855.06", "actual_qty": "1156.87"}]
+            }
+        }
+    }
+
+    summary = demo_session_module._summary(
+        profile,
+        diagnosis,
+        result,
+        knowledge_point="计划量与实际量口径",
+    )
+
+    assert "计划量1855.06" in summary
+    assert "实际完成量1156.87" in summary
+    assert "完成了计划量与实际量口径核对" in summary
 def test_lecture_generation_retry_budget_is_three_attempts() -> None:
     assert MAX_LECTURE_GENERATION_ATTEMPTS == 3
 
