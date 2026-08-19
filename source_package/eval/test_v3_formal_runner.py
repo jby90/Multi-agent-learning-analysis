@@ -285,6 +285,10 @@ def test_wrong_formal_learner_answer_is_evidence_bearing_and_accepted_by_input_g
     assert "工序" in answer
     assert "完成率" in answer
     assert "9999" in answer
+    # 连错/辩护脚本必须是真正的错误主张，不能把完整正确行一并
+    # 交给审核器，否则部分模板会仅按证据覆盖判成 mastered。
+    assert "0.6236" not in answer
+    assert "1.0249" not in answer
 
 
 def test_formal_learner_answer_respects_the_production_input_limit():

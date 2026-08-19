@@ -108,6 +108,29 @@ class TestPersonaPretestServing:
 
 
 class TestPersonaRouting:
+    def test_learning_contract_uses_selected_plan_item_not_later_blind_spot(
+        self, tmp_path
+    ):
+        """The contract, evidence bundle and visible task must name one point.
+
+        A line leader can miss the last profile question while the production
+        plan deliberately begins with a verified prerequisite.  The historic
+        contract constructor still preferred ``blind_spots[0]`` and therefore
+        claimed the later blind spot even though the current task trained the
+        selected first plan item.
+        """
+
+        manager, session_id, state, content = submit(
+            tmp_path,
+            "line_leader",
+            wrong={"责任单元定位"},
+        )
+
+        assert content["selected_knowledge_point"] == "计划量与实际量口径"
+        assert state["learning_contract"]["target_knowledge_points"] == [
+            "计划量与实际量口径"
+        ]
+
     def test_plan_is_domain_scoped_with_point_level_difficulty(self, tmp_path):
         manager, session_id, state, content = submit(
             tmp_path, "line_leader", wrong={"计划量与实际量口径"}

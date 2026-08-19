@@ -342,12 +342,14 @@ class GoldLearnerActor:
         Production correctly rejects vacuous answers such as ``不知道`` before
         review.  Formal wrong-answer scenarios must therefore exercise the real
         reviewer with a field/value claim instead of mistaking input validation
-        for a failed case.
+        for a failed case.  Do not echo the full correct result set here: doing
+        so lets evidence-coverage heuristics treat a deliberately wrong
+        conclusion as mastered on some templates.
         """
 
         return (
-            f"根据刚才查询结果中的字段和值：{evidence}。"
-            "我判断完成率为9999%，因此所有工序均已正常完成。"
+            "根据刚才查询结果中的工序和完成率字段，"
+            "我判断YCL工序的完成率为9999%，因此所有工序均已正常完成。"
         )
 
     @staticmethod

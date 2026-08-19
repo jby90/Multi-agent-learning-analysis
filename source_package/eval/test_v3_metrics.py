@@ -314,6 +314,42 @@ def test_coverage_cell_requires_the_complete_closed_loop():
     assert cells[0]["cell_pass"] == 0
 
 
+def test_coverage_contract_gate_accepts_the_matching_contract_before_a_step_up():
+    run = _run()
+    run["messages"].extend([
+        _message(
+            7,
+            role="system",
+            payload_type="control",
+            content={
+                "event": "learning_contract_ready",
+                "learning_contract": {
+                    "target_knowledge_points": ["三道工序与传导关系"],
+                    "difficulty": "basic",
+                },
+            },
+            agent="system",
+        ),
+        _message(
+            8,
+            role="system",
+            payload_type="control",
+            content={
+                "event": "learning_contract_ready",
+                "learning_contract": {
+                    "target_knowledge_points": ["三道工序与传导关系"],
+                    "difficulty": "applied",
+                },
+            },
+            agent="system",
+        ),
+    ])
+
+    cell = build_coverage_cells([run], [_gold()], mode="AUTO_PRELIMINARY")[0]
+
+    assert cell["learning_contract_match"] == 1
+
+
 def test_final_mode_refuses_missing_double_review_labels():
     facts = build_fact_units([_run()], mode="AUTO_PRELIMINARY")
     nodes = build_adaptation_nodes([_run()], [_gold()], mode="AUTO_PRELIMINARY")

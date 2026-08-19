@@ -1986,7 +1986,7 @@ def test_cross_phase_question_accumulator_blocks_same_fallback_across_tiers(
     )
     question = turn.product["payload"]["content"]["question"]
     assert question != shared
-    assert question.startswith("查询结果中YCL、ZZTP、AZTP各自最低的月份")
+    assert question == "查询结果中AZTP在2025-04的完成率是多少？"
 
 
 def test_initial_follow_up_question_pins_rows_when_identifiers_repeat() -> None:
@@ -4035,6 +4035,13 @@ def test_learning_record_written_on_completion_with_account(
     assert completed["outcome"] == "completed"
     report = completed["training_report"]
     assert report["mastery_plan"], "报告应含每知识点掌握档位"
+    completed_mastery = next(
+        item
+        for item in report["mastery_plan"]
+        if item["knowledge_point"] == report["knowledge_point"]
+    )
+    assert completed_mastery["tier"] == 2
+    assert completed_mastery["mastery_status"] == "applied_mastered"
     assert all(
         key in report["common_mistakes"]
         for key in ("misconception_counts", "wrong_answer_rounds", "sql_failure_count")
@@ -4051,6 +4058,7 @@ def test_learning_record_written_on_completion_with_account(
     assert record["date"] and record["start_time"] and record["end_time"]
     assert record["duration_seconds"] >= 0
     assert isinstance(record["mastery"], dict) and record["mastery"]
+    assert record["mastery"][report["knowledge_point"]] == 2
     assert (tmp_path / "records" / "learning_records.jsonl").exists()
 
     summary = manager.summarize_learning_records()

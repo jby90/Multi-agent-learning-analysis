@@ -248,6 +248,19 @@ class LearningContract:
         diagnosis_profile = content.get("profile_id")
         if diagnosis_profile != learner.profile_id:
             raise ValueError("diagnosis profile does not match learner profile")
+        selected_point = content.get("selected_knowledge_point")
+        if (
+            use_selected_route
+            and isinstance(selected_point, str)
+            and selected_point.strip()
+        ):
+            target_points: Sequence[str] = (selected_point.strip(),)
+        else:
+            target_points = content.get("blind_spots") or [
+                item["knowledge_point"]
+                for item in content.get("knowledge_point_plan", [])
+                if isinstance(item, Mapping) and item.get("knowledge_point")
+            ]
         return cls(
             learner=learner,
             domain_id=_required_string(domain_id, "domain_id"),
@@ -255,15 +268,17 @@ class LearningContract:
                 domain_package_sha256, "domain_package_sha256"
             ),
             target_knowledge_points=_unique_strings(
-                # v4 画像路由：前测全对时 blind_spots 为空（培养清单仍非空），
-                # 目标点回退为培养清单；v3 盲区恒非空，行为不变。
-                content.get("blind_spots")
-                or [
-                    item["knowledge_point"]
-                    for item in content.get("knowledge_point_plan", [])
-                    if isinstance(item, Mapping) and item.get("knowledge_point")
-                ],
-                "diagnosis.blind_spots",
+                # v4 production routing trains one selected plan item per
+                # session.  The contract must bind that same point; using a
+                # later blind spot here creates contract/evidence drift.  v3
+                # callers leave ``use_selected_route`` disabled and retain the
+                # historical blind-spot behaviour.
+                target_points,
+                (
+                    "diagnosis.selected_knowledge_point"
+                    if use_selected_route
+                    else "diagnosis.blind_spots"
+                ),
             ),
             misconceptions=_unique_strings(
                 content.get("hit_misconceptions"),

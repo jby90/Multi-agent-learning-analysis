@@ -53,6 +53,7 @@ from agents.follow_up_agent import (
     resolve_follow_up_layer,
     reviewed_answer_confirmation,
     reviewed_answer_correction,
+    reviewed_plan_actual_correction,
     reviewed_row_value_correction,
 )
 from agents.misconception_relations import (
@@ -1117,7 +1118,10 @@ class InteractiveSessionManager:
                     "provisional_route": {
                         "knowledge_point": focus_point,
                         "difficulty": result["selected_difficulty"],
-                        "reason": "训练关注点已置顶；校准探针将确认其起点档位。",
+                        "reason": (
+                            "训练关注点已加入培养计划；系统会先补齐必要前置知识，"
+                            "校准探针用于确认关注点的起点档位。"
+                        ),
                         "evidence_source": "calibration_probe",
                         "evidence_ids": [],
                     },
@@ -2918,15 +2922,34 @@ class InteractiveSessionManager:
         )
         diagnosis_content = _payload_content(session.diagnosis or {})
         plan = diagnosis_content.get("knowledge_point_plan")
-        mastery_plan = [
-            {
-                "knowledge_point": str(item.get("knowledge_point", "")),
-                "tier": tier_from_status(item.get("mastery_status")),
-                "mastery_status": item.get("mastery_status"),
+        completed_point = str(report.get("knowledge_point") or "").strip()
+        final_difficulty = str(report.get("final_difficulty") or "").strip()
+        completed_tiers = {"basic": 1, "applied": 2, "advanced": 3}
+        mastery_plan: list[dict[str, Any]] = []
+        for item in (plan if isinstance(plan, list) else []):
+            if not isinstance(item, Mapping) or not item.get("knowledge_point"):
+                continue
+            point = str(item.get("knowledge_point", ""))
+            status = item.get("mastery_status")
+            row = {
+                "knowledge_point": point,
+                "tier": tier_from_status(status),
+                "mastery_status": status,
             }
-            for item in (plan if isinstance(plan, list) else [])
-            if isinstance(item, Mapping) and item.get("knowledge_point")
-        ]
+            # The diagnosis plan is intentionally immutable routing evidence,
+            # so its original ``needs_training`` status is not rewritten when
+            # a learner finishes a knowledge point.  The report, however,
+            # describes post-training attainment and must overlay the current
+            # point with the actually completed difficulty.  Deferred/error
+            # exits remain fail-closed and are never promoted here.
+            if (
+                outcome == "completed"
+                and point == completed_point
+                and final_difficulty in completed_tiers
+            ):
+                row["tier"] = completed_tiers[final_difficulty]
+                row["mastery_status"] = f"{final_difficulty}_mastered"
+            mastery_plan.append(row)
         misconception_counts: dict[str, int] = {}
         wrong_rounds = 0
         examples: list[dict[str, Any]] = []
@@ -4371,6 +4394,10 @@ class InteractiveSessionManager:
         else:
             feedback = "暂时无法确认掌握：当前回答还不足以和查询证据建立稳定对应，请明确引用结果中的字段和值。"
         correction = reviewed_answer_correction(
+            question=question,
+            answer=answer,
+            evidence=evidence,
+        ) or reviewed_plan_actual_correction(
             question=question,
             answer=answer,
             evidence=evidence,

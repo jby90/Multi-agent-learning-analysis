@@ -656,13 +656,18 @@ def build_coverage_cells(
                 if _content(message).get("event") == "learning_contract_ready"
                 and isinstance(_content(message).get("learning_contract"), Mapping)
             ]
-            latest_contract = contract_messages[-1] if contract_messages else {}
-            contract_points = latest_contract.get("target_knowledge_points")
             learning_contract_match = int(
-                expected_point
-                in (contract_points if isinstance(contract_points, list) else [])
-                and str(latest_contract.get("difficulty") or "")
-                in {expected_initial, difficulty}
+                any(
+                    expected_point
+                    in (
+                        contract.get("target_knowledge_points")
+                        if isinstance(contract.get("target_knowledge_points"), list)
+                        else []
+                    )
+                    and str(contract.get("difficulty") or "")
+                    in {expected_initial, difficulty}
+                    for contract in contract_messages
+                )
             )
             profile_id = _run_value(run, "profile_id")
             reviews = _reviews(messages)

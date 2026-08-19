@@ -1,5 +1,6 @@
 jsonschema==4.26.0
 numpy==2.5.1
+openpyxl==3.1.5
 openai==2.45.0
 PyMySQL==1.2.0
 pytest==9.1.1

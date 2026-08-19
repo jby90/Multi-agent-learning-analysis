@@ -218,6 +218,24 @@ class TestTiersAndDifficulty:
         )
         assert result2["knowledge_point_plan"][0]["tier"] == "focus"
 
+    def test_wrong_focus_point_is_not_duplicated_in_learning_plan(self):
+        router = make_router()
+        result = router.build_plan(
+            "line_leader",
+            answers_for("line_leader", wrong={"异常识别标准"}),
+            dependencies=DEPENDENCIES,
+            experience_tag_point="异常识别标准",
+        )
+
+        matching = [
+            item for item in result["knowledge_point_plan"]
+            if item["knowledge_point"] == "异常识别标准"
+        ]
+        assert len(matching) == 1
+        assert matching[0]["tier"] == "focus"
+        assert matching[0]["initial_difficulty"] == "basic"
+        assert result["blind_spots"] == ["异常识别标准"]
+
     def test_plan_only_contains_scope_points(self):
         router = make_router()
         pretest = load_persona_pretest("craft_engineer")

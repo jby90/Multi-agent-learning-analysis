@@ -221,11 +221,12 @@ _TEMPLATE_FALLBACK_QUESTIONS = {
         "查询结果中YCL、ZZTP、AZTP各自最低的月份和完成率分别是什么？",
         "查询结果中2025-05、2025-06、2025-07每个月完成率最低的工序和对应值分别是什么？",
     ),
-    "T-03-B": (
-        "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07的完成率分别是多少？",
-        "查询结果中YCL、ZZTP、AZTP各自最低的月份和完成率分别是什么？",
-        "查询结果中2025-04至2025-07每个月完成率最低的工序和对应值分别是什么？",
-    ),
+    # T-03-B deliberately uses the row-bound fallback built below instead of
+    # a template-level extrema question.  The advanced task still asks for
+    # causal/temporal reasoning in its reviewed primary assessment; this is
+    # only the fail-closed last-resort ladder.  Pinning one reviewed row per
+    # question prevents R-02 from having to infer an uncontracted sorting or
+    # aggregation operation when the model-generated probe is rejected.
     "T-10": (
         "查询结果中的月偏差率是多少？",
         "该偏差率为正值还是负值？",
@@ -1263,6 +1264,99 @@ def _matches_reviewed_row_value(
     return target["value"] in unicodedata.normalize("NFKC", answer)
 
 
+def _matches_reviewed_monthly_trend(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Confirm a fully cited single-series monthly trend.
+
+    This guard corrects model false negatives only.  It activates for a
+    reviewed result containing exactly one value per month, requires every
+    month/value binding in the learner answer, and then checks the stated
+    direction against the ordered reviewed values.  Multi-process tables and
+    answers containing an unreviewed percentage fail closed.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    if not any(
+        token in normalized_question
+        for token in ("相邻月份", "持续趋势", "序列", "月度", "月份")
+    ) or not any(
+        token in normalized_question
+        for token in ("变化", "趋势", "序列", "确认什么")
+    ):
+        return False
+    rows = _expected_rows(evidence)
+    monthly: list[tuple[str, Decimal]] = []
+    for row in rows:
+        month = str(row.get("month_label") or "").strip()
+        rate = _decimal_scalar(row.get("complete_rate"))
+        if not month or rate is None:
+            return False
+        monthly.append((month, rate))
+    if len(monthly) < 2 or len({month for month, _ in monthly}) != len(monthly):
+        return False
+    monthly.sort(key=lambda item: item[0])
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    cited_percent_values = {
+        Decimal(token)
+        for token in re.findall(r"([-+]?\d+(?:\.\d+)?)\s*[%％]", normalized_answer)
+    }
+    reviewed_percent_values = {rate * Decimal("100") for _, rate in monthly}
+    if cited_percent_values - reviewed_percent_values:
+        return False
+    rates = [rate for _, rate in monthly]
+    if "最明显" in normalized_question or "变化最大" in normalized_question:
+        deltas = [
+            abs(right - left) for left, right in zip(rates, rates[1:])
+        ]
+        maximum = max(deltas)
+        if deltas.count(maximum) != 1:
+            return False
+        index = deltas.index(maximum)
+        earlier_month, earlier_rate = monthly[index]
+        later_month = monthly[index + 1][0]
+        later_rate = monthly[index + 1][1]
+        return (
+            earlier_month in normalized_answer
+            and later_month in normalized_answer
+            and str(earlier_rate) in normalized_answer
+            and str(later_rate) in normalized_answer
+            and any(
+                phrase in normalized_answer for phrase in ("最明显", "变化最大")
+            )
+        )
+    for month, rate in monthly:
+        rate_text = str(rate)
+        if re.search(
+            re.escape(month) + r"[^。；\n]{0,24}" + re.escape(rate_text),
+            normalized_answer,
+        ) is None:
+            return False
+    if all(left > right for left, right in zip(rates, rates[1:])):
+        return any(
+            phrase in normalized_answer
+            for phrase in ("连续下降", "持续下降", "逐月下降")
+        ) and not any(
+            phrase in normalized_answer
+            for phrase in ("连续上升", "持续上升", "逐月上升")
+        )
+    if all(left < right for left, right in zip(rates, rates[1:])):
+        return any(
+            phrase in normalized_answer
+            for phrase in ("连续上升", "持续上升", "逐月上升")
+        ) and not any(
+            phrase in normalized_answer
+            for phrase in ("连续下降", "持续下降", "逐月下降")
+        )
+    return any(
+        phrase in normalized_answer
+        for phrase in ("有升有降", "阶段性波动", "不是单一持续趋势")
+    )
+
+
 def reviewed_row_value_correction(
     question: str,
     answer: str,
@@ -1370,6 +1464,49 @@ def _matches_reviewed_plan_actual_binding(
     ) and completed_statement and not wrong_binding
 
 
+def reviewed_plan_actual_correction(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> str | None:
+    """Correct a reviewed plan/actual value swap after a learner attempt.
+
+    This is feedback only; it never participates in mastery.  It is bounded
+    to the reviewed scalar pair carried by the active task, so a model cannot
+    invent either value while explaining the mistake.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    if "计划" not in normalized_question or "实际" not in normalized_question:
+        return None
+    pair = _plan_actual_pair(evidence)
+    if pair is None:
+        return None
+    plan_text, actual_text = pair
+    wrong_binding = (
+        _answer_binds_field(normalized_answer, "计划", actual_text)
+        and _answer_binds_field(normalized_answer, "实际", plan_text)
+    )
+    wrong_meaning = bool(
+        re.search(
+            r"计划(?:量)?[^。；，,\n]{0,28}(?:车间实际|实际完成|真正完成)",
+            normalized_answer,
+        )
+        or re.search(
+            r"实际(?:完成量|量)?[^。；，,\n]{0,28}(?:应该完成|应完成|计划目标|排产要求)",
+            normalized_answer,
+        )
+    )
+    if not (wrong_binding or wrong_meaning):
+        return None
+    return (
+        f"需要纠正：查询结果中计划量为{plan_text}，"
+        f"实际完成量为{actual_text}；实际完成量才表示车间真正完成的数量。"
+    )
+
+
 def _is_meaningless_short_answer(
     question: str,
     answer: str,
@@ -1459,6 +1596,11 @@ def _matches_reviewed_answer(
         )
         or _matches_reviewed_citation_justified(question, answer, evidence)
         or _matches_reviewed_row_value(question, answer, evidence)
+        or _matches_reviewed_monthly_trend(
+            question=question,
+            answer=answer,
+            evidence=evidence,
+        )
     )
 
 

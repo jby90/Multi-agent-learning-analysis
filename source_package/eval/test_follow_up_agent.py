@@ -19,6 +19,7 @@ from agents.follow_up_agent import (
     normalize_learner_input,
     reviewed_answer_confirmation,
     reviewed_answer_correction,
+    reviewed_plan_actual_correction,
 )
 from agents.task_agent import TaskAgent, load_task_catalog
 from agents.validate_message import validate_message
@@ -704,6 +705,85 @@ def test_reviewed_extreme_field_and_value_override_an_unknown_false_negative(
 
 
 @pytest.mark.parametrize(
+    "question",
+    (
+        "相邻月份的完成率如何变化，这属于单期变化还是持续趋势？",
+        "请引用月份和完成率说明当前序列能确认什么？",
+    ),
+)
+def test_reviewed_monthly_trend_overrides_an_unknown_model_false_negative(
+    question: str,
+) -> None:
+    llm = FollowUpLLM(
+        {
+            "assessment": "unknown",
+            "diagnosed_misconception": "UNKNOWN",
+            "next_target_misconception": "UNKNOWN",
+            "question": "请继续核对月度变化？",
+        }
+    )
+    task_agent = _task_agent()
+    agent = FollowUpAgent("trace-production-progress", llm_call=llm)
+
+    turn = agent.generate(
+        student_answer=(
+            "月份2025-03完成率为0.9534，月份2025-04完成率为0.9061，"
+            "月份2025-05完成率为0.6236；相邻月份完成率连续下降，"
+            "属于持续下降趋势，不是单期孤立波动。"
+        ),
+        current_task=_current_task(task_agent, "T-04"),
+        task_agent=task_agent,
+        current_question=question,
+        round_index=2,
+        max_rounds=4,
+    )
+
+    assert turn.assessment == "mastered"
+    assert turn.diagnosed_misconception == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    "student_answer",
+    (
+        "月份2025-03完成率为0.9534，月份2025-05完成率为0.6236，属于持续下降。",
+        "月份2025-03完成率为0.9534，月份2025-04完成率为0.9061，月份2025-05完成率为0.6236，属于持续上升。",
+        "月份2025-03完成率为0.9534，月份2025-04完成率为0.9061，月份2025-05完成率为0.6236，但完成率为9999%。",
+    ),
+)
+def test_reviewed_monthly_trend_guard_rejects_incomplete_or_contradictory_answers(
+    student_answer: str,
+) -> None:
+    current_task = _current_task(_task_agent(), "T-04")
+
+    assert not _matches_reviewed_answer(
+        question="相邻月份的完成率如何变化，这属于单期变化还是持续趋势？",
+        answer=student_answer,
+        evidence=current_task["evidence"],
+    )
+
+
+def test_reviewed_monthly_change_requires_the_most_changed_month_to_be_named():
+    current_task = _current_task(_task_agent(), "T-04")
+    question = "月度结果中哪个月的完成率变化最明显，你依据的月份和值是什么？"
+
+    assert _matches_reviewed_answer(
+        question=question,
+        answer=(
+            "2025-05相对2025-04变化最明显，完成率由0.9061下降到0.6236。"
+        ),
+        evidence=current_task["evidence"],
+    )
+    assert not _matches_reviewed_answer(
+        question=question,
+        answer=(
+            "月份2025-03完成率为0.9534，月份2025-04完成率为0.9061，"
+            "月份2025-05完成率为0.6236，属于持续下降。"
+        ),
+        evidence=current_task["evidence"],
+    )
+
+
+@pytest.mark.parametrize(
     ("student_answer", "expected_value"),
     (
         ("YCL 0.6236", "0.6236"),
@@ -1014,6 +1094,34 @@ def test_plan_actual_correction_uses_only_reviewed_scalar_fields() -> None:
         previous_questions.append(question)
 
 
+def test_reviewed_plan_actual_correction_names_swapped_values() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-01")
+    evidence = tuple(current_task["evidence"])
+
+    correction = reviewed_plan_actual_correction(
+        question="计划量1855.06和实际量1156.87中，哪个表示车间实际完成？",
+        answer="计划量1855.06表示车间实际完成，实际量1156.87表示应该完成。",
+        evidence=evidence,
+    )
+
+    assert correction is not None
+    assert "计划量为1855.06" in correction
+    assert "实际完成量为1156.87" in correction
+    assert "实际完成量" in correction
+
+
+def test_reviewed_plan_actual_correction_is_silent_for_correct_binding() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-01")
+
+    assert reviewed_plan_actual_correction(
+        question="计划量和实际量分别表示什么？",
+        answer="计划量1855.06表示应完成，实际完成量1156.87表示真正完成。",
+        evidence=tuple(current_task["evidence"]),
+    ) is None
+
+
 def test_generate_passes_missing_evidence_fields_to_the_model() -> None:
     llm = FollowUpLLM(
         {
@@ -1114,6 +1222,37 @@ def test_advanced_delay_fallback_uses_template_specific_questions() -> None:
         "三道工序的完成率低点分别出现在哪个月？",
         "只依据当前月度表，四态候选应归为哪一种状态？",
     ]
+
+
+def test_advanced_process_fallback_uses_single_reviewed_rows() -> None:
+    """Fail-closed fallback must stay inside one unambiguous evidence row.
+
+    A multi-month extrema question can be answerable by a human while still
+    being rejected by R-02 because its sorting/aggregation operation is not
+    explicit in the active evidence contract.  The deterministic last-resort
+    ladder therefore asks for one reviewed row at a time; it does not weaken
+    Review or bypass the A loop.
+    """
+
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-03-B")
+    agent = FollowUpAgent("trace-production_progress")
+
+    questions = []
+    for round_index in (2, 3, 4):
+        turn = agent.deterministic_fallback(
+            current_task=current_task,
+            round_index=round_index,
+        )
+        assert turn.product is not None
+        questions.append(turn.product["payload"]["content"]["question"])
+
+    assert questions == [
+        "查询结果中AZTP在2025-04的完成率是多少？",
+        "查询结果中YCL在2025-04的完成率是多少？",
+        "查询结果中ZZTP在2025-04的完成率是多少？",
+    ]
+    assert not any("最低" in question or "分别" in question for question in questions)
 
 
 def test_applied_three_process_fallback_never_uses_an_unresolved_process_reference() -> None:

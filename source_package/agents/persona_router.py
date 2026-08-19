@@ -231,6 +231,13 @@ class PersonaDiagnosticRouter:
             sequence.append((focus_point, "focus"))
             tier_of[focus_point] = "focus"
         for point in ordered_wrong:
+            # A selected focus already carries the same pretest evidence and
+            # chooses basic/applied from whether that point was answered
+            # correctly.  Appending it again as a generic wrong-tier item
+            # creates two visually identical learning-plan rows and can make
+            # the same knowledge point run twice.
+            if point in tier_of:
+                continue
             sequence.append((point, "wrong"))
             tier_of.setdefault(point, "wrong")
         for point in ordered_correct:
@@ -275,7 +282,9 @@ class PersonaDiagnosticRouter:
         # 按需抬前置（蓝图 3.4）：依赖点目标档（初始+1）所需的前置档不足时插入提升条目
         plan = self._insert_prerequisite_lifts(plan, chunk_records or ())
 
-        blind_spots = [point for point, _tier in sequence if _tier == "wrong"]
+        # Blind spots describe the scored pretest, independently of whether a
+        # point is represented by the focus tier in the executable plan.
+        blind_spots = list(dict.fromkeys(ordered_wrong))
         selected = plan[0] if plan else None
         return {
             "router_version": ROUTER_VERSION,
