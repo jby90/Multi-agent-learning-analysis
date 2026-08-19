@@ -686,7 +686,18 @@ def _trace_messages(path: Path) -> list[dict[str, Any]]:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
         raise DemoSessionError(f"cannot read trace {path}: {exc}") from exc
-    return [json.loads(line) for line in lines if line.strip()]
+    messages: list[dict[str, Any]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            messages.append(json.loads(line))
+        except json.JSONDecodeError:
+            # 轮询读取与追加写入并发时，最后一行可能只写了一半。
+            # 跳过不完整行而不是让整次 get_state 失败：消息是追加型，
+            # 下一次轮询会读到完整内容。
+            continue
+    return messages
 
 
 def _transition_sequence(messages: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:

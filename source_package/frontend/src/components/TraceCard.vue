@@ -6,6 +6,7 @@ import {
   agentLabel,
   collaborationText,
   messageSummary,
+  payloadTypeLabel,
   publicQueryText,
   roleLabel,
   ruleLabel,
@@ -55,21 +56,7 @@ const generatedSql = computed(() => {
     : undefined
 })
 
-const payloadLabel = computed(() => {
-  const labels: Record<string, string> = {
-    profile_assessment: '学情诊断',
-    lecture_note: '岗位微课',
-    practice_guide: '实操指引',
-    quiz_set: '练习题',
-    sql_result: '数据查询',
-    review_verdict: '专业审核',
-    rebuttal_case: '补充说明',
-    probe_questions: '验证任务',
-    learning_path_update: '培养路径',
-    control: '流程调度',
-  }
-  return labels[props.message.payloadType] ?? '会话内容'
-})
+const payloadLabel = computed(() => payloadTypeLabel(props.message.payloadType))
 
 function busReason(): string {
   if (!props.message.busErrors.length) return '记录未通过完整性检查，培养流程保持原状态。'

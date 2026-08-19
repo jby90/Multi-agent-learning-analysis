@@ -10,7 +10,7 @@ import type {
   InteractiveLearningContract,
   InteractiveResourceBundle,
 } from '../lib/interactiveApi'
-import { agentLabel, agentPurpose } from '../lib/tracePresentation'
+import { STATE_LABELS, agentLabel, agentPurpose } from '../lib/tracePresentation'
 import type { StateId, TraceView } from '../types/trace'
 import AgentTeacherAvatar from './AgentTeacherAvatar.vue'
 
@@ -532,17 +532,17 @@ function statusLabel(status: AgentActivityStatus): string {
           <Pause v-if="motionEnabled" :size="12" aria-hidden="true" />
           <Play v-else :size="12" aria-hidden="true" />
           {{ motionEnabled ? `FLOW ${flowPercent}%` : `已暂停 ${flowPercent}%` }}
-          <small v-if="reducedMotion">RM兼容</small>
+          <small v-if="reducedMotion">减弱动效</small>
         </button>
         <div class="stage-metrics" aria-label="协同状态摘要">
           <span v-if="parallelStageMetric">
             <b>{{ parallelStageMetric.fanOut }}</b> {{ parallelStageMetric.label }}
           </span>
           <span v-if="evidenceBundle" class="evidence-bundle-metric">
-            <b>EB</b> 3 源已绑定
+            证据包 <b>{{ Object.keys(evidenceBundle.sources ?? {}).length }}</b> 源已绑定
           </span>
           <span v-if="resourceBundle" class="resource-bundle-metric">
-            <b>RB</b> 3 资源已汇聚
+            资源包 <b>{{ resourceBundle.branches?.length ?? 0 }}</b> 项已汇聚
           </span>
           <span><b>{{ activeCount }}</b> 活跃</span>
           <span><b>{{ approvedCount }}</b> 已接力</span>
@@ -605,7 +605,7 @@ function statusLabel(status: AgentActivityStatus): string {
         <Sparkles :size="18" aria-hidden="true" />
         <span>当前协作动作</span>
         <strong>{{ headline }}</strong>
-        <small>{{ view.currentState }}</small>
+        <small>{{ STATE_LABELS[view.currentState as StateId] ?? view.currentState }}</small>
       </div>
 
       <ul class="agent-stage-roster">
@@ -702,7 +702,6 @@ function statusLabel(status: AgentActivityStatus): string {
                     <b>{{ member.label }}</b>
                     <small>{{ member.axisLabel }}</small>
                   </span>
-                  <code>{{ member.ruleId }}</code>
                   <span class="review-specialist-status">{{ statusLabel(member.agentStatus) }}</span>
                 </article>
               </div>
@@ -732,7 +731,7 @@ function statusLabel(status: AgentActivityStatus): string {
 
         <div class="parallel-proof-audit" aria-label="专项审核审计摘要">
           <span v-for="branch in parallelReviewProof.branches" :key="branch.agentId">
-            <code>{{ branch.ruleId }}</code>
+            <code>{{ branch.axisLabel }}</code>
             <b>{{ branch.status === 'running' ? '执行中' : branch.status === 'succeeded' ? '已完成' : '异常' }}</b>
             <time>{{ elapsedLabel(branch.elapsedMs) }}</time>
           </span>
@@ -746,11 +745,11 @@ function statusLabel(status: AgentActivityStatus): string {
 
         <footer class="parallel-proof-meta">
           <span>
-            <small>LEARNING CONTRACT</small>
+            <small>学习契约</small>
             <code :title="parallelReviewProof.contractId">{{ shortId(parallelReviewProof.contractId) }}</code>
           </span>
           <span>
-            <small>ARTIFACT</small>
+            <small>产物编号</small>
             <code :title="parallelReviewProof.artifactId">{{ shortId(parallelReviewProof.artifactId) }}</code>
           </span>
           <span>

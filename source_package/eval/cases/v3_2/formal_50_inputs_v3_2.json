@@ -19,7 +19,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-002",
@@ -45,7 +45,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-003",
@@ -64,14 +64,10 @@
     "diagnostic_probe_answers": [
       {
         "probe_id": "DP-01-B",
-        "answer": "YCL→ZZTP→AZTP。"
-      },
-      {
-        "probe_id": "DP-01-A",
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-STEP-UP"
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-004",
@@ -138,7 +134,7 @@
       "PT-5": "C"
     },
     "diagnostic_probe_answers": [],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-007",
@@ -160,7 +156,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-008",
@@ -170,19 +166,14 @@
       "plan_actual_reconciliation"
     ],
     "pretest_answers": {
-      "PT-1": "B",
+      "PT-1": "A",
       "PT-2": "B",
       "PT-3": "C",
       "PT-4": "B",
       "PT-5": "C"
     },
-    "diagnostic_probe_answers": [
-      {
-        "probe_id": "AP-01",
-        "answer": "不知道"
-      }
-    ],
-    "learner_script_id": "S-STEP-UP"
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-009",
@@ -241,7 +232,7 @@
       "PT-5": "C"
     },
     "diagnostic_probe_answers": [],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-012",
@@ -263,7 +254,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-013",
@@ -274,18 +265,13 @@
     ],
     "pretest_answers": {
       "PT-1": "B",
-      "PT-2": "B",
+      "PT-2": "A",
       "PT-3": "C",
       "PT-4": "B",
       "PT-5": "C"
     },
-    "diagnostic_probe_answers": [
-      {
-        "probe_id": "AP-02",
-        "answer": "不知道"
-      }
-    ],
-    "learner_script_id": "S-STEP-UP"
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-014",
@@ -351,7 +337,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-017",
@@ -377,7 +363,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-018",
@@ -396,14 +382,10 @@
     "diagnostic_probe_answers": [
       {
         "probe_id": "DP-02-B",
-        "answer": "(850-1000)/1000=-15%，属于欠产。"
-      },
-      {
-        "probe_id": "DP-02-A",
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-STEP-UP"
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-019",
@@ -470,7 +452,7 @@
       "PT-5": "A"
     },
     "diagnostic_probe_answers": [],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-022",
@@ -492,7 +474,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-023",
@@ -506,15 +488,10 @@
       "PT-2": "B",
       "PT-3": "C",
       "PT-4": "B",
-      "PT-5": "C"
+      "PT-5": "A"
     },
-    "diagnostic_probe_answers": [
-      {
-        "probe_id": "AP-05",
-        "answer": "不知道"
-      }
-    ],
-    "learner_script_id": "S-STEP-UP"
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-024",
@@ -573,7 +550,7 @@
       "PT-5": "C"
     },
     "diagnostic_probe_answers": [],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-027",
@@ -595,7 +572,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-028",
@@ -608,16 +585,11 @@
       "PT-1": "B",
       "PT-2": "B",
       "PT-3": "C",
-      "PT-4": "B",
+      "PT-4": "A",
       "PT-5": "C"
     },
-    "diagnostic_probe_answers": [
-      {
-        "probe_id": "AP-04",
-        "answer": "不知道"
-      }
-    ],
-    "learner_script_id": "S-STEP-UP"
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-029",
@@ -676,7 +648,7 @@
       "PT-5": "C"
     },
     "diagnostic_probe_answers": [],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-032",
@@ -698,7 +670,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-033",
@@ -710,17 +682,12 @@
     "pretest_answers": {
       "PT-1": "B",
       "PT-2": "B",
-      "PT-3": "C",
+      "PT-3": "A",
       "PT-4": "B",
       "PT-5": "C"
     },
-    "diagnostic_probe_answers": [
-      {
-        "probe_id": "AP-03",
-        "answer": "不知道"
-      }
-    ],
-    "learner_script_id": "S-STEP-UP"
+    "diagnostic_probe_answers": [],
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-034",
@@ -786,7 +753,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-037",
@@ -812,7 +779,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-038",
@@ -831,14 +798,10 @@
     "diagnostic_probe_answers": [
       {
         "probe_id": "DP-03-B",
-        "answer": "可描述为表观收窄/衰减形态，但不能据此证明传导。"
-      },
-      {
-        "probe_id": "DP-03-A",
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-STEP-UP"
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-039",
@@ -912,7 +875,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-042",
@@ -938,7 +901,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-043",
@@ -957,14 +920,10 @@
     "diagnostic_probe_answers": [
       {
         "probe_id": "DP-04-B",
-        "answer": "不能；完成率差异只是线索。"
-      },
-      {
-        "probe_id": "DP-04-A",
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-STEP-UP"
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-044",
@@ -1038,7 +997,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-B"
+    "learner_script_id": "S-STEP-UP-B"
   },
   {
     "case_id": "E2E-047",
@@ -1064,7 +1023,7 @@
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-KEEP-A"
+    "learner_script_id": "S-STEP-UP-A"
   },
   {
     "case_id": "E2E-048",
@@ -1083,14 +1042,10 @@
     "diagnostic_probe_answers": [
       {
         "probe_id": "DP-05-B",
-        "answer": "不等于；时序相容只是候选证据。"
-      },
-      {
-        "probe_id": "DP-05-A",
         "answer": "不知道"
       }
     ],
-    "learner_script_id": "S-STEP-UP"
+    "learner_script_id": "S-REFRESH"
   },
   {
     "case_id": "E2E-049",

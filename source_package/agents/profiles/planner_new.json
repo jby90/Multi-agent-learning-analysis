@@ -1,9 +1,25 @@
 {
   "profile_id": "planner_new",
   "title": "新入职生产计划员",
-  "background": "计算机/信息类背景校招生，会SQL和数据分析工具，不懂船舶工序与口径",
-  "strengths": ["SQL基础", "数据分析工具"],
-  "gaps_prior": ["三道工序与传导关系", "计划量与实际量口径", "传导时滞分析"],
+  "background": "初入船厂计划岗位的新人，熟悉办公与数据工具的使用，正在建立船舶生产口径的概念",
+  "strengths": [
+    "SQL基础",
+    "数据分析工具"
+  ],
+  "gaps_prior": [
+    "三道工序与传导关系",
+    "计划量与实际量口径",
+    "传导时滞分析"
+  ],
   "difficulty_start": "basic",
-  "lecture_style": "重讲工序与口径、少讲SQL"
+  "lecture_style": "重讲工序与口径、少讲SQL",
+  "knowledge_scope": [
+    "三道工序与传导关系",
+    "计划量与实际量口径",
+    "传导时滞分析",
+    "异常衰减规律",
+    "责任单元定位",
+    "跨工序归因方法"
+  ],
+  "practice_mode": "sql"
 }

@@ -105,13 +105,44 @@ function learningTask(view: TraceView): TraceMessage | undefined {
 }
 
 
+function practiceTaskMessage(view: TraceView): TraceMessage | undefined {
+  // The practice/validation trajectory stages describe the hands-on task
+  // the student executed SQL against (event "product_ready").  Conclusion
+  // assessments ("assessment_ready") and follow-up questions
+  // ("follow_up_question_ready") are graded checkpoints; their R-03
+  // verdicts carry advisory difficulty_action labels that may default to
+  // step_down without any real difficulty change, so they must never be
+  // treated as trajectory decisions.
+  return [...view.visibleMessages].reverse().find((message) => (
+    (message.payloadType === 'quiz_set' || message.payloadType === 'practice_guide')
+    && stringValue(message.content.knowledge_point) !== undefined
+    && (message.content.event === undefined || message.content.event === 'product_ready')
+  ))
+}
+
+
 export function resourceCoverage(view: TraceView): ResourceCoverage {
+  // 覆盖按全会话累计：每一档微课的铺垫面与每次实操任务的主题都保留。
+  // 更换难度单元时新微课的铺垫集合可能不同（例如应用档铺垫责任单元、
+  // 进阶档铺垫三道工序），若只看当前帧会出现"越学覆盖越少"的回落；
+  // 累计语义与「本次会话资源覆盖」文案一致，回放中数字只增不减。
   const sources = new Map<string, Set<ResourceSource>>()
-  addSource(sources, stringValue(view.lecture?.content.knowledge_point), '岗位微课')
-  for (const point of stringList(view.lecture?.content.coverage)) {
-    addSource(sources, point, '岗位微课')
+  for (const message of view.visibleMessages) {
+    if (message.rejectedByBus) continue
+    if (message.payloadType === 'lecture_note') {
+      addSource(sources, stringValue(message.content.knowledge_point), '岗位微课')
+      for (const point of stringList(message.content.coverage)) {
+        addSource(sources, point, '岗位微课')
+      }
+    } else if (
+      message.agent === 'task'
+      && message.role === 'produce'
+      && (message.payloadType === 'quiz_set' || message.payloadType === 'practice_guide')
+      && (message.content.event === undefined || message.content.event === 'product_ready')
+    ) {
+      addSource(sources, stringValue(message.content.knowledge_point), '实操任务')
+    }
   }
-  addSource(sources, stringValue(learningTask(view)?.content.knowledge_point), '实操任务')
 
   const items = stringList(view.diagnosis?.content.blind_spots).map((name) => ({
     name,
@@ -157,19 +188,21 @@ export function difficultyJourney(
   authoritativeCurrentDifficulty?: DifficultyLevel | string | null,
 ): DifficultyJourney {
   const points: DifficultyPoint[] = []
-  const assessed = difficulty(view.diagnosis?.content.difficulty)
+  const assessed = difficulty(view.diagnosis?.content.selected_difficulty)
+    ?? difficulty(view.diagnosis?.content.difficulty)
   if (assessed) {
     points.push({ stage: 'assessment', label: '测评', level: assessed })
   }
 
   if (view.lecture) {
-    const level = catalogLevel(view.lecture.content.knowledge_point, catalog)
+    const level = difficulty(view.lecture.content.difficulty)
+      ?? catalogLevel(view.lecture.content.knowledge_point, catalog)
       ?? points.at(-1)?.level
       ?? 'basic'
     points.push({ stage: 'lecture', label: '微课', level })
   }
 
-  const task = learningTask(view)
+  const task = practiceTaskMessage(view)
   if (task) {
     const level = difficulty(task.content.difficulty)
       ?? points.at(-1)?.level
@@ -192,23 +225,60 @@ export function difficultyJourney(
     const prior = points.at(-1)?.level ?? assessed ?? 'basic'
     const nextAction = action(view.path.content.difficulty_action)
     const explicitLevel = difficulty(view.path.content.difficulty)
+    const practiceLevel = points.find((point) => point.stage === 'practice')?.level
+    let lastPathIdx = -1
+    let lastTaskIdx = -1
+    for (let i = 0; i < view.visibleMessages.length; i++) {
+      const msg = view.visibleMessages[i]
+      if (msg.payloadType === 'learning_path_update') lastPathIdx = i
+      if ((msg.payloadType === 'quiz_set' || msg.payloadType === 'practice_guide')
+        && typeof msg.content?.knowledge_point === 'string') lastTaskIdx = i
+    }
+    const taskAfterPath = lastTaskIdx > lastPathIdx
+    const steppedDown = taskAfterPath && practiceLevel && explicitLevel
+      && LEVELS.indexOf(explicitLevel) > LEVELS.indexOf(practiceLevel)
     points.push({
       stage: 'advanced',
       label: '进阶',
-      level: explicitLevel ?? applyAction(prior, nextAction),
-      ...(nextAction ? { action: nextAction } : {}),
+      level: steppedDown ? practiceLevel : (explicitLevel ?? applyAction(prior, nextAction)),
+      ...(!steppedDown && nextAction ? { action: nextAction } : {}),
     })
   }
 
   const authoritativeLevel = difficulty(authoritativeCurrentDifficulty)
   const currentPoint = points.at(-1)
-  if (authoritativeLevel && currentPoint) currentPoint.level = authoritativeLevel
+  if (authoritativeLevel && currentPoint) {
+    if (currentPoint.level !== authoritativeLevel) {
+      currentPoint.level = authoritativeLevel
+      delete currentPoint.action
+    }
+  }
 
   const practiceIndex = points.findIndex((point) => point.stage === 'practice')
   const lectureIndex = points.findIndex((point) => point.stage === 'lecture')
+  const stateStageMap: Record<string, DifficultyStage> = {
+    S0_INIT: 'assessment',
+    S1_DIAGNOSIS: 'assessment',
+    S2_KNOWLEDGE: 'lecture',
+    S3_TASK: 'practice',
+    S4_VERIFY: 'practice',
+    S5_REVIEW: 'validation',
+    S6_DEBATE: 'validation',
+    S7_STUDENT: 'validation',
+    S8_PROBE: 'validation',
+    S9_PATH_UPDATE: 'advanced',
+    S10_DONE: 'advanced',
+    S_FAIL: 'advanced',
+  }
+  const mappedStage = stateStageMap[view.currentState]
+  const mappedIndex = mappedStage
+    ? points.findIndex((point) => point.stage === mappedStage)
+    : -1
   return {
     points,
-    currentResourceIndex: practiceIndex >= 0 ? practiceIndex : Math.max(lectureIndex, 0),
+    currentResourceIndex: mappedIndex >= 0
+      ? mappedIndex
+      : (practiceIndex >= 0 ? practiceIndex : Math.max(lectureIndex, 0)),
   }
 }
 
@@ -257,8 +327,9 @@ export function nextLearningPlan(
     const point = byId.get(chunkId)?.knowledgePoint
     return point ? [point] : []
   })
-  const nextDifficulty = difficultyJourney(view, catalog).points.at(-1)?.level
-    ?? candidate.difficulty
+  // 下一知识点尚未开始，其起始档由它自己的岗前测评路由决定、暂未可知；
+  // 这里给目录基准档（稳定值），不再跟随当前单元的实时难度闪烁。
+  const nextDifficulty = candidate.difficulty
   const reason = prerequisiteNames.length
     ? `承接${prerequisiteNames.join('、')}，继续补齐尚未覆盖的知识盲区。`
     : '从尚未覆盖的知识盲区中，按课程先后顺序继续学习。'
@@ -293,6 +364,10 @@ function correctionEvidence(view: TraceView): CorrectionEvidence | undefined {
     message.step < outcome.step
     && message.payloadType === 'sql_result'
     && message.content.event === 'query_completed'
+    // 纠错模板只描述计划量/实际完成量口径混淆。其他口径的结果列（如
+    // 船号/完成率）不构成"把X当成Y"的证据，与数据对撞帧的判定对齐。
+    && stringList(message.content.columns).includes('plan_qty')
+    && stringList(message.content.columns).includes('actual_qty')
   ))
   if (!result) return undefined
   const columns = stringList(result.content.columns)

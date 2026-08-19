@@ -78,7 +78,7 @@ function parallelWidth(serial: number, parallel: number): string {
 
     <footer class="official-baseline">
       <div>
-        <span>OFFICIAL 50×2</span>
+        <span>正式评测集 50×2</span>
         <strong>正式质量基线</strong>
       </div>
       <dl>
@@ -88,7 +88,7 @@ function parallelWidth(serial: number, parallel: number): string {
         <div><dt>终点到达</dt><dd>98%</dd></div>
       </dl>
     </footer>
-    <p class="evaluation-note">串行值为同一次执行中各分支墙钟耗时之和；输入、证据和模型条件完全配对。</p>
+    <p class="evaluation-note">串行值为同一次执行中各分支墙钟耗时之和；输入、证据和模型条件完全配对。基线为正式评测集两轮（96% 与 100%）的综合结果，与本轮实测分列展示。</p>
   </section>
 </template>
 

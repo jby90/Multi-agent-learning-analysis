@@ -628,7 +628,9 @@ def _claimed_metric_values(text: str) -> tuple[tuple[str, Decimal], ...]:
 
 
 def _numeric_issue(claim_text: str, rows: Sequence[Mapping[str, Any]]) -> str | None:
-    for metric, claimed in _claimed_metric_values(claim_text):
+    claimed_values = _claimed_metric_values(claim_text)
+    import logging
+    for metric, claimed in claimed_values:
         evidence_values = tuple(
             parsed
             for row in rows
@@ -637,8 +639,18 @@ def _numeric_issue(claim_text: str, rows: Sequence[Mapping[str, Any]]) -> str | 
             if parsed is not None
         )
         if not evidence_values:
+            logging.error(
+                "numeric_issue: NO_EVIDENCE metric=%s claimed=%s rows=%s",
+                metric, claimed,
+                [{k: str(v) for k, v in row.items()} for row in rows],
+            )
             return f"结论声明{metric}={claimed}，结构化SQL结果没有该口径"
         if not any(abs(claimed - actual) <= NUMERIC_TOLERANCE for actual in evidence_values):
+            logging.error(
+                "numeric_issue: MISMATCH metric=%s claimed=%s evidence=%s claim_text=%s",
+                metric, claimed, [str(v) for v in evidence_values],
+                claim_text[:120],
+            )
             return f"结论数值{metric}={claimed}与结构化SQL结果不一致"
     return None
 
@@ -730,7 +742,7 @@ def _r01(product: Mapping[str, Any]) -> dict[str, str] | None:
                 issue = (
                     _numeric_issue(claim_text, matching_rows)
                     if matching_rows
-                    else "结论维度标签与结构化SQL结果行不一致"
+                    else "claim_dimension_mismatch"
                 )
                 if issue is not None:
                     evidence_ref = record.ref
@@ -739,6 +751,20 @@ def _r01(product: Mapping[str, Any]) -> dict[str, str] | None:
                 break
     if issue is None:
         return None
+    import logging
+    logging.error(
+        "R01_reject: family=%s issue=%s expected_metrics=%s projections=%s where=%s group=%s",
+        family,
+        issue,
+        (
+            frozenset(query_authority.metric_columns)
+            if query_authority is not None
+            else _question_metrics(question)
+        ),
+        list(_projection_sources(statement).keys()),
+        sorted(_columns_in(statement.args.get("where"))),
+        sorted(_columns_in(statement.args.get("group"))),
+    )
     return _rule_hit(
         "R-01",
         f"问题口径 vs SQL实际口径：{issue}，请重新生成。",
@@ -1065,12 +1091,26 @@ def evaluate_hard_rules(product: Mapping[str, Any]) -> tuple[dict[str, str], ...
 
     if not isinstance(product, Mapping):
         raise ValueError("product must be a mapping")
-    return tuple(
+    hits = tuple(
         hit
         for evaluator in (_r01, _r04, _r05)
         for hit in (evaluator(product),)
         if hit is not None
     )
+    if hits:
+        import logging
+        payload_type = _payload(product).get("type", "?")
+        content = _content(product)
+        family = content.get("family", "?")
+        question = str(content.get("question", ""))[:60]
+        logging.error(
+            "hard_rule_hit: type=%s family=%s q=%s rules=%s",
+            payload_type,
+            family,
+            question,
+            [(h.get("rule_id"), h.get("reason", "")[:80]) for h in hits],
+        )
+    return hits
 
 
 def _data_safety_reviews(
@@ -2039,6 +2079,14 @@ class ReviewAgent:
             + (() if r03_result is None else (r03_result,))
         )
         decision = arbitration.decision
+        if decision == "reject" and hits:
+            import logging
+            logging.error(
+                "parallel_review_reject: type=%s family=%s hits=%s",
+                _payload(product).get("type", "?"),
+                _content(product).get("family", "?"),
+                [(h.get("rule_id"), str(h.get("reason", ""))[:80]) for h in hits],
+            )
         return _verdict_draft(
             trace_id=self._trace_id,
             role="verdict",

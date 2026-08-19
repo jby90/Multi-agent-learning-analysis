@@ -596,7 +596,20 @@ class OrchestratorEngine:
                 )
             transition_content["outcome"] = outcome.value
         elif transition.transition_id == "T17":
-            transition_content["difficulty_action"] = "step_down"
+            # The remediation decision (step_down / refresh / deferred) is
+            # computed by the session before firing T17 and carried on the
+            # probe-outcome draft.  Fall back to "step_down" for legacy
+            # drafts that predate the metadata so the field is always set.
+            probe_meta = bus_result.message.get("probe")
+            stamped_action = (
+                probe_meta.get("difficulty_action")
+                if isinstance(probe_meta, Mapping)
+                else None
+            )
+            transition_content["difficulty_action"] = (
+                stamped_action if isinstance(stamped_action, str) and stamped_action
+                else "step_down"
+            )
         elif transition.transition_id == "T18":
             transition_content["fallback_action"] = "generic_probe"
         transition_result = self._bus.send(

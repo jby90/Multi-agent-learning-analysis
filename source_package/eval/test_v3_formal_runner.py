@@ -116,7 +116,24 @@ class FakeManager:
                             "assessment": "mastered",
                         },
                     },
-                }
+                },
+                {
+                    "step": 2,
+                    "payload": {
+                        "type": "learning_path_update",
+                        "content": {"difficulty_action": "step_up"},
+                    },
+                },
+                {
+                    "step": 3,
+                    "payload": {
+                        "type": "practice_guide",
+                        "content": {
+                            "event": "product_ready",
+                            "difficulty": "applied",
+                        },
+                    },
+                },
             ],
         )
         return dict(self._state)
@@ -165,6 +182,15 @@ class RetryingReviewManager(FakeManager):
                     },
                 }
             )
+            assessments.append(
+                {
+                    "step": 3,
+                    "payload": {
+                        "type": "learning_path_update",
+                        "content": {"difficulty_action": "step_up"},
+                    },
+                }
+            )
         self._state["messages"] = assessments
         return dict(self._state)
 
@@ -177,7 +203,7 @@ def test_formal_runner_never_injects_knowledge_point_or_template(tmp_path: Path)
         "experience_tags": ["process_flow_coordination"],
         "pretest_answers": {f"PT-{index}": "A" for index in range(1, 6)},
         "diagnostic_probe_answers": [{"probe_id": "DP-01-B", "answer": "wrong"}],
-        "learner_script_id": "S-KEEP-B",
+        "learner_script_id": "S-STEP-UP-B",
     }
     gold = {
         "case_id": "E2E-001",
@@ -208,7 +234,7 @@ def test_formal_runner_rejects_forced_case_before_session_creation(tmp_path: Pat
         "profile_id": "planner_new",
         "pretest_answers": {},
         "diagnostic_probe_answers": [],
-        "learner_script_id": "S-KEEP-B",
+        "learner_script_id": "S-STEP-UP-B",
     }
     manager = FakeManager()
     runner = FormalCaseRunner(
@@ -293,7 +319,7 @@ def test_formal_learner_answer_respects_the_production_input_limit():
         ]
     }
 
-    answer = actor.follow_up_answer(state, "S-KEEP-A")
+    answer = actor.follow_up_answer(state, "S-STEP-UP-A")
 
     assert len(answer) <= 500
     assert "YCL 2025-05=0.6236" in answer

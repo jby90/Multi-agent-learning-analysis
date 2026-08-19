@@ -64,6 +64,8 @@ describe('DebugWorkspace', () => {
       continueLearning: vi.fn(),
       submitSql: vi.fn(),
       submitFollowUp: vi.fn(),
+      getLearningRecords: vi.fn(async () => ({ guest: true, records: [] })),
+      getLearningSummary: vi.fn(async () => ({ profiles: [] })),
       subscribeAgentEvents: (_sessionId, onEvent) => {
         onEvent(activity('trace-other-user', 1, '其他用户事件'))
         onEvent(activity('trace-current', 2, '当前会话审核通过'))

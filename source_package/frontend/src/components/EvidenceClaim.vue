@@ -55,29 +55,13 @@ const segments = computed<Segment[]>(() => {
 <template>
   <span class="evidence-line">
     <template v-for="(segment, index) in segments" :key="`${index}-${segment.text}`">
+      <!-- 需求②：证据句按普通文本呈现（无下划线/悬停/角标） -->
       <span v-if="segment.claim" class="claim-wrap">
-        <span
-          class="claim-anchor"
-          :class="{ 'is-speculation': segment.claim.kind === 'speculation' }"
-          tabindex="0"
-        >{{ learnerText(segment.text) }}</span>
-        <sup
-          v-if="segment.marker"
-          class="evidence-marker"
-          :aria-label="`查看《${learnerText(knowledgePoint ?? '本节内容')}》知识出处`"
-        >{{ segment.marker }}</sup>
+        {{ learnerText(segment.text) }}
         <span
           v-if="segment.claim.kind === 'speculation'"
           class="speculation-badge"
         >推断</span>
-        <span
-          v-if="segment.evidence.length"
-          class="evidence-popover"
-          role="tooltip"
-        >
-          <span>出自《{{ learnerText(knowledgePoint ?? '本节内容') }}》知识点</span>
-          <span>{{ matchesBlindSpot ? '与你的盲区匹配' : '与本节学习目标相连' }}</span>
-        </span>
       </span>
       <span v-else>{{ learnerText(segment.text) }}</span>
     </template>

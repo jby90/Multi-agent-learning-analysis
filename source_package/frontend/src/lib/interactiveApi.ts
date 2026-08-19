@@ -124,6 +124,25 @@ export interface InteractiveFollowUpTurn {
   target_misconception?: string | null
 }
 
+export interface InteractiveMasteryPlanItem {
+  knowledge_point: string
+  tier: number
+  mastery_status?: string
+}
+
+export interface InteractiveCommonMistakes {
+  misconception_counts?: Record<string, number>
+  wrong_answer_rounds?: number
+  sql_failure_count?: number
+  examples?: Array<{
+    round?: number
+    misconception?: string
+    question?: string
+    answer?: string
+    feedback?: string
+  }>
+}
+
 export interface InteractiveTrainingReport {
   title: string
   knowledge_point: string
@@ -136,6 +155,47 @@ export interface InteractiveTrainingReport {
   achievement: string
   next_knowledge_point?: string | null
   deferred_knowledge_points?: string[]
+  /** 0818 需求 3：报告增强——每知识点掌握档位/常犯错误/学习起止 */
+  started_at?: string
+  finished_at?: string
+  mastery_plan?: InteractiveMasteryPlanItem[]
+  common_mistakes?: InteractiveCommonMistakes
+}
+
+/** 0818 需求 5：学习记录（后端完成训练时落盘，账号归属查询） */
+export interface LearningRecord {
+  record_id: string
+  account_user_id?: string | null
+  account_username?: string | null
+  profile_id: string
+  knowledge_point: string
+  started_at: string
+  finished_at: string
+  date: string
+  start_time: string
+  end_time: string
+  duration_seconds: number
+  mastery: Record<string, number>
+  misconception_hits?: Record<string, number>
+  wrong_answer_rounds?: number
+  sql_failure_count?: number
+  query_count?: number
+  follow_up_rounds?: number
+  achievement?: string
+  outcome?: string
+  difficulty?: { initial?: string | null; final?: string | null }
+}
+
+/** 0818 需求 6：画像维度汇总（仅 admin） */
+export interface ProfileLearningSummary {
+  profile_id: string
+  round_count: number
+  learner_count: number
+  avg_duration_seconds: number
+  misconception_frequency: Record<string, number>
+  avg_mastery: Record<string, number>
+  wrong_answer_rounds: number
+  sql_failure_total: number
 }
 
 type InteractiveFeedback = {
@@ -150,6 +210,8 @@ export type InteractiveInteraction =
       title: string
       message: string
       questions: InteractiveDiagnosticProbe[]
+      probe_step?: number
+      probe_total?: number
       provisional_route?: {
         knowledge_point?: string
         difficulty?: string
@@ -162,6 +224,11 @@ export type InteractiveInteraction =
       difficulty?: string
       reason?: string
       evidence_ids?: string[]
+    })
+  | (InteractiveFeedback & {
+      /** 闭环四：前测答对点微课懒生成——直入实操提示 */
+      kind: 'lecture_deferred'
+      message?: string
     })
   | (InteractiveFeedback & {
       kind: 'free_text_follow_up'
@@ -223,7 +290,7 @@ export interface InteractiveState {
   }
   sql_support?: {
     attempt: number
-    level: 'self_correction' | 'structured_hint' | 'partial_template' | 'step_down'
+    level: 'self_correction' | 'structured_hint' | 'partial_template' | 'step_down' | 'scaffold_direct'
     hint: string
     will_step_down: boolean
   } | null
@@ -273,7 +340,11 @@ export interface AgentActivityEvent {
 }
 
 export interface InteractiveApi {
-  createSession(profileId: string, experienceTags?: string[]): Promise<InteractiveState>
+  createSession(
+    profileId: string,
+    experienceTags?: string[],
+    authToken?: string | null,
+  ): Promise<InteractiveState>
   getState(sessionId: string): Promise<InteractiveState>
   getPretest(sessionId: string): Promise<InteractivePretestQuestion[]>
   getDiagnosticProbes(sessionId: string): Promise<InteractiveDiagnosticProbe[]>
@@ -293,6 +364,15 @@ export interface InteractiveApi {
     text: string,
     clientTurnId: string,
   ): Promise<InteractiveState>
+  /** 0818 需求 5：学员学习记录（游客仅返回 guest 标记） */
+  getLearningRecords(authToken?: string | null): Promise<{
+    guest: boolean
+    records: LearningRecord[]
+  }>
+  /** 0818 需求 6：画像维度汇总（仅 admin，403 抛 InteractiveApiError） */
+  getLearningSummary(authToken?: string | null): Promise<{
+    profiles: ProfileLearningSummary[]
+  }>
   subscribeAgentEvents?(
     sessionId: string,
     onEvent: (event: AgentActivityEvent) => void,
@@ -363,10 +443,22 @@ export function createInteractiveApi(
   }
 
   return {
-    createSession: (profileId, experienceTags = []) => request(
+    createSession: (profileId, experienceTags = [], authToken = null) => request(
       '/api/sessions',
       'POST',
-      { profile_id: profileId, experience_tags: experienceTags },
+      {
+        profile_id: profileId,
+        experience_tags: experienceTags,
+        ...(authToken ? { auth_token: authToken } : {}),
+      },
+    ),
+    getLearningRecords: (authToken = null) => request(
+      `/api/learning-records${authToken ? `?token=${encodeURIComponent(authToken)}` : ''}`,
+      'GET',
+    ),
+    getLearningSummary: (authToken = null) => request(
+      `/api/learning-records/summary${authToken ? `?token=${encodeURIComponent(authToken)}` : ''}`,
+      'GET',
     ),
     getState: (sessionId) => request(
       `/api/sessions/${encodeURIComponent(sessionId)}`,

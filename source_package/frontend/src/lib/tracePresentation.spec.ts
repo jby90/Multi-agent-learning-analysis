@@ -12,6 +12,8 @@ import {
   learnerTextOr,
   learnerText,
   publicQueryText,
+  contextualizedTaskStem,
+  currentProfileCopy,
   firstLectureGoal,
   roleLabel,
   ruleLabel,
@@ -134,6 +136,19 @@ describe('trace presentation mappings', () => {
     )).toBe(
       '计划量与实际量的区分验证查询由流程调度触发，完成数据验证后进入数据验证。',
     )
+  })
+
+  it('strips the prerequisite scaffold note from graded question stems', () => {
+    expect(learnerText(
+      '前置提示：本题关联前置知识 「月度聚合方法」——能用半开区间正确聚合同月度数据且不混淆聚合层级。查询2025-05YCL各责任单元完成率',
+    )).toBe('查询2025-05YCL各责任单元完成率')
+
+    expect(learnerText(
+      '前置提示：本题关联前置知识 「三道工序与传导关系」——能从下游异常沿工序链溯源到源头，区分链式传导与各自独立异常；「月度聚合方法」——能用半开区间正确聚合月度数据。按工序顺序查询H26012025-05三道工序完成率',
+    )).toBe('按工序顺序查询H26012025-05三道工序完成率')
+
+    expect(learnerText('按工序顺序查询H26012025-05三道工序完成率'))
+      .toBe('按工序顺序查询H26012025-05三道工序完成率')
   })
 
   it.each([
@@ -377,5 +392,74 @@ describe('trace presentation mappings', () => {
     expect(truthBadges(traceMessage({
       content: { cached: true, generated_by: 'template_fallback' },
     }))).toHaveLength(2)
+  })
+})
+
+
+describe('currentProfileCopy', () => {
+  it('prefers the live profile catalog wording by profile id', () => {
+    const copy = currentProfileCopy('planner_new', {
+      title: '旧标题',
+      background: '旧版背景文案（现场熟）',
+    })
+    expect(copy.title).toBe('新入职生产计划员')
+    // 现行画像目录是岗位选择页同源数据：旧 trace 内嵌文案不得胜出
+    // （0819 画像文案更新：新背景不再包含"SQL"字样）
+    expect(copy.background).toContain('船厂')
+    expect(copy.background).not.toContain('旧版')
+  })
+
+  it('falls back to trace copy when the profile is not in the catalog', () => {
+    const copy = currentProfileCopy('imported_custom', {
+      title: '导入岗位',
+      background: '导入会话的背景',
+    })
+    expect(copy.title).toBe('导入岗位')
+    expect(copy.background).toBe('导入会话的背景')
+  })
+
+  it('uses neutral placeholders when nothing is known', () => {
+    const copy = currentProfileCopy(undefined, undefined)
+    expect(copy.title).toBe('岗位画像')
+    expect(copy.background).toBe('岗位背景随会话载入。')
+  })
+})
+
+
+describe('contextualizedTaskStem', () => {
+  function taskView(content: Record<string, unknown>) {
+    return {
+      visibleMessages: [{
+        ...traceMessage({
+          agent: 'task',
+          role: 'produce',
+          payloadType: 'practice_guide',
+          content: { event: 'product_ready', ...content },
+        }),
+      }],
+    } as unknown as Parameters<typeof contextualizedTaskStem>[0]
+  }
+
+  it('returns the contextualized stem when it differs from the standard one', () => {
+    const view = taskView({
+      contextualized_stem: '结合你负责的托盘工序，统计……',
+      standard_stem: '统计……',
+      question: '统计……',
+    })
+    expect(contextualizedTaskStem(view)).toBe('结合你负责的托盘工序，统计……')
+  })
+
+  it('falls back to the question actually issued in old-format traces', () => {
+    // 旧 trace 没有 contextualized_stem：退回 question，不得恒为 undefined
+    const view = taskView({
+      standard_stem: '请统计 H2601 的偏差率……',
+      question: '请统计 H2601 的偏差率……',
+    })
+    expect(contextualizedTaskStem(view)).toBe('请统计 H2601 的偏差率……')
+  })
+
+  it('stays undefined when the session issued no task at all', () => {
+    const view = { visibleMessages: [] } as unknown as Parameters<typeof contextualizedTaskStem>[0]
+    expect(contextualizedTaskStem(view)).toBeUndefined()
   })
 })

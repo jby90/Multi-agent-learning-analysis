@@ -37,7 +37,7 @@ def test_v3_router_is_deterministic_and_records_complete_route_evidence() -> Non
         "evidence_ids": ["DP-02-A"],
         "priority": 100,
         "initial_difficulty": "applied",
-        "route_reason": "应用校准探针答错，需从应用档建立稳定掌握。",
+        "route_reason": "第2道小题答错，将从应用难度开始巩固掌握。",
         "prerequisites": ["计划量与实际量口径", "完成率计算"],
     }
 

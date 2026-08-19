@@ -1,3 +1,5 @@
+import profileCatalog from 'virtual:profile-catalog'
+
 import type {
   AgentId,
   RoleId,
@@ -6,6 +8,26 @@ import type {
   TraceView,
   TruthBadge,
 } from '../types/trace'
+
+
+/**
+ * 展示层统一岗位文案：以现行画像目录（agents/profiles/*.json，与实操通道
+ * 的岗位选择页同源）为准；旧 demo trace 内嵌的旧版背景文案只作兜底。
+ * trace 是评测证据不可改写，因此三处（岗位选择页/单画像/三画像）的口径
+ * 统一发生在展示层。
+ */
+export function currentProfileCopy(
+  profileId: string | undefined,
+  traceProfile: { title?: string; background?: string } | undefined,
+): { title: string; background: string } {
+  const current = profileId
+    ? profileCatalog.find((profile) => profile.id === profileId)
+    : undefined
+  return {
+    title: current?.title ?? traceProfile?.title ?? '岗位画像',
+    background: current?.background ?? traceProfile?.background ?? '岗位背景随会话载入。',
+  }
+}
 
 
 export const STATE_ORDER: StateId[] = [
@@ -48,7 +70,7 @@ const ROLE_LABELS: Record<RoleId, string> = {
   system: '流程调度',
 }
 
-const STATE_LABELS: Record<StateId, string> = {
+export const STATE_LABELS: Record<StateId, string> = {
   S0_INIT: '会话建立',
   S1_DIAGNOSIS: '岗前测评',
   S2_KNOWLEDGE: '岗位微课',
@@ -186,15 +208,21 @@ export function contextualizedTaskStem(view: TraceView): string | undefined {
     && message.content.event === 'product_ready'
     && ['quiz_set', 'practice_guide'].includes(message.payloadType)
   ))
-  if (!task || task.content.contextualize_fallback === true) return undefined
+  if (!task) return undefined
   const stem = typeof task.content.contextualized_stem === 'string'
     ? task.content.contextualized_stem.trim()
     : ''
   const standard = typeof task.content.standard_stem === 'string'
     ? task.content.standard_stem.trim()
     : ''
-  if (!stem || (standard && stem === standard)) return undefined
-  return stem
+  if (stem && stem !== standard) return stem
+  // 旧版 trace（个性化题干功能上线前录制）没有 contextualized_stem 字段：
+  // 退回会话实际下发的题干 question，保证回放/三画像能看到真实任务，
+  // 而不是恒为"暂无岗位实操任务"。
+  const question = typeof task.content.question === 'string'
+    ? task.content.question.trim()
+    : ''
+  return question || undefined
 }
 
 
@@ -203,6 +231,81 @@ export function abbreviateDimension(dimension: string): string {
     ?? dimension.replace(/方法|分析|标准|规律|关系|计算/g, '').slice(0, 6)
 }
 
+
+const PROCESS_VALUE_LABELS: Record<string, string> = {
+  YCL: '预处理',
+  ZZTP: '制作托盘',
+  AZTP: '安装托盘',
+}
+
+export function processValueLabel(code: string): string {
+  return PROCESS_VALUE_LABELS[code] ?? code
+}
+
+const SHIP_IN_SQL_RE = /ship_no\s*=\s*'([^']+)'/giu
+const PROCESS_IN_SQL_RE = /process_code\s*=\s*'([^']+)'/giu
+const PROCESS_IN_LIST_RE = /process_code\s+in\s*\(([^)]+)\)/giu
+const MONTH_UPPER_RE = /period_date\s*<\s*'(\d{4})-(\d{2})-/iu
+const MONTH_LOWER_RE = /period_date\s*>=\s*'(\d{4})-(\d{2})-/iu
+
+/** 从当前可见 trace 提取训练数据范围（船号/工序/数据截止）。 */
+export function deriveTrainingScope(
+  view: { sqlResult?: { content: Record<string, unknown> } } | undefined,
+): { ship?: string; processes: string[]; cutoff?: string } {
+  const content = view?.sqlResult?.content
+  let ship: string | undefined
+  const processes: string[] = []
+  const months: string[] = []
+
+  const addProcess = (code: string): void => {
+    if (code && !processes.includes(code)) processes.push(code)
+  }
+
+  // 来源一：结果行中的维度列（宽表查询直接可见）。
+  const rows = content?.rows
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (typeof row !== 'object' || row === null) continue
+      const record = row as Record<string, unknown>
+      if (!ship && typeof record.ship_no === 'string') ship = record.ship_no
+      if (typeof record.process_code === 'string') addProcess(record.process_code)
+      if (typeof record.month_label === 'string') months.push(record.month_label)
+    }
+  }
+
+  // 来源二：查询语句的 WHERE 条件——单值结果（如仅一列完成率）时，
+  // 船号/工序/时间范围只在 SQL 文本里。
+  const sqlText = [content?.generated_sql, content?.executed_sql]
+    .filter((part): part is string => typeof part === 'string')
+    .join('\n')
+  if (sqlText) {
+    if (!ship) {
+      const shipMatch = SHIP_IN_SQL_RE.exec(sqlText)
+      if (shipMatch) ship = shipMatch[1]
+    }
+    for (const match of sqlText.matchAll(PROCESS_IN_SQL_RE)) addProcess(match[1])
+    for (const listMatch of sqlText.matchAll(PROCESS_IN_LIST_RE)) {
+      for (const inner of listMatch[1].matchAll(/'([^']+)'/gu)) addProcess(inner[1])
+    }
+    const upper = MONTH_UPPER_RE.exec(sqlText)
+    if (upper) {
+      // 上界为开区间次月首日，数据实际覆盖到上界前一月。
+      const year = Number(upper[1])
+      const month = Number(upper[2])
+      const prev = month === 1 ? 12 : month - 1
+      const prevYear = month === 1 ? year - 1 : year
+      months.push(`${prevYear}-${String(prev).padStart(2, '0')}`)
+    } else {
+      const lower = MONTH_LOWER_RE.exec(sqlText)
+      if (lower) months.push(`${lower[1]}-${lower[2]}`)
+    }
+  }
+
+  const maxMonth = months.filter(Boolean).sort().at(-1)
+  // 数据截止：观测到的最大月份的月末。
+  const cutoff = maxMonth ? `${maxMonth.slice(0, 7)} 月末` : undefined
+  return { ship, processes, cutoff }
+}
 
 export function dataFieldLabel(field: string): string {
   const approvedLabel = ownValue(FIELD_LABELS, field)
@@ -345,6 +448,18 @@ function publicText(text: string, fallback = PUBLIC_TEXT_FALLBACK): string {
     : text
 }
 
+// The task generator prepends "前置提示：本题关联前置知识 「KP」——goal；…。"
+// to graded questions that cross into a prerequisite knowledge point — the
+// R-03 reviewer needs this note inside the product, but learners should
+// never see it; every display path strips it for a uniform clean stem.
+const SCAFFOLD_HINT_PREFIX = /^前置提示：本题关联前置知识 [^。]*。/u
+
+function stripScaffoldHint(text: string): string {
+  if (!SCAFFOLD_HINT_PREFIX.test(text)) return text
+  return text.replace(SCAFFOLD_HINT_PREFIX, '').trim() || text
+}
+
+
 export function publicDisplayText(
   rawText: string,
   translatedText = rawText,
@@ -358,13 +473,13 @@ export function publicDisplayText(
   ) {
     return publicFallback(fallback)
   }
-  return translatedText
+  return stripScaffoldHint(translatedText)
 }
 
 function translatedPublicText(text: string): string {
   const mechanisms = MECHANISM_COPY.reduce(
     (value, [pattern, replacement]) => value.replace(pattern, replacement),
-    sourceSafeText(translatedFields(text)),
+    sourceSafeText(translatedFields(stripScaffoldHint(text))),
   )
   return Object.entries(MISCONCEPTION_LABELS).reduce(
     (value, [code, label]) => value.replaceAll(code, label),
@@ -471,6 +586,40 @@ export function verificationFailureCopy(
 
 export function agentLabel(agent: string): string {
   return AGENT_LABELS[agent as AgentId] ?? '未识别角色'
+}
+
+
+const PAYLOAD_TYPE_LABELS: Record<string, string> = {
+  profile_assessment: '学情诊断',
+  lecture_note: '岗位微课',
+  practice_guide: '实操指引',
+  quiz_set: '练习题',
+  sql_result: '数据查询',
+  review_verdict: '专业审核',
+  rebuttal_case: '补充说明',
+  probe_questions: '验证任务',
+  learning_path_update: '培养路径',
+  control: '流程调度',
+}
+
+
+export function payloadTypeLabel(payloadType: string): string {
+  return PAYLOAD_TYPE_LABELS[payloadType] ?? '会话内容'
+}
+
+
+const AWAITING_LABELS: Record<string, string> = {
+  pretest: '岗前测评',
+  diagnostic_probe: '补充诊断',
+  sql: '数据实操',
+  follow_up: '理解核对',
+  advance: '等待推进',
+  done: '已完成',
+}
+
+
+export function awaitingLabel(awaiting: string): string {
+  return AWAITING_LABELS[awaiting] ?? awaiting
 }
 
 

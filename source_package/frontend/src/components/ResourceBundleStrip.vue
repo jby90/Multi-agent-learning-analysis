@@ -8,7 +8,11 @@ import type {
 } from '../lib/interactiveApi'
 
 
-const props = defineProps<{ bundle: InteractiveResourceBundle }>()
+const props = withDefaults(defineProps<{
+  bundle: InteractiveResourceBundle
+  /** 闭环四：微课懒生成（前测已验证）时，知识分支为延期标记而非讲义内容 */
+  knowledgeDeferred?: boolean
+}>(), { knowledgeDeferred: false })
 
 const branchMeta: Record<InteractiveResourceBranch['branch_id'], {
   label: string
@@ -37,8 +41,9 @@ function difficultyLabel(value: string | undefined): string {
       <span class="bundle-summary-copy">
         <CircleCheck :size="18" aria-hidden="true" />
         <span>
-          <strong>微课、实操与测验已准备</strong>
-          <small>内容围绕同一学习目标组织</small>
+          <strong v-if="knowledgeDeferred">实操与测验已准备</strong>
+          <strong v-else>微课、实操与测验已准备</strong>
+          <small>{{ knowledgeDeferred ? '微课已由前测验证跳过，未通过将自动配发' : '内容围绕同一学习目标组织' }}</small>
         </span>
       </span>
       <span class="bundle-summary-status">
@@ -50,7 +55,6 @@ function difficultyLabel(value: string | undefined): string {
     <div class="bundle-details">
       <header>
         <strong>本轮学习资源</strong>
-        <code :title="bundle.bundle_id">RB · {{ bundle.bundle_id.slice(-6) }}</code>
       </header>
       <div class="resource-branches">
         <article
@@ -63,7 +67,13 @@ function difficultyLabel(value: string | undefined): string {
           <ClipboardCheck v-else :size="17" aria-hidden="true" />
           <span>
             <b>{{ branch.label }}</b>
-            <small>{{ branch.status === 'ready' ? branch.detail : '正在重新准备' }}</small>
+            <small>{{
+              branch.status !== 'ready'
+                ? '正在重新准备'
+                : branch.branch_id === 'knowledge' && knowledgeDeferred
+                  ? '前测已验证，本次跳过'
+                  : branch.detail
+            }}</small>
           </span>
           <em>{{ difficultyLabel(branch.difficulty) }}</em>
           <Check v-if="branch.status === 'ready'" :size="13" aria-label="已生成" />

@@ -180,9 +180,9 @@ class DiagnosticRouter:
                 continue
             mastered.discard(point)
             reason = (
-                "基础诊断探针答错，需从基础档建立概念与口径。"
+                "第1道小题答错，将从基础难度开始建立概念与口径。"
                 if difficulty == "basic"
-                else "应用校准探针答错，需从应用档建立稳定掌握。"
+                else "第2道小题答错，将从应用难度开始巩固掌握。"
             )
             wrong[point] = {
                 "source": "diagnostic_probe",
@@ -231,7 +231,7 @@ class DiagnosticRouter:
                 evidence_source="profile_prior",
                 evidence_ids=[f"PROFILE:{profile_id}"],
                 initial_difficulty=str(profile["difficulty_start"]),
-                route_reason="岗位画像将该点标记为先验薄弱项，且当前无正确作答证据覆盖。",
+                route_reason="岗位画像将该点标记为可能的薄弱项，且当前没有正确作答的证据。",
             )
 
         for point in self._order:
@@ -244,7 +244,7 @@ class DiagnosticRouter:
                 evidence_source="curriculum_extension",
                 evidence_ids=[f"CURRICULUM:{point}"],
                 initial_difficulty="basic",
-                route_reason="该核心知识点尚无直接掌握证据，按冻结培养顺序纳入后续扩展。",
+                route_reason="该知识点尚无掌握证据，按既定培养顺序安排在后续学习。",
             )
 
         ordered = sorted(
@@ -302,15 +302,15 @@ class DiagnosticRouter:
                 "evidence_source": "profile_experience",
                 "evidence_ids": [f"EXPERIENCE:{tags[0]}"],
                 "route_reason": (
-                    f"岗位画像经历“{tag['label']}”需要先用固定探针校准；"
-                    "该标签本身不判定盲区。"
+                    f"你选择的经历“{tag['label']}”还需要用小题确认；"
+                    "该经历本身不代表知识薄弱。"
                 ),
             }
         if selected_knowledge_point:
             return selected_knowledge_point, {
                 "evidence_source": "diagnostic_plan",
                 "evidence_ids": [f"PLAN_CANDIDATE:{selected_knowledge_point}"],
-                "route_reason": "按当前确定性知识点计划首项执行固定探针校准。",
+                "route_reason": "按学习计划的第一个知识点出一道小题确认起点。",
             }
         return None, None
 

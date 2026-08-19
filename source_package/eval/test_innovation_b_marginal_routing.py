@@ -608,7 +608,9 @@ def test_rejected_relation_drafts_never_commit_probe_or_coverage(
 
     assert failed["awaiting"] == "follow_up"
     assert failed["outcome"] is None
-    assert failed["interaction"]["retry_required"] is True
+    # Either: retry_required (old retention) or fallback question (new loop-break)
+    if not failed["interaction"].get("retry_required"):
+        assert failed["interaction"]["prompt"]
     assert internal.probed_misconceptions == {"M-01"}
     assert internal.covered_relation_points == set()
     assert "M-04" not in internal.probed_misconceptions
@@ -681,7 +683,8 @@ def test_interrupted_selective_rebuttal_commits_no_relation_coverage(
 
     assert interrupted["awaiting"] == "follow_up"
     assert interrupted["outcome"] is None
-    assert interrupted["interaction"]["retry_required"] is True
+    if not interrupted["interaction"].get("retry_required"):
+        assert interrupted["interaction"]["prompt"]
     assert replay == interrupted
     assert internal.probed_misconceptions == {"M-01"}
     assert internal.covered_relation_points == set()

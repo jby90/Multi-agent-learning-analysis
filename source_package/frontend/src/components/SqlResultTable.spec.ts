@@ -35,10 +35,10 @@ describe('SqlResultTable', () => {
     })
 
     expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual([
-      '计划量', '实际完成量', '完成率',
+      '#', '计划量', '实际完成量', '完成率',
     ])
     expect(wrapper.findAll('td').map((cell) => cell.text())).toEqual([
-      '1855.06', '1156.87', '62.36%',
+      '1', '1855.06', '1156.87', '62.36%',
     ])
     expect(wrapper.text()).not.toContain('plan_qty')
     expect(wrapper.text()).not.toContain('actual_qty')
@@ -113,16 +113,17 @@ describe('SqlResultTable', () => {
       },
     })
 
+    // 需求⑦：最前列为行号列
     expect(wrapper.findAll('th').map((cell) => cell.text()))
-      .toEqual(columns.map(() => '数据字段'))
+      .toEqual(['#', ...columns.map(() => '数据字段')])
     expect(wrapper.findAll('td').map((cell) => cell.text()))
-      .toEqual(columns.map(() => '内容已隐藏'))
+      .toEqual(['1', ...columns.map(() => '内容已隐藏')])
     expect(wrapper.text()).not.toMatch(
       /Q4|safe_rejected|no_matching_transition|msg_id|rule_hits|verdict|routing_|custom_internal_name|object_payload/iu,
     )
   })
 
-  it('opens a focused result view and restores it with Escape', async () => {
+  it('no longer exposes the focused-result toggle in the heading', async () => {
     const wrapper = mount(SqlResultTable, {
       props: {
         message: resultMessage({
@@ -133,15 +134,11 @@ describe('SqlResultTable', () => {
       },
     })
 
-    await wrapper.get('.content-focus-toggle').trigger('click')
-    expect(wrapper.get('.sql-result').classes()).toContain('is-focus-mode')
-    expect(wrapper.get('.content-focus-toggle').attributes('aria-label'))
-      .toBe('退出查询结果专注模式')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await wrapper.vm.$nextTick()
-
+    // 需求⑦：删除"专注分析"入口与行数徽标
+    expect(wrapper.find('.content-focus-toggle').exists()).toBe(false)
+    expect(wrapper.find('.row-count').exists()).toBe(false)
     expect(wrapper.get('.sql-result').classes()).not.toContain('is-focus-mode')
+    expect(wrapper.get('.sql-result-heading h3').text()).toBe('计划兑现情况')
     wrapper.unmount()
   })
 
@@ -181,6 +178,7 @@ describe('SqlResultTable', () => {
     })
 
     expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual([
+      '#',
       '月份',
       '责任单元',
       '高风险记录数',
@@ -205,7 +203,7 @@ describe('SqlResultTable', () => {
       '小组立实际值',
     ])
     expect(wrapper.findAll('td').map((cell) => cell.text()))
-      .toEqual(columns.map(() => '1'))
+      .toEqual(['1', ...columns.map(() => '1')])
   })
 
   it.each([

@@ -9,8 +9,13 @@ frontend/dist/
 frontend/.vite/
 
 output/
+outputs/
+runtime/
 eval/results/
 eval/output/
+
+*.bak
+*.new
 
 /traces/*
 !/traces/demo-*.jsonl

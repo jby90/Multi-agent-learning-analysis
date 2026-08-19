@@ -7,29 +7,85 @@ import CollaborationWorkspace from './components/CollaborationWorkspace.vue'
 import LearningPath from './components/LearningPath.vue'
 import DataCollisionMoment from './components/DataCollisionMoment.vue'
 import DebugWorkspace from './components/DebugWorkspace.vue'
-import FloatingAgentAssistant from './components/FloatingAgentAssistant.vue'
 import LivePractice from './components/LivePractice.vue'
+import LearningRecords from './components/LearningRecords.vue'
 import ProfileComparison from './components/ProfileComparison.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
 import ReplayToolbar from './components/ReplayToolbar.vue'
+import AuthGate from './components/AuthGate.vue'
+import UserMenu from './components/UserMenu.vue'
 import ResourcePanel from './components/ResourcePanel.vue'
-import ResourceBundleStrip from './components/ResourceBundleStrip.vue'
 import { useAgentEventPlayback } from './composables/useAgentEventPlayback'
 import { useReplay, type ReplaySpeed } from './composables/useReplay'
 import { buildTraceView, listKeyframes } from './lib/traceModel'
 import { parseTraceJsonl } from './lib/traceParser'
 import { parseImportedTrace, serializeTraceJsonl } from './lib/traceTransfer'
 import type { InteractiveState } from './lib/interactiveApi'
+import { AUTH_TOKEN_KEY, createAuthApi, type AuthRole, type AuthSession } from './lib/authApi'
 import type { DataCollision, TraceDocument, TraceManifestEntry } from './types/trace'
 
 
 const documents = ref<TraceDocument[]>([])
 const isDebugWorkspace = new URLSearchParams(window.location.search).get('view') === 'debug'
+
+// ---- 登录态（身份层；与 ref-interactive-session 训练会话互不干扰） ----
+const authApi = createAuthApi()
+const authUser = ref<AuthSession | null>(null)
+const authRestoring = ref(Boolean(sessionStorage.getItem(AUTH_TOKEN_KEY)))
+async function restoreAuth(): Promise<void> {
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY)
+  if (!token) {
+    authRestoring.value = false
+    return
+  }
+  try {
+    const profile = await authApi.me(token)
+    authUser.value = {
+      user_id: profile.user_id,
+      username: profile.username,
+      role: profile.role,
+      token,
+    }
+  } catch {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  } finally {
+    authRestoring.value = false
+  }
+}
+function onAuthenticated(session: AuthSession): void {
+  authUser.value = session
+  // 定稿：登录/注册进入系统一律先落在欢迎页——清掉上一账号遗留的
+  // 训练会话恢复标记并复位面板（否则 LivePractice 会直接续训而非欢迎页）。
+  sessionStorage.removeItem('ref-interactive-session')
+  resetLiveState()
+}
+function onAuthLogout(): void {
+  authUser.value = null
+  // 登录态清除不影响正在进行的训练会话（ref-interactive-session 保留）。
+}
+const userRole = computed<AuthRole | null>(() => authUser.value?.role ?? null)
+// 0819 bug7：跳过登录的游客模式（不再弹登录门）
+const authSkipped = ref(false)
+function onAuthSkip(): void {
+  authSkipped.value = true
+  // 定稿：跳过（游客）进入同样先落欢迎页
+  sessionStorage.removeItem('ref-interactive-session')
+  resetLiveState()
+}
+void restoreAuth()
 const selectedFile = ref('')
 const comparison = ref(false)
 const entryMode = ref<'replay' | 'live'>(
   sessionStorage.getItem('ref-interactive-session') ? 'live' : 'replay',
 )
+// 优化20：非 admin（学员+游客跳过）一律固定实操通道——游客曾见管理入口。
+// 登录态恢复期间（authRestoring）不强制：admin 恢复后保持默认回放入口。
+watch(userRole, (role) => {
+  if (authRestoring.value) return
+  if (role !== 'admin' && entryMode.value !== 'live') entryMode.value = 'live'
+}, { immediate: true })
+// 0818 需求 5：学习记录页（头像下拉进入）
+const recordsOpen = ref(false)
 const viewMode = ref<'student' | 'collaboration'>('student')
 const liveDocument = ref<TraceDocument>()
 const liveState = ref<InteractiveState>()
@@ -42,6 +98,10 @@ type LessonPageState = {
   isLast: boolean
 }
 const liveLessonPage = ref<LessonPageState>({ index: 0, total: 0, isLast: false })
+// 需求⑨：提问环节查阅讲义开关——追问态临时切回双栏展示完整微课
+const lecturePeek = ref(false)
+const autoChainActive = ref(false)
+const practiceChainActive = ref(false)
 const {
   events: liveAgentEvents,
   receive: receiveAgentEvent,
@@ -65,9 +125,15 @@ const replay = useReplay(total)
 const view = computed(() => selectedDocument.value
   ? buildTraceView(selectedDocument.value, replay.cursor.value)
   : undefined)
+// 顶栏数据范围：从当前通道（live 实操 / 回放）的最新查询结果动态提取。
+
 const liveView = computed(() => liveDocument.value
   ? buildTraceView(liveDocument.value, liveDocument.value.messages.length)
   : undefined)
+watch(
+  () => liveView.value?.lecture?.msgId,
+  () => { liveLessonPage.value = { index: 0, total: 0, isLast: false } },
+)
 const liveLearnerView = computed(() => {
   const current = liveView.value
   const state = liveState.value
@@ -118,10 +184,32 @@ const liveLearnerHasResource = computed(() => Boolean(
   || liveLearnerView.value?.task
   || liveLearnerView.value?.sqlResult,
 ))
+// T17 remediation and the claim gate keep the artifact pointer populated
+// (control / lecture messages) while the previous sql_result message stays
+// in the append-only trace.  During awaiting='advance' the result is valid
+// only while the artifact IS the approved sql_result message.
+const liveSqlResultStale = computed(() => {
+  const state = liveState.value
+  if (!state || state.awaiting !== 'advance') return false
+  const artifact = state.artifact as { payload?: { type?: string } } | null | undefined
+  return artifact?.payload?.type !== 'sql_result'
+})
 const liveTrainingLayout = computed<LiveTrainingLayout>(() => {
   const state = liveState.value
+  // ②③：前测链锁 transition（中央 pending）；练习链锁 lesson（保持讲义页+正在进入按钮）
+  if (autoChainActive.value && state && state.awaiting !== 'pretest' && state.awaiting !== 'done') {
+    return 'transition'
+  }
+  if (practiceChainActive.value && state && state.awaiting !== 'pretest' && state.awaiting !== 'done') {
+    return 'lesson'
+  }
   if (!state || state.awaiting === 'pretest') return 'assessment'
   if (state.awaiting === 'done') return 'report'
+  if (
+    state.awaiting === 'sql'
+    && liveLearnerView.value?.lecture
+    && !liveLessonPage.value.isLast
+  ) return 'lesson'
   if (state.awaiting === 'sql' || state.awaiting === 'follow_up') return 'practice'
   if (state.state === 'S2_KNOWLEDGE') return 'transition'
   if (
@@ -137,18 +225,17 @@ const liveTrainingLayout = computed<LiveTrainingLayout>(() => {
   return 'transition'
 })
 const liveWorkbenchTitle = computed(() => ({
-  assessment: '岗前评测',
+  assessment: '岗前测评',
   transition: '训练准备',
   lesson: '岗位微课',
   practice: '实操工作台',
   report: '本轮训练报告',
 })[liveTrainingLayout.value])
 const liveWorkbenchStatus = computed(() => {
-  if (liveTrainingLayout.value === 'lesson') {
-    const page = liveLessonPage.value
-    return page.total ? `学习进度 ${page.index + 1}/${page.total}` : '微课已就绪'
-  }
-  if (liveTrainingLayout.value === 'practice') return '指南与操作同步'
+  // 需求③：微课阶段不再展示"学习进度 n/m"字样
+  if (liveTrainingLayout.value === 'lesson') return ''
+  // 需求③：实操阶段不再展示"指南与操作同步"状态字样
+  if (liveTrainingLayout.value === 'practice') return ''
   if (liveTrainingLayout.value === 'assessment') return '专注完成诊断'
   if (liveTrainingLayout.value === 'report') return '训练已完成'
   return liveHasResource.value ? '内容已就绪' : '正在准备'
@@ -166,7 +253,7 @@ const collisionKey = computed(() => entryMode.value === 'live'
 const traceOptions = computed(() => documents.value.map((document) => {
   const full = buildTraceView(document, document.messages.length)
   const title = full.profile?.title ?? '岗位培养会话'
-  const suffix = full.debateGroups.length ? '辩论复审' : '完整会话'
+  const suffix = isDebateReviewDocument(document, full) ? '辩论复审' : '完整会话'
   return { fileName: document.fileName, label: `${title} · ${suffix}` }
 }))
 
@@ -179,9 +266,16 @@ const comparisonEntries = computed(() => {
   return documents.value.flatMap((document) => {
     const full = buildTraceView(document, document.messages.length)
     const profileId = document.profileId ?? ''
-    if (!profileId || seen.has(profileId) || full.debateGroups.length) return []
+    if (!profileId || seen.has(profileId) || isDebateReviewDocument(document, full)) return []
     seen.add(profileId)
-    return [{ document, view: full }]
+    // 当前会话卡跟随回放光标（展示连续学习过程），其余岗位定格各自会话
+    // 终态作对照组 —— 三条会话只有一条在回放，其余无光标可同步。
+    const isCurrent = document === selectedDocument.value
+    return [{
+      document,
+      view: isCurrent ? buildTraceView(document, replay.cursor.value) : full,
+      isCurrent,
+    }]
   })
 })
 
@@ -190,10 +284,35 @@ const exportDocument = computed(() => entryMode.value === 'live'
   ? liveDocument.value
   : selectedDocument.value)
 
+/**
+ * 是否为"辩论复审"专题会话（整段会话以复审为主体）。
+ * 优化7：真实完整会话也可能包含少量辩论复审轮次（讲义/任务评审触发），
+ * 只有辩论消息占比过半的专题会话才排除出三画像对比集。
+ */
+function isDebateReviewDocument(
+  document: TraceDocument,
+  full: ReturnType<typeof buildTraceView>,
+): boolean {
+  if (!full.debateGroups.length) return false
+  const debateMessages = document.messages.filter((message) => (
+    message.payloadType === 'rebuttal_case'
+  )).length
+  return debateMessages * 2 >= document.messages.length
+}
+
+/** 会话是否属于三画像对比集（带画像的基础岗会话；辩论复审专题/导入的不算）。 */
+function participatesInComparison(document: TraceDocument | undefined): boolean {
+  if (!document?.profileId) return false
+  const full = buildTraceView(document, document.messages.length)
+  return !isDebateReviewDocument(document, full)
+}
+
 function selectTrace(fileName: string): void {
   selectedFile.value = fileName
-  comparison.value = false
   const document = documents.value.find((item) => item.fileName === fileName)
+  // 三画像下切换岗位会话：新会话仍在对比集内则停留在三画像（"正在回放"高亮
+  // 卡随之切换到对应岗位）；切到对比集之外的会话（辩论复审/导入）才退回单画像。
+  if (!participatesInComparison(document)) comparison.value = false
   replay.jumpTo(document?.messages.length ?? 0)
 }
 
@@ -208,6 +327,8 @@ function changeSpeed(value: ReplaySpeed): void {
 }
 
 function changeEntryMode(value: 'replay' | 'live'): void {
+  // 优化20：回放仅 admin 可进（学员+游客跳过均固定实操通道）
+  if (value === 'replay' && userRole.value !== 'admin') return
   replay.pause()
   comparison.value = false
   entryMode.value = value
@@ -216,6 +337,18 @@ function changeEntryMode(value: 'replay' | 'live'): void {
 function changeViewMode(value: 'student' | 'collaboration'): void {
   viewMode.value = value
 }
+
+
+async function autoAdvanceToPractice(): Promise<void> {
+  const ref = livePracticeRef.value as { startPracticeChain?: () => Promise<void> } | null
+  if (!ref?.startPracticeChain) return
+  // ①③：整链由 LivePractice startPracticeChain 包裹 autoChainRunning——不闪中间界面
+  await ref.startPracticeChain()
+}
+
+watch(() => liveState.value?.awaiting, () => {
+  lecturePeek.value = false
+})
 
 function updateLiveState(state: InteractiveState): void {
   liveState.value = state
@@ -369,7 +502,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <DebugWorkspace v-if="isDebugWorkspace" />
+  <div v-if="authRestoring" class="auth-restore-veil" aria-label="正在恢复登录状态">
+    <LoaderCircle class="auth-restore-spin" :size="26" aria-hidden="true" />
+  </div>
+  <AuthGate v-else-if="!authUser && !authSkipped" @authenticated="onAuthenticated" @skip="onAuthSkip" />
+  <DebugWorkspace v-else-if="isDebugWorkspace" />
+  <!-- 优化27：学习记录=独立完整页面（不带顶栏），返回按钮回到训练 -->
+  <main v-else-if="recordsOpen" class="records-standalone">
+    <LearningRecords :role="userRole" @close="recordsOpen = false" />
+  </main>
   <div
     v-else
     class="app-shell"
@@ -382,6 +523,7 @@ onMounted(() => {
   >
     <ReplayToolbar
       :traces="traceOptions"
+      :auth-role="userRole"
       :selected-file="selectedFile"
       :playing="replay.playing.value"
       :cursor="replay.cursor.value"
@@ -392,21 +534,42 @@ onMounted(() => {
       :can-compare="canCompare"
       :entry-mode="entryMode"
       :view-mode="viewMode"
-      :can-export="Boolean(exportDocument)"
       :has-session="Boolean(liveState)"
+      :view-disabled="entryMode === 'live' && liveState?.awaiting === 'pretest'"
       @select="selectTrace"
       @play="replay.play"
       @pause="replay.pause"
       @step="replay.step"
+      @back="replay.stepBack"
+      @restart="replay.restart"
       @speed="changeSpeed"
       @jump="replay.jumpTo"
       @comparison="changeComparison"
       @entry="changeEntryMode"
       @view="changeViewMode"
-      @import="importTrace"
-      @export="exportTrace"
       @debug="openDebugWorkspace"
-    />
+    >
+      <template #user-menu>
+        <UserMenu
+          v-if="authUser"
+          :username="authUser.username"
+          :role="authUser.role"
+          :can-export="Boolean(exportDocument)"
+          @import-trace="importTrace"
+          @export-trace="exportTrace"
+          @open-records="recordsOpen = true"
+          @logout="onAuthLogout"
+        />
+        <!-- 优化26：游客（跳过登录）在头像位显示"登录/注册"，一键回到登录门 -->
+        <button
+          v-else-if="authSkipped"
+          type="button"
+          class="guest-login-btn"
+          aria-label="登录或注册"
+          @click="authSkipped = false"
+        >登录/注册</button>
+      </template>
+    </ReplayToolbar>
 
     <p v-if="transferMessage" class="trace-transfer-message" role="status">
       {{ transferMessage }}
@@ -450,7 +613,7 @@ onMounted(() => {
         :catalog="knowledgeCatalog"
       />
       <template v-else>
-        <ProfilePanel :view="view" :catalog="knowledgeCatalog" />
+        <ProfilePanel :view="view" :catalog="knowledgeCatalog" :profile-id="selectedDocument?.profileId" />
         <ResourcePanel :view="view" />
         <CollaborationWorkspace
           v-if="viewMode === 'collaboration'"
@@ -469,15 +632,21 @@ onMounted(() => {
           'is-student-view': viewMode === 'student',
           'is-collaboration-view': viewMode === 'collaboration',
           'is-live-booting': Boolean(liveState && !liveView),
+          'is-pretest-focus': Boolean(
+            liveState
+              && (liveState.awaiting === 'pretest'
+                || liveState.awaiting === 'diagnostic_probe'),
+          ),
         },
       ]"
       :aria-label="liveState ? '岗位训练工作台' : '选择岗位训练路径'"
     >
         <ProfilePanel
-          v-if="liveView"
+          v-if="liveView && liveState?.awaiting !== 'pretest' && liveState?.awaiting !== 'diagnostic_probe'"
           :view="liveView"
           :catalog="knowledgeCatalog"
           :current-difficulty="liveState?.current_difficulty"
+          :profile-id="liveState?.profile?.profile_id"
         />
       <div
         id="collaboration-learner-workspace"
@@ -497,7 +666,10 @@ onMounted(() => {
             </small>
           </div>
           <div class="training-workbench-actions">
-            <span class="training-workbench-status">
+            <span
+              v-if="liveState && liveWorkbenchStatus && liveState.awaiting !== 'pretest' && liveState.awaiting !== 'diagnostic_probe'"
+              class="training-workbench-status"
+            >
               {{ liveWorkbenchStatus }}
             </span>
             <a
@@ -506,11 +678,19 @@ onMounted(() => {
               href="#collaboration-topology-workspace"
             >返回拓扑 ↑</a>
             <button
+              v-if="liveState && (liveState.awaiting === 'pretest' || liveState.awaiting === 'diagnostic_probe')"
               type="button"
               class="restart-training"
-              aria-label="重新开始训练"
+              aria-label="返回选择训练关注点"
+              @click="livePracticeRef?.backToFocusSelection()"
+            >返回</button>
+            <button
+              v-else
+              type="button"
+              class="restart-training"
+              aria-label="重新选择岗位"
               @click="livePracticeRef?.resetSession()"
-            >重新开始</button>
+            >重新选择岗位</button>
           </div>
         </header>
         <div
@@ -519,7 +699,8 @@ onMounted(() => {
             'has-learning-resource': liveHasResource,
             'is-profile-selection': !liveState,
             [`is-${liveTrainingLayout}-layout`]: Boolean(liveState),
-          }"
+            'is-followup-focus': Boolean(liveState && liveState.awaiting === 'follow_up' && !lecturePeek),
+            }"
         >
           <LivePractice
             ref="livePracticeRef"
@@ -529,27 +710,37 @@ onMounted(() => {
             }"
             :sql-result="liveView?.sqlResult"
             :operation-only="Boolean(liveState)"
+            :lecture-peek-open="lecturePeek"
             @state="updateLiveState"
+            @lecture-peek="lecturePeek = $event"
+            @auto-chain="autoChainActive = $event"
+            @practice-chain="practiceChainActive = $event"
             @agent-event="receiveAgentEvent"
             @reset="resetLiveState"
           />
           <aside
             v-if="liveState"
-            v-show="liveTrainingLayout === 'lesson' || liveTrainingLayout === 'practice'"
+            v-show="liveTrainingLayout === 'lesson' || liveTrainingLayout === 'practice' || lecturePeek"
             class="training-lesson-station"
             aria-label="学习与实操指南"
           >
-            <ResourceBundleStrip
-              v-if="liveState.resource_bundle"
-              :bundle="liveState.resource_bundle"
-            />
+            <!-- 需求③：资源就绪条（实操与测验已准备 3/3）板块已删除 -->
             <ResourcePanel
               v-if="liveLearnerView && liveLearnerHasResource"
               :view="liveLearnerView"
               lesson-pager
+              live-operation
+              :auto-jump-to-task="false"
+              :task-claimed="!(liveState?.state === 'S3_TASK' && liveState?.awaiting === 'advance')"
+              :peek-lecture="lecturePeek"
+              :chain-running="autoChainActive || practiceChainActive"
+              :practice-chain-active="practiceChainActive"
+              :data-present-mode="liveState?.profile?.practice_mode === 'data_present'"
               :guidance-feedback="liveFeedback"
               :guidance-next-step-reason="liveNextStepReason"
+              :sql-result-stale="liveSqlResultStale"
               @page-state="liveLessonPage = $event"
+              @start-practice="autoAdvanceToPractice"
             />
             <section v-else class="lesson-station-placeholder">
               <span>微课</span>
@@ -569,17 +760,6 @@ onMounted(() => {
         :resource-bundle="liveState?.resource_bundle ?? undefined"
         :coordination-evidence="liveState?.coordination_evidence"
         learner-workspace-target="#collaboration-learner-workspace"
-      />
-      <LearningPath
-        v-if="liveView"
-        :view="liveView"
-        :catalog="knowledgeCatalog"
-        :state="liveState"
-      />
-      <FloatingAgentAssistant
-        v-if="viewMode === 'student' && liveView"
-        :view="liveView"
-        :events="liveAgentEvents"
       />
     </main>
   </div>

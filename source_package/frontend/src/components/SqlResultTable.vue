@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Code2, Database, Maximize2, Minimize2 } from '@lucide/vue'
+import { Code2, Database } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
@@ -12,13 +12,13 @@ import {
 import type { TraceMessage } from '../types/trace'
 
 
-const props = defineProps<{ message: TraceMessage }>()
+const props = defineProps<{
+  message: TraceMessage
+  /** live 实操模式：拦截说明已在实操区即时展示，结果面板不再重复正文。 */
+  liveOperation?: boolean
+}>()
 const showSql = ref(false)
 const focusMode = ref(false)
-
-function toggleFocusMode(): void {
-  focusMode.value = !focusMode.value
-}
 
 function leaveFocusMode(event: KeyboardEvent): void {
   if (event.key === 'Escape') focusMode.value = false
@@ -52,9 +52,23 @@ const generatedSql = computed(() => {
     : undefined
 })
 
+/** 需求⑥：结果副标题展示数据说明——去掉题干里的查询动作前缀。 */
+const dataTitle = computed(() => {
+  const raw = learnerText(String(props.message.content.question ?? '')).trim()
+  const stripped = raw
+    .replace(/^按[^，。；！？]*?(?:查询|比较|统计|核对|筛查|查看|计算)/, '')
+    .replace(/^(?:查询|查看)/, '')
+    .replace(/^[，。、；：\s]+/, '')
+    .trim()
+  return stripped || '查询结果'
+})
+
 const failureFeedback = computed(() => verificationFailureCopy(
   props.message.content.event,
   props.message.content,
+))
+const suppressFailureMessage = computed(() => (
+  props.liveOperation && props.message.content.event === 'sandbox_rejected'
 ))
 
 const isStudentSql = computed(() => props.message.content.sql_source === 'student')
@@ -87,39 +101,29 @@ function cellValue(value: unknown): string {
   >
     <div class="sql-result-heading">
       <div>
-        <span class="resource-eyebrow"><Database :size="14" aria-hidden="true" /> 数据实操</span>
-        <h3>{{ learnerText(String(message.content.question ?? '查询结果')) }}</h3>
-      </div>
-      <div class="sql-result-heading-actions">
-        <span v-if="!failureFeedback" class="row-count">{{ rows.length }} 行</span>
-        <button
-          v-if="!failureFeedback && columns.length"
-          type="button"
-          class="content-focus-toggle"
-          :aria-label="focusMode ? '退出查询结果专注模式' : '最大化查询结果'"
-          :title="focusMode ? '退出专注模式（Esc）' : '最大化查询结果'"
-          @click="toggleFocusMode"
-        >
-          <Minimize2 v-if="focusMode" :size="16" aria-hidden="true" />
-          <Maximize2 v-else :size="16" aria-hidden="true" />
-          <span>{{ focusMode ? '还原' : '专注分析' }}</span>
-        </button>
+        <span class="resource-eyebrow"><Database :size="14" aria-hidden="true" /> 查询结果</span>
+        <h3>{{ dataTitle }}</h3>
       </div>
     </div>
 
     <aside v-if="failureFeedback" class="panel-empty compact-empty query-failure">
       <strong>{{ failureFeedback.title }}</strong>
-      <p>{{ failureFeedback.learnerMessage }}</p>
+      <!-- 拦截说明的完整修改建议在实操区即时展示（sandbox-rejection），
+           结果面板只报“发生了什么”，不再重复第三遍“怎么办”。 -->
+      <p v-if="!suppressFailureMessage">{{ failureFeedback.learnerMessage }}</p>
+      <p v-else class="query-failure-pointer">修改建议见实操区说明。</p>
     </aside>
     <div v-else-if="columns.length" class="table-scroll">
       <table>
         <thead>
           <tr>
+            <th scope="col" class="row-no" aria-label="行号">#</th>
             <th v-for="column in columns" :key="column" scope="col">{{ dataFieldLabel(column) }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(row, rowIndex) in rows" :key="rowIndex">
+            <td class="row-no">{{ rowIndex + 1 }}</td>
             <td v-for="column in columns" :key="column">{{ cellValue(row[column]) }}</td>
           </tr>
         </tbody>

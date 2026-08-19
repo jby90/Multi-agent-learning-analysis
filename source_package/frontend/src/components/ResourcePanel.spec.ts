@@ -47,7 +47,7 @@ function taskView(
 
 
 describe('ResourcePanel', () => {
-  it('paginates the lesson and omits task/result duplicates in resident mode', async () => {
+  it('stacks the full lesson and omits task/result duplicates in resident mode', async () => {
     const wrapper = mount(ResourcePanel, {
       props: {
         view: resourceView(
@@ -58,15 +58,14 @@ describe('ResourcePanel', () => {
       },
     })
 
-    expect(wrapper.get('[aria-label="微课分页阅读"]')).toBeTruthy()
-    expect(wrapper.get('.resource-heading h2').text()).toBe('知识卡片')
-    expect(wrapper.find('#task-resource').exists()).toBe(false)
+    expect(wrapper.get('[aria-label="微课连续阅读"]')).toBeTruthy()
+    const headings = wrapper.findAll('.lesson-page-heading h3').map((node) => node.text())
+    expect(headings).toContain('本节目标')
+    expect(headings).toContain('核心概念')
+    // 叠页模式无翻页按钮，底部"进入练习环节"仅在 liveOperation 时出现
+    expect(wrapper.find('button[aria-label="下一张微课卡片"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="进入练习环节"]').exists()).toBe(false)
     expect(wrapper.find('.sql-result').exists()).toBe(false)
-    expect(wrapper.get('button[aria-label="下一张微课卡片"]')).toBeTruthy()
-
-    const before = wrapper.get('.lesson-page-heading h3').text()
-    await wrapper.get('button[aria-label="下一张微课卡片"]').trigger('click')
-    expect(wrapper.get('.lesson-page-heading h3').text()).not.toBe(before)
   })
 
   it('reports lesson page state so the shell can change layout on the practice page', async () => {
@@ -80,20 +79,75 @@ describe('ResourcePanel', () => {
           completion_criteria: ['结果包含三道工序。'],
         }),
         lessonPager: true,
+        liveOperation: true,
+        // 点击前状态（S3+advance）：任务未下发（taskClaimed=false）"进入练习环节"可见；
+        // 下发后按钮不再滞留（闭环五）——由 !taskClaimed 兜住
+        taskClaimed: false,
       },
     })
 
-    expect(wrapper.emitted('pageState')?.at(-1)?.[0]).toMatchObject({ kind: 'metrics' })
-    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
-    while (next.attributes('disabled') === undefined) await next.trigger('click')
-
+    expect(wrapper.emitted('pageState')?.at(-1)?.[0]).toMatchObject({
+      // 需求⑥：关键数据页已从叠页移除，首页为知识小节
+      kind: 'section',
+      isLast: false,
+    })
+    await wrapper.get('button[aria-label="进入练习环节"]').trigger('click')
     expect(wrapper.emitted('pageState')?.at(-1)?.[0]).toMatchObject({
       kind: 'task',
       isLast: true,
     })
+    expect(wrapper.emitted('startPractice')).toHaveLength(1)
   })
 
-  it('uses the expanded lesson space for a navigable content overview', async () => {
+  it('shows operation steps and completion criteria for plain quiz tasks (优化16)', () => {
+    // 查询题与实操指南统一展示：quiz_set 由题面 query_authority 确定性推导步骤/标准
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: taskView('quiz_set', {
+          difficulty: 'basic',
+          question: '查询H26012025-05YCL的计划量与实际量。',
+          family: 'Q1',
+          query_authority: {
+            output_columns: ['plan_qty', 'actual_qty'],
+            filter_columns: ['ship_no', 'process_code', 'period_date'],
+          },
+        }),
+        lessonPager: true,
+        liveOperation: true,
+        taskClaimed: true,
+      },
+    })
+    expect(wrapper.get('[aria-label="操作步骤"]').text()).toContain('操作步骤')
+    expect(wrapper.get('[aria-label="操作步骤"]').text()).toContain('计划量')
+    expect(wrapper.get('[aria-label="完成标准"]').text()).toContain('全部字段')
+  })
+
+  it('hides the SQL practice card and stuck entry button for data_present personas', async () => {
+    // 闭环五：画像三 data_present（系统代执行）——查询题目卡（含提示/难度阶梯）
+    // 不进叠页；任务已下发（taskClaimed=true）后"进入练习"按钮不再滞留
+    const wrapper = mount(ResourcePanel, {
+      props: {
+        view: taskView('quiz_set', {
+          difficulty: 'basic',
+          question: '查询 H2601 2025-05 YCL 的计划量与实际量。',
+          family: 'Q2',
+        }),
+        lessonPager: true,
+        liveOperation: true,
+        dataPresentMode: true,
+        taskClaimed: true,
+      },
+    })
+
+    expect(wrapper.text()).not.toContain('查询题目')
+    expect(wrapper.text()).not.toContain('查看提示')
+    expect(wrapper.find('button[aria-label="进入练习环节"]').exists()).toBe(false)
+    // 微课小节仍完整保留（追问态查讲义/链中讲义锁都依赖整页微课）
+    const headings = wrapper.findAll('.lesson-page-heading h3').map((node) => node.text())
+    expect(headings.length).toBeGreaterThan(0)
+  })
+
+  it('omits the panel header chrome and keeps all sections stacked', async () => {
     const wrapper = mount(ResourcePanel, {
       props: {
         view: resourceView(
@@ -104,14 +158,15 @@ describe('ResourcePanel', () => {
       },
     })
 
+    // 需求①：叠页模式无面板头行（岗位微课/内容已就绪/专注学习）
+    expect(wrapper.find('.resource-heading').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="最大化微课"]').exists()).toBe(false)
     expect(wrapper.find('[aria-label="本节内容概览"]').exists()).toBe(false)
-    await wrapper.get('button[aria-label="最大化微课"]').trigger('click')
-    const overview = wrapper.get('[aria-label="本节内容概览"]')
-    expect(overview.text()).toContain('学习目标')
-    expect(overview.text()).toContain('业务判断')
-
-    await overview.findAll('button')[1]!.trigger('click')
-    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('业务判断')
+    const headings = wrapper.findAll('.lesson-page-heading h3').map((node) => node.text())
+    expect(headings).toContain('学习目标')
+    expect(headings).toContain('业务判断')
+    // 需求②：无页码徽标
+    expect(wrapper.find('.lesson-page-heading b').exists()).toBe(false)
   })
 
   it('does not create an empty lesson page for a standalone document heading', async () => {
@@ -129,9 +184,9 @@ describe('ResourcePanel', () => {
       props: { view, lessonPager: true },
     })
 
-    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('本节关键数据')
-    await wrapper.get('button[aria-label="下一张微课卡片"]').trigger('click')
-    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('学习目标')
+    const headings = wrapper.findAll('.lesson-page-heading h3').map((node) => node.text())
+    expect(headings).toContain('学习目标')
+    expect(headings).not.toContain('微课总标题')
     expect(wrapper.get('.lesson-page-copy').text()).toContain('掌握三道工序关系')
   })
 
@@ -156,8 +211,6 @@ describe('ResourcePanel', () => {
         guidanceNextStepReason: '可以进入结果解释。',
       },
     })
-    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
-    while (next.attributes('disabled') === undefined) await next.trigger('click')
 
     await wrapper.get('.practice-coaching-heading button').trigger('click')
     expect(wrapper.get('.practice-coaching').text()).toContain('先确认题目对象')
@@ -165,7 +218,7 @@ describe('ResourcePanel', () => {
     expect(wrapper.get('.practice-round-summary').text()).toContain('进入下一步的理由')
   })
 
-  it('keeps the current lesson card while entering and leaving focus mode', async () => {
+  it('keeps the lesson stack stable without pager chrome', async () => {
     const wrapper = mount(ResourcePanel, {
       props: {
         view: resourceView(
@@ -176,20 +229,17 @@ describe('ResourcePanel', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="下一张微课卡片"]').trigger('click')
-    const currentCard = wrapper.get('.lesson-page-heading h3').text()
-
-    await wrapper.get('.content-focus-toggle').trigger('click')
-    expect(wrapper.get('.resource-panel').classes()).toContain('is-focus-mode')
-    expect(wrapper.get('.lesson-page-heading h3').text()).toBe(currentCard)
-    expect(wrapper.get('.content-focus-toggle').attributes('aria-label'))
-      .toBe('退出微课专注模式')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await wrapper.vm.$nextTick()
-
+    const headingsBefore = wrapper.findAll('.lesson-page-heading h3').map((node) => node.text())
+    // 需求①：专注模式入口随面板头行一并删除
+    expect(wrapper.find('.content-focus-toggle').exists()).toBe(false)
     expect(wrapper.get('.resource-panel').classes()).not.toContain('is-focus-mode')
-    expect(wrapper.get('.lesson-page-heading h3').text()).toBe(currentCard)
+    // 重渲染后叠页标题保持稳定
+    await wrapper.setProps({ view: { ...resourceView(
+      '# 岗位微课\n\n#### 本节目标\n\n理解计划量。\n\n#### 核心概念\n\n实际完成量表示真实产出。',
+      '实际完成量表示真实产出。',
+    ) } })
+    expect(wrapper.findAll('.lesson-page-heading h3').map((node) => node.text()))
+      .toEqual(headingsBefore)
     wrapper.unmount()
   })
 
@@ -205,12 +255,9 @@ describe('ResourcePanel', () => {
       },
     })
 
-    const next = wrapper.get('button[aria-label="下一张微课卡片"]')
-    while (next.attributes('disabled') === undefined) {
-      await next.trigger('click')
-    }
-
-    expect(wrapper.get('.lesson-page-heading h3').text()).toBe('练习题')
+    // 需求②④：任务页不再有小节页眉，任务卡本体以 #task-resource 呈现
+    expect(wrapper.find('#task-resource').exists()).toBe(true)
+    expect(wrapper.find('.task-locked-card').exists()).toBe(false)
     expect(wrapper.get('.lesson-page-task h3').text())
       .toContain('作为新入职的生产计划员')
     expect(wrapper.get('.lesson-page-task .task-difficulty-ladder').attributes('aria-label'))
@@ -227,11 +274,13 @@ describe('ResourcePanel', () => {
 
     expect(wrapper.findAll('.safe-markdown h3').map((node) => node.text()))
       .toContain('本节目标')
-    expect(wrapper.get('.resource-heading h2').text()).toBe('微课 / 实操')
+    // 优化12：面板头行（微课/实操、内容已就绪✓、专注学习）整体删除，回放与 live 同口径
+    expect(wrapper.find('.resource-heading').exists()).toBe(false)
+    expect(wrapper.find('.professional-review-badge').exists()).toBe(false)
+    expect(wrapper.find('.content-focus-toggle').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('微课、任务与数据实操')
     expect(wrapper.text()).not.toContain('讲义中的事实结论均可通过脚注查看原始依据')
     expect(wrapper.text()).not.toContain('#### 本节目标')
-    expect(wrapper.get('.professional-review-badge').text()).toContain('已通过专业审核')
   })
 
   it('keeps naturally rewritten claims visibly linked to their evidence', () => {
@@ -240,10 +289,10 @@ describe('ResourcePanel', () => {
       props: { view: resourceView('# 岗位微课\n\n两种数量口径要分别理解。', claim) },
     })
 
-    expect(wrapper.get('.claim-register .claim-anchor').text()).toBe(claim)
-    expect(wrapper.get('.claim-register h4').text()).toBe('数据出处')
-    expect(wrapper.get('.claim-register .evidence-popover').text())
-      .toContain('出自《计划量与实际量口径》知识点')
+    // 优化12："数据出处"证据登记小节删除（live 学员界面无此元素）
+    expect(wrapper.find('.claim-register').exists()).toBe(false)
+    // 正文句仍正常渲染（证据关联下沉到行内元素）
+    expect(wrapper.text()).toContain('两种数量口径要分别理解。')
   })
 
   it('renders safe inline markdown without showing syntax delimiters', () => {
@@ -295,8 +344,9 @@ describe('ResourcePanel', () => {
       /\braw\b|\bchunks?\b|\b(?:SEC|KB)-[A-Za-z0-9_-]+\b/iu,
     )
 
-    await wrapper.get('.claim-anchor').trigger('focus')
-    expect(wrapper.get('.evidence-popover').text()).toContain('出自《现有资料》知识点')
+    // 需求②：证据句为纯文本，无锚点可聚焦
+    expect(wrapper.find('.claim-anchor').exists()).toBe(false)
+    expect(wrapper.find('.evidence-popover').exists()).toBe(false)
     expect(visibleCopy()).not.toMatch(
       /\braw\b|\bchunks?\b|\b(?:SEC|KB)-[A-Za-z0-9_-]+\b/iu,
     )
@@ -654,5 +704,32 @@ describe('ResourcePanel', () => {
     expect(quiz.get('h3').text()).toBe('分别查询计划量与实际完成量。')
     expect(wrapper.find('.practice-guide-card').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('实操指南')
+  })
+
+  it('hides the stale query result while remediation marks it stale', () => {
+    const view = resourceView(
+      '# 岗位微课\n\n#### 本节目标\n\n理解计划量。',
+      '理解计划量。',
+    )
+    if (!view.lecture) throw new Error('fixture lecture missing')
+    view.sqlResult = {
+      ...view.lecture,
+      msgId: 'demo-resource-sql',
+      step: 9999,
+      payloadType: 'sql_result',
+      content: {
+        question: '按工序查询完成率',
+        columns: ['process_code', 'complete_rate'],
+        rows: [{ process_code: 'YCL', complete_rate: '0.6236' }],
+      },
+    }
+    view.visibleMessages.push(view.sqlResult)
+
+    const visible = mount(ResourcePanel, { props: { view } })
+    expect(visible.text()).toContain('完成率')
+
+    const stale = mount(ResourcePanel, { props: { view, sqlResultStale: true } })
+    expect(stale.find('.sql-result').exists()).toBe(false)
+    expect(stale.text()).toContain('数据结果将在查询完成并确认可用后出现')
   })
 })

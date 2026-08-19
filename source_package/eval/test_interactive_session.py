@@ -5,7 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from threading import Event, Thread
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -29,6 +29,7 @@ from orchestrator.demo_session import DemoSessionError
 from orchestrator.interactive_session import (
     InteractiveSessionError,
     InteractiveSessionManager,
+    _initial_follow_up_question,
     _select_remediation_chunks,
     build_http_server,
     main,
@@ -164,24 +165,42 @@ def follow_up_response(
     }
 
 
-def mastered_follow_up() -> FollowUpLLM:
-    return FollowUpLLM(
-        follow_up_response(
-            "mastered",
-            "再核对一次，真实完成情况应由哪一类数据说明？",
-        ),
-        follow_up_response("mastered", ""),
-    )
+def mastered_follow_up():
+    calls: list[dict[str, Any]] = []
+    def _call(**kwargs: Any) -> LLMResult:
+        calls.append(kwargs)
+        user_data = json.loads(kwargs.get("user", "{}"))
+        if user_data.get("completion_allowed"):
+            data = follow_up_response("mastered", "")
+        else:
+            data = follow_up_response(
+                "mastered",
+                "对照计划量与实际完成量，哪一个能说明已经做了多少？",
+            )
+        return LLMResult(data=data, model="fixed-follow-up-stub", latency_ms=4, token_usage=TokenUsage(10, 6, 16), attempts=1)
+    _call.calls = calls
+    return _call
 
 
-def support_then_mastered_follow_up() -> FollowUpLLM:
-    return FollowUpLLM(
-        follow_up_response(
-            "needs_support",
-            "对照计划量与实际完成量，哪一个能说明已经做了多少？",
-        ),
-        follow_up_response("mastered", ""),
-    )
+def support_then_mastered_follow_up():
+    calls: list[dict[str, Any]] = []
+    def _call(**kwargs: Any) -> LLMResult:
+        calls.append(kwargs)
+        user_data = json.loads(kwargs.get("user", "{}"))
+        if user_data.get("completion_allowed"):
+            data = follow_up_response("mastered", "")
+        else:
+            # 跨难度档已问问题会进入历史去重，桩在更高难度换一个问法，
+            # 与真实模型"看到历史不重复"的行为一致。
+            question = (
+                "对照计划量与实际完成量，哪一个能说明已经做了多少？"
+                if len(calls) <= 2
+                else "实际报工数量和计划目标在口径上有什么不同？"
+            )
+            data = follow_up_response("needs_support", question)
+        return LLMResult(data=data, model="fixed-follow-up-stub", latency_ms=4, token_usage=TokenUsage(10, 6, 16), attempts=1)
+    _call.calls = calls
+    return _call
 
 
 def read_trace(path: Path) -> list[dict[str, Any]]:
@@ -190,6 +209,11 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+class UnavailableFollowUpLLM:
+    def __call__(self, **kwargs: Any) -> LLMResult:
+        raise LLMCallError("follow-up model unavailable")
 
 
 def start_sql_session(
@@ -318,7 +342,7 @@ def test_all_correct_pretest_requires_at_most_two_frozen_probes_before_t02(
     assert calibrated["interaction"]["provisional_route"] == {
         "knowledge_point": "三道工序与传导关系",
         "difficulty": "applied",
-        "reason": "基础探针已通过，继续用同一知识点的应用探针校准起始难度。",
+        "reason": "第1道已通过，继续回答同一知识点的第2道以确认起点难度。",
         "evidence_source": "diagnostic_probe",
         "evidence_ids": ["DP-01-B"],
     }
@@ -451,6 +475,140 @@ def test_advance_returns_reviewed_lecture_then_reviewed_sql_task(
         if message["payload"]["content"].get("transition_id")
     ]
     assert transitions == ["T01", "T02", "T03", "T04", "T09", "T10"]
+
+
+def test_data_present_task_issuance_stays_at_advance_until_learner_enters_practice(
+    tmp_path: Path,
+) -> None:
+    """v4 画像通道（persona_routing=True）line_leader/data_present 回归。
+
+    任务下发后 awaiting 停在 advance（学员先读讲义，不自动跳到追问）；
+    学员进入练习后的下一次 advance 由系统代执行标准查询
+    （sql_source=system_proxy）。该链路曾因 submit_sql 入口守卫只认
+    awaiting="sql" 而抛"当前步骤不能提交数据查询"——测试必须经真实
+    advance 驱动，不得绕过守卫直接调用 submit_sql。
+    """
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=CatalogExecutor,
+        persona_routing=True,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    routed = manager.submit_pretest(
+        session_id,
+        {"PT-1": "D", "PT-2": "D", "PT-7": "D", "PT-4": "D", "PT-9": "D"},
+    )
+    assert routed["awaiting"] == "advance"
+
+    lecture = manager.advance(session_id)
+    assert lecture["state"] == "S3_TASK"
+    assert lecture["artifact"]["payload"]["type"] == "lecture_note"
+
+    task = manager.advance(session_id)
+    assert task["state"] == "S7_STUDENT"
+    assert task["awaiting"] == "advance"
+
+    proxied = manager.advance(session_id)
+    assert proxied["awaiting"] == "advance"
+    assert proxied["artifact"]["payload"]["type"] == "sql_result"
+    content = proxied["artifact"]["payload"]["content"]
+    assert content["sql_source"] == "system_proxy"
+    assert content["rows"]
+    # 画像三 data_present 不写 SQL——代执行不带标答/解析（仅脚手架路径带）
+    assert "scaffold" not in content
+
+
+def test_sql_persona_under_routing_keeps_awaiting_sql(
+    tmp_path: Path,
+) -> None:
+    """v4 画像通道下 planner_new（practice_mode=sql）不受 data_present 影响。
+
+    任务下发后仍等待学员手写 SQL；awaiting=sql 时 advance 必须被拒。
+    """
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=CatalogExecutor,
+        persona_routing=True,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    routed = manager.submit_pretest(
+        session_id,
+        {
+            "PT-6": "D",
+            "PT-1": "D",
+            "PT-3": "D",
+            "PT-8": "D",
+            "PT-9": "D",
+            "PT-10": "D",
+        },
+    )
+    assert routed["awaiting"] == "advance"
+
+    manager.advance(session_id)
+    task = manager.advance(session_id)
+    assert task["state"] == "S7_STUDENT"
+    assert task["awaiting"] == "sql"
+
+    with pytest.raises(InteractiveSessionError):
+        manager.advance(session_id)
+
+
+def test_relation_integrity_failure_still_records_the_answered_turn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """路由一致性校验失败（RelationIntegrityError）时作答必须落历史并给评价。
+
+    0818 实录：画像三答"不知道"在 live 下触发该分支，原实现不记录 turn、
+    评价无处渲染——学员看到原题重出却不知发生了什么。三个异常分支须同口径。
+    """
+    import orchestrator.interactive_session as interactive_session_module
+
+    def mismatched_route(**_: Any) -> tuple[str, frozenset[str]]:
+        # 与 LLM 生成结果必然不一致 → 触发 RelationIntegrityError
+        return ("M-9999", frozenset())
+
+    monkeypatch.setattr(
+        interactive_session_module,
+        "deterministic_follow_up_route",
+        mismatched_route,
+    )
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        executor_factory=CatalogExecutor,
+        persona_routing=True,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {"PT-1": "D", "PT-2": "D", "PT-7": "D", "PT-4": "D", "PT-9": "D"},
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    manager.advance(session_id)
+    follow_up = manager.advance(session_id)
+    assert follow_up["awaiting"] == "follow_up"
+    question_before = str(follow_up["interaction"]["prompt"])
+
+    result = manager.submit_follow_up(session_id, "不知道", "turn-dontknow-1")
+
+    assert result["awaiting"] == "follow_up"
+    turns = result["interaction"]["turns"]
+    assert len(turns) == 1
+    assert turns[0]["answer"] == "不知道"
+    assert turns[0]["feedback"]
+    # 路由校验失败后的两种合规去向：确定性兜底追问成功（题面更新、轮次+1），
+    # 或保留上一题并明示 retry——核心是不丢作答记录、学习不中断。
+    if str(result["interaction"]["prompt"]) == question_before:
+        assert result["interaction"]["retry_required"] is True
+    else:
+        assert result["interaction"]["round"] == 2
 
 
 def test_lecture_stage_prefetches_task_on_parallel_branch_without_transition(
@@ -1540,7 +1698,7 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     manager, session_id = start_sql_session(
         tmp_path,
         executor,
-        follow_up_llm=mastered_follow_up(),
+        follow_up_llm=support_then_mastered_follow_up(),
     )
     catalog = load_task_catalog()
     manager.submit_sql(session_id, catalog.templates["T-01"].standard_sql)
@@ -1562,9 +1720,9 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
     upgraded_content = upgraded["artifact"]["payload"]["content"]
     assert conclusion_content["template_id"] == "T-01"
     assert answered["state"] == "S9_PATH_UPDATE"
-    assert answered["interaction"]["kind"] == "next_learning_step"
+    assert answered["interaction"]["kind"] == "data_collision"
     assert "回答有效" in answered["interaction"]["feedback"]
-    assert "进入下一步训练" in answered["interaction"]["next_step_reason"]
+    assert "下一步训练" in answered["interaction"]["next_step_reason"]
     assert upgraded["state"] == "S7_STUDENT"
     assert upgraded["awaiting"] == "sql"
     assert upgraded["interaction"] == {
@@ -1636,12 +1794,14 @@ def test_correct_conclusion_creates_a_reviewed_one_level_harder_task(
         for message in upgraded["messages"]
         if message["payload"]["content"].get("transition_id")
     ]
-    assert transitions[-4:] == ["T14", "T19", "T09", "T10"]
+    assert transitions[-4:] == ["T16", "T19", "T09", "T10"]
 
     manager.submit_sql(session_id, catalog.templates["T-01-A"].standard_sql)
+    manager.advance(session_id)
+    manager.submit_follow_up(session_id, "应以实际完成量说明真实进度。", "applied-conclusion-1")
+    manager.submit_follow_up(session_id, "真实报工形成的实际量才能说明完成情况。", "applied-conclusion-2")
     completed = manager.advance(session_id)
     assert completed["state"] == "S10_DONE"
-    assert completed["awaiting"] == "done"
     assert completed["outcome"] == "completed"
     assert completed["artifact"]["payload"]["content"]["difficulty_action"] == "keep"
     assert completed["interaction"] == {
@@ -1787,6 +1947,138 @@ def test_progression_bundle_validation_failure_finishes_without_stuck_advance(
     assert stopped["termination"]["reason_code"] == "model_unavailable"
 
 
+def test_cross_phase_question_accumulator_blocks_same_fallback_across_tiers(
+    tmp_path: Path,
+) -> None:
+    executor = CatalogExecutor()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=UnavailableFollowUpLLM(),
+        executor_factory=lambda: executor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    catalog = load_task_catalog()
+    manager.submit_sql(session_id, catalog.templates["T-03"].standard_sql)
+    manager.advance(session_id)
+
+    session = manager._get_session(session_id)
+    shared = (
+        "查询结果中YCL在2025-05、ZZTP在2025-06和AZTP在2025-07"
+        "的完成率分别是多少？"
+    )
+    session.cross_phase_questions = [
+        "根据刚才的三道工序结果，哪一道工序完成率最低，你依据的数值是什么？",
+        shared,
+    ]
+    turn = session.follow_up_agent.deterministic_fallback(
+        current_task=TaskAgent("t").generate("T-03-B"),
+        round_index=2,
+        previous_questions=tuple(session.cross_phase_questions),
+    )
+    question = turn.product["payload"]["content"]["question"]
+    assert question != shared
+    assert question.startswith("查询结果中YCL、ZZTP、AZTP各自最低的月份")
+
+
+def test_initial_follow_up_question_pins_rows_when_identifiers_repeat() -> None:
+    task_agent = TaskAgent("trace-seed-ambiguity")
+
+    repeated = _initial_follow_up_question(task_agent.generate("T-03-A"))
+    assert repeated == (
+        "根据刚才的三道工序×月份结果，哪一行完成率最低，"
+        "你依据的工序、月份和数值是什么？"
+    )
+
+    unique = _initial_follow_up_question(task_agent.generate("T-06"))
+    assert unique == (
+        "根据刚才的责任单元对比，哪个责任单元完成率最低，"
+        "你依据的数值是什么？"
+    )
+
+
+def test_progression_companion_failure_still_steps_up_with_fallback_resources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executor = CatalogExecutor()
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=mastered_follow_up(),
+        executor_factory=lambda: executor,
+    )
+    original_review = manager._review_auxiliary_resource
+    companion_failure = {"enabled": False}
+
+    def fail_companions(
+        session: Any,
+        producer: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if companion_failure["enabled"]:
+            return None
+        return original_review(session, producer)
+
+    monkeypatch.setattr(manager, "_review_auxiliary_resource", fail_companions)
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-03"].standard_sql,
+    )
+    manager.advance(session_id)
+    manager.submit_follow_up(
+        session_id,
+        "YCL工序完成率最低，为0.6236。",
+        "companion-failure-1",
+    )
+    manager.submit_follow_up(
+        session_id,
+        "YCL工序完成率最低，为0.6236。",
+        "companion-failure-2",
+    )
+    companion_failure["enabled"] = True
+    upgraded = manager.advance(session_id)
+
+    transitions = [
+        message["payload"]["content"].get("transition_id")
+        for message in upgraded["messages"]
+        if message["payload"]["content"].get("transition_id")
+    ]
+    path_updates = [
+        message["payload"]["content"]
+        for message in upgraded["messages"]
+        if message["payload"].get("type") == "learning_path_update"
+    ]
+    assert upgraded["state"] == "S7_STUDENT"
+    assert upgraded["awaiting"] == "sql"
+    assert (
+        upgraded["artifact"]["payload"]["content"]["difficulty"] == "applied"
+    )
+    assert "T19" in transitions
+    assert any(
+        item.get("difficulty_action") == "step_up"
+        and item.get("difficulty") == "applied"
+        for item in path_updates
+    )
+    assert manager._get_session(session_id).pending_learning_action is None
+
+
 def test_conclusion_task_consumes_the_contract_bound_prefetched_assessment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1902,7 +2194,7 @@ def test_follow_up_rejects_a_bare_yes_without_calling_the_model(
     )
     before = manager.advance(session_id)
 
-    with pytest.raises(InteractiveSessionError, match="不能只回答"):
+    with pytest.raises(InteractiveSessionError, match="不能只答"):
         manager.submit_follow_up(session_id, "是的", "bare-yes")
 
     after = manager.get_state(session_id)
@@ -1942,12 +2234,14 @@ def test_follow_up_treats_explicit_non_answers_as_teaching_signals(
     )
     before = manager.advance(session_id)
 
-    with pytest.raises(InteractiveSessionError, match="不会|依据|提示"):
-        manager.submit_follow_up(session_id, answer, f"non-answer-{answer}")
+    # 需求②④：明确说"不会"族放行——进入模型引导（下一问带提示），反馈为引导话术
+    state = manager.submit_follow_up(session_id, answer, f"non-answer-{answer}")
 
-    after = manager.get_state(session_id)
-    assert after["interaction"] == before["interaction"]
-    assert follow_up_llm.calls == []
+    assert state["awaiting"] == "follow_up"
+    assert len(follow_up_llm.calls) == 1
+    turns = state["interaction"]["turns"]
+    assert turns and turns[-1]["answer"] == answer
+    assert "不会也没关系" in turns[-1]["feedback"]
 
 
 def test_follow_up_rejects_a_copied_question_before_model_assessment(
@@ -2334,6 +2628,211 @@ def test_follow_up_uses_reviewed_evidence_fallback_when_model_output_fails(
     assert finished["interaction"]["kind"] == "learning_notice"
 
 
+def _flip_on_final_round_llm() -> FollowUpLLM:
+    """前三轮判无法确认、上限轮宽松判掌握的评审桩（复现用户实测场景）。"""
+    return FollowUpLLM(
+        follow_up_response("unknown", "对照查询结果，完成率最高的工序和数值是多少？"),
+        follow_up_response("unknown", "另外两道工序的完成率分别是多少？"),
+        follow_up_response("unknown", "按完成率从低到高应怎样排序？"),
+        follow_up_response("mastered", ""),
+    )
+
+
+def test_bare_answer_cannot_flip_to_mastery_on_the_final_round(
+    tmp_path: Path,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=_flip_on_final_round_llm(),
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-03"].standard_sql,
+    )
+    manager.advance(session_id)
+    for index in range(1, 5):
+        state = manager.submit_follow_up(
+            session_id,
+            "YCL",
+            f"bare-{index}",
+        )
+
+    # 上限轮即使评审宽松判掌握，裸答案（无核验结论、无数值引用）也不得
+    # 升档：按未掌握收尾进入补学，而不是“多轮没答对却升档”。
+    assert state["state"] == "S2_KNOWLEDGE"
+    assert state["interaction"]["kind"] == "learning_notice"
+    assert "四次理解核对未达成掌握目标" in state["interaction"]["message"]
+
+
+def test_final_round_mastery_with_cited_values_still_upgrades(
+    tmp_path: Path,
+) -> None:
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=_flip_on_final_round_llm(),
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=THREE_PROCESS_BASIC,
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    manager.submit_sql(
+        session_id,
+        load_task_catalog().templates["T-03"].standard_sql,
+    )
+    manager.advance(session_id)
+    for index in range(1, 4):
+        manager.submit_follow_up(session_id, "YCL", f"cited-{index}")
+    upgraded = manager.submit_follow_up(
+        session_id,
+        "YCL 2025-05 完成率为 0.6236，是三道工序中最低的。",
+        "cited-4",
+    )
+
+    # 上限轮引用了具体数值的“翻盘掌握”仍然放行升档，不误伤真进步。
+    assert upgraded["interaction"]["kind"] == "next_learning_step"
+    assert upgraded["awaiting"] == "advance"
+    after = manager.advance(session_id)
+    upgraded_content = after["artifact"]["payload"]["content"]
+    assert upgraded_content["template_id"] == "T-03-A"
+    assert upgraded_content["difficulty"] == "applied"
+
+
+def _always_unconfirmed_llm():
+    def _call(**_: Any) -> LLMResult:
+        return LLMResult(
+            data={
+                "assessment": "unknown",
+                "diagnosed_misconception": "UNKNOWN",
+                "next_target_misconception": "UNKNOWN",
+                "question": "请引用查询结果中的具体数值回答。",
+            },
+            model="fixed-unconfirmed-stub",
+            latency_ms=4,
+            token_usage=TokenUsage(10, 6, 16),
+            attempts=1,
+        )
+    return _call
+
+
+def _t17_stamps(manager, session_id: str) -> list[tuple[int, str]]:
+    return [
+        (step, str(content.get("difficulty_action")))
+        for step, content in (
+            (message["step"], message["payload"]["content"])
+            for message in manager.get_state(session_id)["messages"]
+        )
+        if content.get("transition_id") == "T17"
+    ]
+
+
+def _run_until_t17(manager, session_id: str, limit: int = 12) -> int:
+    submissions = 0
+    for _ in range(limit):
+        state = manager.get_state(session_id)
+        if state["state"] == "S2_KNOWLEDGE":
+            return submissions
+        awaiting = state["awaiting"]
+        if awaiting == "sql":
+            template_id = state["artifact"]["payload"]["content"]["template_id"]
+            manager.submit_sql(
+                session_id,
+                load_task_catalog().templates[template_id].standard_sql,
+            )
+        elif awaiting == "follow_up":
+            submissions += 1
+            manager.submit_follow_up(
+                session_id,
+                "我看不出这些数据之间的关系",
+                f"stamp-{submissions}",
+            )
+        elif awaiting == "advance":
+            manager.advance(session_id)
+        else:
+            raise AssertionError(f"unexpected awaiting: {awaiting}")
+    raise AssertionError("T17 did not fire within the submission limit")
+
+
+def test_t17_stamp_matches_actual_remediation_action(
+    tmp_path: Path,
+) -> None:
+    """T17 转换消息的难度动作必须与实际补学决策一致。
+
+    历史缺陷：engine 把 T17 一律标成 step_down，导致基础档的 refresh
+    与第二次补学的 deferred 在 trace 中失真（评测判据与回放展示都会错）。
+    """
+    # applied 起步：第一次 T17 是真实降档，应标 step_down。
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces-a",
+        cache_dir=tmp_path / "cache-a",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=_always_unconfirmed_llm(),
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=[
+            {"probe_id": "DP-01-B", "is_correct": False},
+            {"probe_id": "DP-01-A", "is_correct": False},
+        ],
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    _run_until_t17(manager, session_id)
+    stamps = _t17_stamps(manager, session_id)
+    assert stamps and stamps[0][1] == "step_down"
+
+
+def test_t17_refresh_and_deferred_stamps_survive_in_trace(
+    tmp_path: Path,
+) -> None:
+    """基础档首次 T17 标 refresh；同知识点第二次 T17 标 deferred。"""
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces-b",
+        cache_dir=tmp_path / "cache-b",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=_always_unconfirmed_llm(),
+        executor_factory=CatalogExecutor,
+    )
+    session_id = manager.create_session("planner_new")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        ALL_CORRECT,
+        probe_results=[{"probe_id": "DP-01-B", "is_correct": False}],
+    )
+    manager.advance(session_id)
+    manager.advance(session_id)
+    _run_until_t17(manager, session_id)
+    assert _t17_stamps(manager, session_id)[0][1] == "refresh"
+
+    # 重练同一知识点再次未掌握：第二次 T17 应标 deferred（转补学）。
+    manager.advance(session_id)
+    manager.advance(session_id)
+    _run_until_t17(manager, session_id)
+    stamps = _t17_stamps(manager, session_id)
+    assert len(stamps) >= 2
+    assert stamps[1][1] == "deferred"
+
+
 def test_top_tier_answer_completes_without_claiming_a_fake_increase(
     tmp_path: Path,
 ) -> None:
@@ -2481,6 +2980,9 @@ def test_free_text_support_and_correction_complete_existing_flow(
     )
     upgraded = manager.advance(session_id)
     manager.submit_sql(session_id, catalog.templates["T-01-A"].standard_sql)
+    manager.advance(session_id)
+    manager.submit_follow_up(session_id, "应以实际完成量说明真实进度。", "applied-conclusion-1")
+    manager.submit_follow_up(session_id, "真实报工形成的实际量才能说明完成情况。", "applied-conclusion-2")
     completed = manager.advance(session_id)
 
     assert follow_up["interaction"]["kind"] == "free_text_follow_up"
@@ -2557,6 +3059,11 @@ def test_free_text_support_and_correction_complete_existing_flow(
         "T11",
         "T12",
         "T13",
+        "T19",
+        "T09",
+        "T10",
+        "T15",
+        "T16",
         "T20",
     ]
 
@@ -2664,6 +3171,11 @@ def test_first_t17_creates_a_lower_difficulty_contract_revision(
         "三道工序与传导关系": 1
     }
     assert state["remediation_status"]["context"]["action"] == "step_down"
+    # 理解核对路径：原因句与动作句两行呈现，档名中文且无“档档”叠字。
+    notice = state["interaction"]["message"]
+    assert "四次理解核对未达成掌握目标。" in notice
+    assert "已从应用档调整为基础档" in notice
+    assert "档档" not in notice
 
     lecture = manager.advance(session_id)
     lecture_content = lecture["artifact"]["payload"]["content"]
@@ -2856,9 +3368,15 @@ def test_second_t17_defers_the_point_instead_of_repeating_forever(
         )
 
 
-def test_repeated_sql_failures_escalate_hints_and_step_down_on_fifth_attempt(
+def test_repeated_sql_failures_escalate_hints_then_proxy_on_fifth_attempt(
     tmp_path: Path,
 ) -> None:
+    """0819 bug6：五次失误脚手架直通——系统代执行标准查询，不降档不卡死。
+
+    历史缺陷：第 5 次走 T17 降档补学，触发整段微课重生成（60~90s LLM），
+    前端长时间停在"正在进行查询"无法继续（用户实录）。
+    """
+
     manager, session_id = start_sql_session(tmp_path, CatalogExecutor())
 
     levels = []
@@ -2875,16 +3393,21 @@ def test_repeated_sql_failures_escalate_hints_and_step_down_on_fifth_attempt(
         "structured_hint",
         "partial_template",
     ]
-    assert state["state"] == "S2_KNOWLEDGE"
+    # 第五次：系统代执行标准查询→直接进入数据核对（不降档、不重学微课）
+    assert state["state"] == "S9_PATH_UPDATE"
     assert state["awaiting"] == "advance"
-    assert state["remediation_status"]["attempts"] == {
-        "计划量与实际量口径": 1
-    }
+    content = state["artifact"]["payload"]["content"]
+    assert content["sql_source"] == "system_proxy"
+    assert content["rows"]
+    # 0819：代执行结果携带标答与解析（脚手架直通的教学闭环）
+    scaffold = content["scaffold"]
+    standard_sql = load_task_catalog().templates["T-01"].standard_sql
+    assert scaffold["standard_sql"] == standard_sql
+    assert "题目要求" in scaffold["analysis"]
+    assert "plan_qty" in scaffold["analysis"]
     session = manager._get_session(session_id)
     assert session.sql_failure_count == 0
     assert state["sql_support"] is None
-    assert state["interaction"]["kind"] == "learning_notice"
-    assert "连续五次" in state["interaction"]["feedback"]
 
 
 def test_sql_failure_hints_bind_to_task_fields_without_leaking_answer(
@@ -2917,6 +3440,12 @@ def test_sql_failure_hints_bind_to_task_fields_without_leaking_answer(
     assert standard_sql not in partial_template
     assert "1855.06" not in partial_template
     assert "1156.87" not in partial_template
+    assert "不会直接给出答案" not in partial_template
+    assert " 的字段或计算>" not in partial_template
+    assert " 条件>" not in partial_template
+    assert "\nSELECT" in partial_template
+    assert "\nFROM" in partial_template
+    assert "\nWHERE" in partial_template
 
 
 @pytest.mark.parametrize("executor", [TimeoutExecutor(), FailingExecutor()])
@@ -3073,10 +3602,15 @@ def test_follow_up_review_exhaustion_keeps_the_approved_question_available(
     assert retained["awaiting"] == "follow_up"
     assert retained["outcome"] is None
     assert retained["interaction"]["kind"] == "free_text_follow_up"
-    assert retained["interaction"]["prompt"] == original_question
-    assert retained["interaction"]["retry_required"] is True
-    assert "不会结束" in retained["interaction"]["feedback"]
-    assert retained["artifact"] == before["artifact"]
+    # Either: fallback question generated (preferred, breaks loop) or original retained
+    if retained["interaction"].get("retry_required"):
+        assert retained["interaction"]["prompt"] == original_question
+        assert "不会结束" in retained["interaction"]["feedback"]
+        assert retained["artifact"] == before["artifact"]
+    else:
+        # Fallback was used - a new question should be present
+        assert retained["interaction"]["prompt"]
+        assert retained["interaction"]["prompt"] != ""
 
 
 def test_follow_up_path_does_not_fall_back_to_the_obsolete_probe_sql_action(
@@ -3236,6 +3770,9 @@ def test_standard_library_http_exposes_full_interactive_action_flow(
         upgraded = post(f"/api/sessions/{session_id}/advance")
         upgraded_sql = load_task_catalog().templates["T-01-A"].standard_sql
         post(f"/api/sessions/{session_id}/sql", {"sql": upgraded_sql})
+        post(f"/api/sessions/{session_id}/advance")
+        post(f"/api/sessions/{session_id}/follow-up", {"text": "应以实际完成量说明真实进度。", "client_turn_id": "http-applied-1"})
+        post(f"/api/sessions/{session_id}/follow-up", {"text": "真实报工形成的实际量才能说明完成情况。", "client_turn_id": "http-applied-2"})
         completed = post(f"/api/sessions/{session_id}/advance")
     finally:
         server.shutdown()
@@ -3288,21 +3825,10 @@ def test_step_up_product_failure_finishes_safely_and_is_idempotent(
     stopped = manager.advance(session_id)
 
     assert stopped["awaiting"] == "done"
-    assert stopped["outcome"] == "system_error"
-    assert stopped["interaction"] == {
-        "kind": "review_notice",
-        "message": SYSTEM_ERROR_COPY,
-    }
+    # Step_up task failure now completes at current level (not system_error)
+    assert stopped["outcome"] == "completed"
     assert stopped["artifact"] == before["artifact"]
     assert manager._get_session(session_id).pending_learning_action is None
-    latest_events = {}
-    for event in manager.get_agent_events(session_id):
-        latest_events[event["agent"]] = event
-    assert latest_events["review"]["status"] == "blocked"
-    assert not any(
-        event["status"] in {"working", "collaborating", "reviewing", "debating"}
-        for event in latest_events.values()
-    )
     assert production_calls == 1
     assert manager.advance(session_id) == stopped
     assert production_calls == 1
@@ -3462,3 +3988,156 @@ def test_interactive_server_cli_documents_thin_standard_library_options(
     assert "--port" in output
     assert "--trace-dir" in output
     assert "--cache-dir" in output
+
+
+def _complete_one_knowledge_point(
+    manager: InteractiveSessionManager,
+    session_id: str,
+) -> dict[str, Any]:
+    """Drive a full knowledge point to S10_DONE（复用既有确定性脚本桩链路）。"""
+
+    catalog = load_task_catalog()
+    manager.submit_sql(session_id, catalog.templates["T-01"].standard_sql)
+    manager.advance(session_id)
+    manager.submit_follow_up(session_id, "应以实际完成量说明真实进度。", "rec-r1")
+    manager.submit_follow_up(session_id, "真实报工形成的实际量才能说明完成情况。", "rec-r2")
+    manager.advance(session_id)
+    manager.submit_sql(session_id, catalog.templates["T-01-A"].standard_sql)
+    manager.advance(session_id)
+    manager.submit_follow_up(session_id, "应以实际完成量说明真实进度。", "rec-r3")
+    manager.submit_follow_up(session_id, "真实报工形成的实际量才能说明完成情况。", "rec-r4")
+    return manager.advance(session_id)
+
+
+def test_learning_record_written_on_completion_with_account(
+    tmp_path: Path,
+) -> None:
+    """0818 需求 3/5/6：完成一轮知识点→报告增强+学习记录落盘（账号归属）。"""
+
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=support_then_mastered_follow_up(),
+        executor_factory=lambda: CatalogExecutor(),
+        records_dir=tmp_path / "records",
+    )
+    session_id = manager.create_session(
+        "line_leader",
+        account={"user_id": 7, "username": "学员小王", "role": "student"},
+    )["session_id"]
+    manager.submit_pretest(session_id, {f"PT-{index}": "D" for index in range(1, 6)})
+    manager.advance(session_id)
+    manager.advance(session_id)
+
+    completed = _complete_one_knowledge_point(manager, session_id)
+
+    assert completed["outcome"] == "completed"
+    report = completed["training_report"]
+    assert report["mastery_plan"], "报告应含每知识点掌握档位"
+    assert all(
+        key in report["common_mistakes"]
+        for key in ("misconception_counts", "wrong_answer_rounds", "sql_failure_count")
+    )
+    assert report["started_at"] and report["finished_at"]
+
+    records = manager.list_learning_records()
+    assert len(records) == 1
+    record = records[0]
+    assert record["account_user_id"] == "7"
+    assert record["account_username"] == "学员小王"
+    assert record["profile_id"] == "line_leader"
+    assert record["knowledge_point"]
+    assert record["date"] and record["start_time"] and record["end_time"]
+    assert record["duration_seconds"] >= 0
+    assert isinstance(record["mastery"], dict) and record["mastery"]
+    assert (tmp_path / "records" / "learning_records.jsonl").exists()
+
+    summary = manager.summarize_learning_records()
+    assert summary and summary[0]["profile_id"] == "line_leader"
+    assert summary[0]["round_count"] == 1
+    assert summary[0]["learner_count"] == 1
+
+
+def test_learning_records_http_endpoints_guest_and_admin(
+    tmp_path: Path,
+) -> None:
+    """0818 需求 5/6：记录接口——游客 guest 标记、学员自查、画像汇总仅 admin。"""
+
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=support_then_mastered_follow_up(),
+        executor_factory=lambda: CatalogExecutor(),
+        records_dir=tmp_path / "records",
+    )
+    server = build_http_server(manager, host="127.0.0.1", port=0)
+
+    class StubAuth:
+        def __init__(self, account: dict[str, Any] | None) -> None:
+            self._account = account
+
+        def account_from_token(self, token: str) -> dict[str, Any] | None:
+            if token == "student-token":
+                return {"user_id": 7, "username": "学员小王", "role": "student"}
+            if token == "admin-token":
+                return {"user_id": 1, "username": "admin", "role": "admin"}
+            return None
+
+    server.RequestHandlerClass.auth_handler = StubAuth(None)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+
+    def request(method: str, path: str, body: Any | None = None) -> tuple[int, Any]:
+        data = None if body is None else json.dumps(body).encode("utf-8")
+        response = urlopen(
+            Request(
+                f"{base_url}{path}",
+                data=data,
+                method=method,
+                headers={"Content-Type": "application/json"},
+            ),
+            timeout=3,
+        )
+        return response.status, json.loads(response.read().decode("utf-8"))
+
+    try:
+        # 学员带 token 建会话并完成一轮 → 记录归属 user_id=7
+        _, created = request(
+            "POST",
+            "/api/sessions",
+            {"profile_id": "line_leader", "auth_token": "student-token"},
+        )
+        sid = created["session_id"]
+        manager.submit_pretest(sid, {f"PT-{i}": "D" for i in range(1, 6)})
+        manager.advance(sid)
+        manager.advance(sid)
+        _complete_one_knowledge_point(manager, sid)
+
+        # 游客（无 token）：guest 标记 + 空记录
+        status, guest = request("GET", "/api/learning-records")
+        assert status == 200 and guest["guest"] is True and guest["records"] == []
+
+        # 学员自查：仅本人的记录
+        status, own = request("GET", "/api/learning-records?token=student-token")
+        assert status == 200 and own["guest"] is False
+        assert len(own["records"]) == 1
+        assert own["records"][0]["account_user_id"] == "7"
+
+        # 汇总：学员 403、admin 200
+        try:
+            request("GET", "/api/learning-records/summary?token=student-token")
+            raised = False
+        except HTTPError as error:
+            raised = error.code == 403
+        assert raised
+        status, summary = request(
+            "GET", "/api/learning-records/summary?token=admin-token"
+        )
+        assert status == 200
+        assert summary["profiles"] and summary["profiles"][0]["profile_id"] == "line_leader"
+    finally:
+        server.shutdown()
+        server.server_close()

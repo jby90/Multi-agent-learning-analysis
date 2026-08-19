@@ -21,15 +21,12 @@ describe('EvidenceClaim', () => {
       },
     })
 
-    expect(wrapper.find('.claim-anchor').attributes('tabindex')).toBe('0')
-    expect(wrapper.find('[role="tooltip"]').text()).toBe(
-      '出自《完成率计算》知识点与你的盲区匹配',
-    )
-    expect(wrapper.find('[role="tooltip"]').text()).not.toMatch(/KB-002|资料|检索|命中|plan_qty/)
-    expect(wrapper.get('.evidence-marker').text()).toBe('1')
-    expect(wrapper.get('.evidence-marker').attributes('aria-label')).toBe(
-      '查看《完成率计算》知识出处',
-    )
+    // 需求②：证据句为普通文本——无锚点/下划线/角标/弹层
+    expect(wrapper.find('.claim-anchor').exists()).toBe(false)
+    expect(wrapper.find('.evidence-marker').exists()).toBe(false)
+    expect(wrapper.find('.evidence-popover').exists()).toBe(false)
+    expect(wrapper.text()).toContain('计划量与实际量必须分开理解')
+    expect(wrapper.text()).not.toMatch(/出自|盲区|KB-002|检索|命中|plan_qty/)
   })
 
   it('adds the purple truth label to speculation', () => {

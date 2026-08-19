@@ -45,6 +45,10 @@ PROFILE_FIELDS = frozenset(
         "gaps_prior",
         "difficulty_start",
         "lecture_style",
+        # 闭环一：画像学习领域清单（展示层/关注点过滤用；路由本闭环不读它）
+        "knowledge_scope",
+        # 闭环五：实操模式（sql=学员书写查询；data_present=系统代执行并呈现）
+        "practice_mode",
     }
 )
 QUESTION_FIELDS = frozenset(
@@ -89,6 +93,9 @@ def load_profiles(directory: Path = PROFILE_DIR) -> dict[str, dict[str, Any]]:
             _non_empty_string(raw[field], field)
         raw["strengths"] = _string_list(raw["strengths"], "strengths")
         raw["gaps_prior"] = _string_list(raw["gaps_prior"], "gaps_prior")
+        raw["knowledge_scope"] = _string_list(raw["knowledge_scope"], "knowledge_scope")
+        if raw["practice_mode"] not in {"sql", "data_present"}:
+            raise ValueError("practice_mode must be sql|data_present")
         if raw["difficulty_start"] not in DIFFICULTIES:
             raise ValueError("difficulty_start must be basic|applied|advanced")
         profiles[profile_id] = raw

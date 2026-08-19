@@ -38,6 +38,12 @@ export function parseLearnerProfile(source: string, fileName: string): LearnerPr
     title: stringField(profile.title, '岗位名称', fileName),
     background: stringField(profile.background, '岗位背景', fileName),
     strengths,
+    // 闭环一：画像学习领域清单（训练关注点按域过滤的数据源）
+    knowledgeScope: Array.isArray(profile.knowledge_scope)
+      ? profile.knowledge_scope.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+      : [],
+    // 闭环五：实操模式（sql=学员书写；data_present=系统代执行并呈现）
+    practiceMode: typeof profile.practice_mode === 'string' ? profile.practice_mode : 'sql',
   }
 }
 

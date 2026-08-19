@@ -651,6 +651,24 @@ class TaskAgent:
             query_authority=query_authority,
         )
         question = display["contextualized_stem"]
+        quiz_scaffolds = [
+            dict(item)
+            for item in prerequisite_scaffolds(
+                entry.knowledge_point,
+                entry.difficulty,
+            )
+        ]
+        if entry.payload_type == "quiz_set" and quiz_scaffolds:
+            # Graded questions that cross into a prerequisite knowledge
+            # point must carry the same audited bridge practice guides
+            # already prepend as "前置检查" steps.  Without the explicit
+            # note R-03 sees an unscaffolded blind spot on every
+            # regeneration cycle and the review loop cannot converge.
+            scaffold_note = "；".join(
+                f"「{item['knowledge_point']}」——{item['learning_goal']}"
+                for item in quiz_scaffolds
+            )
+            question = f"前置提示：本题关联前置知识 {scaffold_note}。{question}"
         content: dict[str, Any] = {
             "event": "product_ready",
             "template_id": entry.template_id,
@@ -666,6 +684,8 @@ class TaskAgent:
         }
         if entry.payload_type == "quiz_set":
             content["questions"] = [{"id": entry.template_id, "prompt": question}]
+            if quiz_scaffolds:
+                content["prerequisite_scaffolds"] = quiz_scaffolds
         else:
             guide_steps = [
                 _render(step, self._catalog.demo_parameters)

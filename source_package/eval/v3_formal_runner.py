@@ -288,6 +288,11 @@ class GoldLearnerActor:
             # keeps answering incorrectly until the real session emits the
             # frozen down-step action; the harness never injects a difficulty.
             return self._evidence_bearing_wrong_answer(evidence)
+        if script_id == "S-REFRESH" and not _has_path_action(state, "refresh"):
+            # Same contract as S-DOWNSTEP, but the knowledge point already sits
+            # at basic, so T17 stamps "refresh" (new evidence and teaching
+            # angle) instead of lowering the band any further.
+            return self._evidence_bearing_wrong_answer(evidence)
 
         point = str(self._gold.get("预期要点") or "")
         return self._bounded_answer(evidence, point)
@@ -395,43 +400,78 @@ def _has_path_action(state: Mapping[str, Any], action: str) -> bool:
     )
 
 
+def _has_difficulty_product(state: Mapping[str, Any], difficulty: str) -> bool:
+    return any(
+        content.get("event") == "product_ready"
+        and content.get("difficulty") == difficulty
+        for _, _, content in _event_contents(state)
+    )
+
+
+def _action_steps(state: Mapping[str, Any], action: str) -> list[int]:
+    return [
+        step
+        for step, _, content in _event_contents(state)
+        if content.get("difficulty_action") == action
+    ]
+
+
 def _scenario_reached(state: Mapping[str, Any], script_id: str) -> bool:
+    """Scenario completion judged from production trace events only.
+
+    Every scenario must run until the system itself made the real difficulty
+    decision; the harness never stops early on a bare ``mastered`` verdict
+    (the historical S-KEEP artefact).  Order assertions matter: the recovery
+    ``step_up`` must come after ``step_down``/``refresh``, and the mastery
+    verdict must come after the wrong answer it recovers from.
+    """
     events = _event_contents(state)
-    assessments = [
-        (step, str(content.get("assessment") or ""))
+    mastered_steps = [
+        step
         for step, _, content in events
         if content.get("event") == "learner_follow_up_assessed"
+        and str(content.get("assessment") or "") == "mastered"
     ]
-    mastered_steps = [step for step, assessment in assessments if assessment == "mastered"]
-    wrong_steps = [step for step, assessment in assessments if assessment != "mastered"]
-    if script_id in {"S-KEEP-B", "S-KEEP-A"}:
-        return bool(mastered_steps)
-    if script_id == "S-STEP-UP":
-        step_up_steps = [
-            step
-            for step, _, content in events
-            if content.get("difficulty_action") == "step_up"
-        ]
-        if not step_up_steps:
-            return False
-        return any(
-            step > step_up_steps[-1]
-            and content.get("event") == "product_ready"
-            and content.get("difficulty") == "advanced"
-            for step, _, content in events
-        )
+    if script_id == "S-STEP-UP-B":
+        step_ups = _action_steps(state, "step_up")
+        return bool(step_ups) and _has_difficulty_product(state, "applied")
+    if script_id == "S-STEP-UP-A":
+        step_ups = _action_steps(state, "step_up")
+        return bool(step_ups) and _has_difficulty_product(state, "advanced")
     if script_id == "S-REBUTTAL":
-        return bool(wrong_steps and mastered_steps and mastered_steps[-1] > wrong_steps[0])
-    if script_id == "S-DOWNSTEP":
-        step_down_steps = [
+        wrong_steps = [
             step
             for step, _, content in events
-            if content.get("difficulty_action") == "step_down"
+            if content.get("event") == "learner_follow_up_assessed"
+            and str(content.get("assessment") or "") != "mastered"
         ]
+        step_ups = _action_steps(state, "step_up")
         return bool(
-            step_down_steps
+            wrong_steps
             and mastered_steps
-            and mastered_steps[-1] > step_down_steps[-1]
+            and step_ups
+            and mastered_steps[-1] > wrong_steps[0]
+            and step_ups[-1] > mastered_steps[-1]
+        )
+    if script_id == "S-DOWNSTEP":
+        step_downs = _action_steps(state, "step_down")
+        step_ups = _action_steps(state, "step_up")
+        return bool(
+            step_downs
+            and mastered_steps
+            and step_ups
+            and mastered_steps[-1] > step_downs[-1]
+            and step_ups[-1] > step_downs[-1]
+        )
+    if script_id == "S-REFRESH":
+        refreshes = _action_steps(state, "refresh")
+        step_ups = _action_steps(state, "step_up")
+        return bool(
+            refreshes
+            and mastered_steps
+            and step_ups
+            and mastered_steps[-1] > refreshes[-1]
+            and step_ups[-1] > refreshes[-1]
         )
     raise ValueError(f"unsupported frozen learner script: {script_id}")
 

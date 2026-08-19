@@ -8,6 +8,7 @@ import {
   type InteractiveApi,
   type InteractiveState,
 } from '../lib/interactiveApi'
+import { awaitingLabel, stateLabel } from '../lib/tracePresentation'
 import { buildTraceView } from '../lib/traceModel'
 import { parseTraceJsonl } from '../lib/traceParser'
 import AgentTopology from './AgentTopology.vue'
@@ -117,7 +118,7 @@ onBeforeUnmount(() => {
         <ShieldCheck :size="17" aria-hidden="true" />
         <span><small>当前浏览器会话</small><b>{{ sessionLabel }}</b></span>
         <span><small>事件轨迹</small><b>{{ traceLabel }}</b></span>
-        <span><small>运行状态</small><b>{{ state.state }} · {{ state.awaiting }}</b></span>
+        <span><small>运行状态</small><b>{{ stateLabel(state.state) }}（{{ state.state }}）· {{ awaitingLabel(state.awaiting) }}</b></span>
       </div>
       <div class="debug-actions">
         <button type="button" aria-label="刷新当前会话" @click="refresh">

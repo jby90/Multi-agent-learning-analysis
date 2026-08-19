@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, ChevronLeft, ChevronRight } from '@lucide/vue'
+import { ChevronLeft, ChevronRight } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
 import type { AgentActivityStatus } from '../lib/interactiveApi'
@@ -143,15 +143,9 @@ function nextRecord(): void {
 
 <template>
   <aside class="panel trace-panel">
-    <header class="panel-heading trace-heading">
-      <div>
-        <h2>协作记录</h2>
-        <span v-if="view.debateGroups.length" class="debate-summary">
-          发生过驳回复审 · {{ view.debateGroups.length }}次
-        </span>
-      </div>
-      <span class="message-count"><Activity :size="14" aria-hidden="true" />{{ view.visibleMessages.length }} 条</span>
-    </header>
+    <span v-if="view.debateGroups.length" class="debate-summary">
+      发生过驳回复审 · {{ view.debateGroups.length }}次
+    </span>
 
     <ul class="agent-collaboration-map" aria-label="五位智能体老师协作状态">
       <li
@@ -177,7 +171,7 @@ function nextRecord(): void {
     <StateRail :messages="view.visibleMessages" :current-state="view.currentState" />
 
     <details v-if="systemMessages.length" class="system-records">
-      <summary>流程记录 · {{ systemMessages.length }}条</summary>
+      <summary>系统流程事件 · {{ systemMessages.length }}条<small>会话建立与状态流转，供审阅追溯</small></summary>
       <div class="system-record-list">
         <TraceCard
           v-for="message in systemMessages"
@@ -186,6 +180,11 @@ function nextRecord(): void {
         />
       </div>
     </details>
+
+    <div class="trace-record-caption">
+      <span>协作产物记录</span>
+      <small>{{ timeline.length }} 条 · 逐条审阅</small>
+    </div>
 
     <div class="trace-record-page" aria-live="polite">
       <div

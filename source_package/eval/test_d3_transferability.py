@@ -8,7 +8,16 @@ from agents.validate_message import validate_message
 
 
 ROOT = Path(__file__).resolve().parents[1]
-KB_TRACE = ROOT / "traces" / "demo-planner_new-20260716133542.jsonl"
+# 优化3 后：交付 traces 已换新录制；测试改用前端稳定夹具（旧轨迹副本）
+KB_TRACE = (
+    ROOT
+    / "frontend"
+    / "src"
+    / "test"
+    / "fixtures"
+    / "traces"
+    / "demo-planner_new-20260716133542.jsonl"
+)
 SEC_TRACE = ROOT / "traces" / "demo-planner_new-20260717-d3-sec-02.jsonl"
 
 
@@ -27,7 +36,8 @@ def knowledge_message(messages: list[dict[str, Any]]) -> dict[str, Any]:
         if message.get("agent") == "knowledge"
         and message.get("role") == "produce"
     ]
-    assert len(matches) == 1
+    # 真实交互会话中每个难度单元产出一节微课；契约校验取首节（初始档）。
+    assert matches
     return matches[0]
 
 

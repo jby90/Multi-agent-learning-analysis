@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, CircleDotDashed, ExternalLink } from '@lucide/vue'
+import { ExternalLink } from '@lucide/vue'
 import { computed } from 'vue'
 
 import { resourceCoverage } from '../lib/learningInsights'
@@ -40,11 +40,10 @@ function resourceName(name: string): string {
         :key="item.name"
         :class="{ 'is-covered': item.covered }"
       >
-        <Check v-if="item.covered" :size="13" aria-hidden="true" />
-        <CircleDotDashed v-else :size="13" aria-hidden="true" />
+        <span v-if="item.covered" class="coverage-ready">资源就绪</span>
+        <span v-else class="coverage-pending">尚未覆盖</span>
         <span class="coverage-name">{{ resourceName(item.name) }}</span>
-        <span v-if="!item.covered" class="coverage-pending">尚未覆盖</span>
-        <span v-else class="coverage-links">
+        <span v-if="item.covered" class="coverage-links">
           <a
             v-for="source in item.sources"
             :key="source"

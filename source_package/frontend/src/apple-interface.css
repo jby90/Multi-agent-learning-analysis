@@ -77,18 +77,36 @@ input:focus-visible,
   margin: 0 auto;
 }
 
+/* 优化1：三画像下学员/协同切换占位隐藏——保持工具栏按钮位置稳定 */
+.audience-switch.is-slot-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Product navigation stays compact in live work and expands only for replay tools. */
 .workshop-header {
   position: relative;
-  z-index: 20;
+  /* 0819 bug8：顶栏（含头像下拉）须盖过全部应用内浮层——生成等待白页(51)、
+     专注模式(2200)等曾把打开的下拉面板罩在 0.96 白底下；密码弹窗(2500,
+     body 级)仍高于本栏。 */
+  z-index: 2400;
   display: grid;
   margin: 0 0 24px;
-  overflow: hidden;
+  /* 不可 overflow:hidden：个人中心下拉面板从头像下方伸出卡片下边缘，
+     卡片级裁剪会把面板拦腰截断（2026-08-16 实测）。圆角裁剪下沉到
+     session-commandbar（唯一满宽绘制的深色数据条）自己处理。 */
+  overflow: visible;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(29, 29, 31, 0.08);
   border-radius: 20px;
   box-shadow: 0 12px 40px rgba(20, 32, 52, 0.065);
   backdrop-filter: saturate(180%) blur(22px);
+}
+
+/* 深色数据条满宽绘制，须自行裁住下圆角，视觉与原卡片级裁剪一致。 */
+.session-commandbar {
+  overflow: hidden;
+  border-radius: 0 0 20px 20px;
 }
 
 .replay-toolbar {
@@ -178,6 +196,12 @@ input:focus-visible,
   background: #30d158;
   border-radius: 50%;
   box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.12);
+}
+
+.live-session-context em {
+  font-style: normal;
+  font-weight: 400;
+  color: #3f3f42;
 }
 
 .live-session-context strong {
@@ -1006,6 +1030,77 @@ select {
   line-height: 1.45;
 }
 
+/* 闭环一：选定岗位后的训练关注点面板（选项已按该岗位学习领域过滤）。
+   注意：选择页上下文规则会劫持同类别名元素（.is-profile-select .profile-route-focus
+   把下拉钉到页面右上角、命名网格把未指派区域的子元素丢进隐式单元格、
+   .profile-picker-cta 是 hero 大按钮比例），因此面板内的覆写全部使用
+   更高优先级（.live-practice .profile-focus-panel ...）以压过上下文规则。 */
+/* 聚焦步骤面板（2026-08-17 定稿回退）：铺满 cards 大板块，单列内容居中排布 */
+.role-selection-page .live-practice.is-profile-select .profile-focus-panel {
+  grid-area: cards;
+  justify-self: stretch;
+  align-self: stretch;
+  width: auto;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 26px;
+  padding: 10px 44px 46px;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+/* 已选岗位摘要整体居中 */
+.profile-focus-copy {
+  width: min(100%, 640px);
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.profile-focus-copy h3 {
+  margin: 4px 0 6px;
+  font-size: 21px;
+}
+
+.profile-focus-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.profile-focus-strengths {
+  margin-top: 10px;
+  justify-content: center;
+}
+
+/* 关注点选择与摘要同宽，横向分隔线 */
+.live-practice .profile-focus-panel .profile-route-focus {
+  position: static; /* 解除 .is-profile-select 把下拉钉到页面右上角的劫持 */
+  width: min(100%, 640px); /* 同时解除基础样式 width:min(100%,360px) 残留 */
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+}
+
+/* 按钮居中、紧凑比例 */
+.live-practice .profile-focus-panel .profile-picker-cta {
+  justify-self: center;
+  min-height: 40px;
+  margin-top: 4px;
+  padding: 0 34px;
+  font-size: 13.5px;
+  box-shadow: 0 6px 16px rgba(0, 113, 227, 0.22);
+}
+
+.profile-focus-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .live-practice,
 .live-step-guide {
   padding: 22px;
@@ -1123,6 +1218,191 @@ select {
   background: rgba(0, 113, 227, 0.045);
   box-shadow: inset 3px 0 0 rgba(0, 113, 227, 0.65);
   transform: none;
+}
+
+/* ===== 岗位入口拆页：第一屏·欢迎页 ===== */
+.role-selection-page .live-practice.is-profile-welcome {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "hero";
+}
+
+.is-profile-welcome .profile-picker-hero {
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+  gap: 40px;
+  padding: 64px 48px 56px;
+  border-right: 0;
+}
+
+.is-profile-welcome .profile-picker-copy {
+  display: grid;
+  justify-items: center;
+  max-width: 680px;
+}
+
+.is-profile-welcome .profile-picker-copy h1 {
+  max-width: 580px;
+  margin: 24px auto 16px;
+  font-size: clamp(32px, 3vw, 44px);
+}
+
+.is-profile-welcome .profile-picker-copy p {
+  max-width: 540px;
+}
+
+.is-profile-welcome .profile-picker-flow {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(100%, 900px);
+  gap: 22px 18px;
+  margin: 0;
+  text-align: left;
+}
+
+.profile-picker-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  margin-top: 8px;
+  padding: 0 30px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: 0.01em;
+  background: #0071e3;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(0, 113, 227, 0.3);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.profile-picker-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(0, 113, 227, 0.36);
+}
+
+.profile-picker-cta:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ===== 岗位入口拆页：第二屏·选择页 ===== */
+.role-selection-page .live-practice.is-profile-select {
+  position: relative; /* 返回按钮随内容竖直居中会跑到中部：锚点从标题区上移到整个板块 */
+  grid-template-columns: minmax(0, 1fr);
+  /* auto auto + center：标题+岗位卡整块在板块内竖直居中（原 1fr 行会让内容偏上） */
+  grid-template-rows: auto auto;
+  align-content: center;
+  grid-template-areas:
+    "heading"
+    "cards";
+}
+
+.is-profile-select .profile-picker-heading {
+  position: static; /* 让绝对定位的返回按钮锚到板块左上角（见上） */
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 30px 44px 20px;
+  text-align: center;
+}
+
+/* 聚焦步骤大标题隐藏：heading 只剩返回按钮，收窄留白 */
+.is-profile-select .profile-picker-heading:not(:has(> div)) {
+  padding: 14px 44px 0;
+}
+
+.profile-picker-back {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  color: #526277;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid rgba(29, 29, 31, 0.14);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.profile-picker-back:hover:not(:disabled) {
+  color: #0071e3;
+  border-color: rgba(0, 113, 227, 0.4);
+}
+
+/* 标题居中；训练关注点下拉放右上角（与左上角返回按钮对称）；
+   窄屏时回落为标题下方居中，避免与标题重叠。 */
+.is-profile-select .profile-picker-heading > div:not(.profile-route-focus) {
+  margin-left: 0;
+}
+
+.is-profile-select .profile-route-focus {
+  position: absolute;
+  top: 22px;
+  right: 32px;
+  margin: 0;
+}
+
+@media (max-width: 980px) {
+  .is-profile-select .profile-route-focus {
+    position: static;
+    justify-items: center;
+  }
+}
+
+.is-profile-select .profile-choice-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 6px 44px 42px;
+}
+
+.is-profile-select .profile-choice {
+  min-height: 300px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  align-content: space-between;
+  gap: 12px;
+  padding: 22px 20px;
+  background: #fbfcfe;
+  border: 1px solid rgba(29, 29, 31, 0.1);
+  border-top: 4px solid #8a929b;
+  border-radius: 16px;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.is-profile-select .profile-choice:hover {
+  background: rgba(0, 113, 227, 0.04);
+  border-top-color: #0071e3;
+  box-shadow: none;
+  transform: translateY(-2px);
+}
+
+.is-profile-select .profile-choice-copy strong {
+  font-size: 18px;
+}
+
+.is-profile-select .profile-choice > .profile-choice-action {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+@media (max-width: 980px) {
+  .is-profile-welcome .profile-picker-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .is-profile-select .profile-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .live-practice:not(.is-profile-picker) .profile-choice:hover,

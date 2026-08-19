@@ -1066,14 +1066,26 @@ def test_cross_process_attribution_has_three_real_database_tiers_and_two_axis_li
 
     advanced = catalog.templates["T-09"]
     assert advanced.question_template == (
-        "核验{ship}2025-04至{month2}三道工序×月份表，"
+        "核验{ship}2025-02至{month2}三道工序×月份表，"
         "处理多候选与混合情形并输出传导证据×本地叠加两轴结论"
     )
+    assert "2025-02-01" in advanced.standard_sql
+    assert len(advanced.expected_rows) == 18
+    assert all(
+        set(row) == {"process_code", "month_label", "complete_rate"}
+        for row in advanced.expected_rows
+    )
+    # 与 T-08（2025-04起、12行）不再雷同：更长窗口暴露 ZZTP 自身偏低历史。
+    assert advanced.standard_sql != catalog.templates["T-08"].standard_sql
+    assert advanced.expected_rows != catalog.templates["T-08"].expected_rows
     assert advanced.expected_points == (
-        "月度序列显示YCL 2025-05、ZZTP 2025-06、AZTP 2025-07时序相容，"
-        "但缺少对象依赖、齐套暴露、交接及独立本地异常证据，候选源头不能唯一锁定",
-        "两轴结论：传导证据=证据不足；本地叠加=待核；"
-        "不得把表观收窄当成传导成立或无本地问题的证明",
+        "扩窗后月度序列显示：YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、"
+        "AZTP 2025-07=0.8501时序相容；但ZZTP 2025-02=0.9142、2025-03=0.9085"
+        "连续偏低，YCL 2025-04=0.9061也早于链前——2025-06的ZZTP低点存在"
+        "自身趋势延续的本地叠加候选，不能只按时序归于上游传导",
+        "两轴结论：传导证据=证据不足；本地叠加=待核（ZZTP自身偏低历史增强叠加候选）；"
+        "缺少对象依赖、齐套暴露与交接证据前，不得把表观收窄当成传导成立，"
+        "也不得忽略本地历史直接排除叠加",
     )
 
 

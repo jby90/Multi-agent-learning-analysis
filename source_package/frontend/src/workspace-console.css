@@ -19,8 +19,9 @@
   justify-content: space-between;
   gap: 18px;
   padding: 10px 16px 10px 18px;
-  background: rgba(249, 249, 251, 0.92);
-  border-bottom: 1px solid var(--border);
+  /* 需求⑦/①：与内容区拉开层次并贴合蓝色主题 */
+  background: linear-gradient(180deg, #f4f8fd 0%, #ecf3fb 100%);
+  border-bottom: 1px solid #d7e3f1;
 }
 
 .training-workbench-heading > div {
@@ -111,6 +112,52 @@
   grid-row: 1;
 }
 
+/* 闭环五后继：追问态整板块——数据在上、提问在下，左侧微课栏让位（可回退：去掉 is-followup-focus 类即恢复双栏） */
+.training-workbench-body.is-followup-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.training-workbench-body.is-followup-focus .training-lesson-station {
+  display: none;
+}
+
+.training-workbench-body.is-followup-focus .training-task-station {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+/* 特异性提升：压过 .live-workspace .is-practice-layout 系把任务栏钉在第 2 列的旧规则（同为 0,5,0 平手时后者位置靠后获胜），
+   否则单列网格中被钉位的元素会撑出内容宽的隐式列（实测 586px）。加 is-practice-layout 抬到 0,6,0 破平手。 */
+.live-workspace .training-workbench-body.is-practice-layout.is-followup-focus .live-practice.training-task-station {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.training-workbench-body.is-followup-focus .follow-up-workbench,
+.training-workbench-body.is-followup-focus .live-practice .task-inline-result {
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+}
+
+.training-workbench-body.is-followup-focus .task-inline-result .sql-result-heading {
+  padding-right: 0;
+}
+
+/* 需求②：追问态查询结果完整呈现，不再内滚 */
+.training-workbench-body.is-followup-focus .live-practice .task-inline-result,
+.training-workbench-body.is-followup-focus .data-present-result-wrapper .task-inline-result {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.training-workbench-body.is-followup-focus .data-present-result-wrapper .task-inline-result .table-scroll {
+  overflow: visible;
+  max-height: none;
+}
+
 .training-task-station,
 .training-lesson-station {
   min-width: 0;
@@ -188,8 +235,11 @@
 .training-task-station .live-action-block {
   min-height: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
+  text-align: center;
 }
 
 .training-task-station .live-action-block .primary-action {
@@ -197,6 +247,282 @@
   height: 48px;
   min-height: 48px;
   flex: 0 0 auto;
+}
+
+/* 学习提示语（如补救判词）与生成进度小字：居中限宽的辅助文案。 */
+.training-task-station .live-action-block .learning-notice {
+  max-width: 520px;
+  color: #3a4a5f;
+  font-size: 14px;
+  line-height: 1.7;
+  /* 后端通知按“原因句 + 动作句”两行输出，保留换行提升可读性。 */
+  white-space: pre-line;
+}
+
+/* 闭环四：微课延期提示（前测已验证，直入实操）——沿用 learning-notice 版式，
+   以绿色左边线区分"已验证"与普通学习通知。 */
+.training-task-station .live-action-block .lecture-deferred-notice {
+  border-left-color: #34c759;
+}
+
+/* 闭环五后继：末页"进入练习环节"按钮 */
+.lesson-start-practice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  background: #0071e3;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+  transition: filter 140ms ease;
+}
+
+.lesson-start-practice:hover {
+  filter: brightness(1.06);
+}
+
+/* ===== 用户验收第二轮：前测满宽 / 选项样式 / 微课叠页 ===== */
+/* ② 前测答题板块满宽：隐藏右侧画像预留列（画像栏本身已按 awaiting 隐藏） */
+.live-workspace.is-student-view.is-pretest-focus {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "resource";
+}
+
+/* ③ 选项：背景更透明、圆角矩形、ABCD 字母加大 */
+.pretest-form .pretest-question label {
+  background: rgba(244, 241, 234, 0.45);
+  border-radius: 12px;
+}
+
+.pretest-form .pretest-question label:hover {
+  background: rgba(244, 241, 234, 0.72);
+}
+
+.pretest-form .pretest-question label:has(input:checked) {
+  background: rgba(232, 240, 248, 0.85);
+}
+
+.pretest-form .option-letter {
+  font-size: 15px;
+}
+
+/* 需求⑥：叠页小节内列表项与正文统一为无底色普通文本 */
+.lesson-stack .markdown-list-item {
+  background: transparent;
+  color: inherit;
+}
+
+/* ④ 微课叠页：整课连续滚动呈现，底部吸附"进入练习环节" */
+.lesson-stack .lesson-page {
+  margin-bottom: 14px;
+}
+
+.lesson-stack .lesson-page:last-of-type {
+  margin-bottom: 0;
+}
+
+.lesson-stack-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 6px;
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.97) 55%,
+    rgba(255, 255, 255, 0)
+  );
+}
+
+.lesson-stack-actions .lesson-start-practice {
+  padding: 11px 30px;
+  font-size: 14px;
+}
+
+/* 需求①②④：两行制——单列 1fr 轨道（隐式 auto 轨道会按内容收缩致按钮靠左） */
+.live-workspace .follow-up-workbench .follow-up-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 8px;
+}
+
+.live-workspace .follow-up-workbench .follow-up-actions small {
+  justify-self: start;
+}
+
+/* 双保险：grid 内 margin:auto 强制按钮居中（压过任何继承位移） */
+.live-workspace .follow-up-workbench .follow-up-actions .primary-action {
+  justify-self: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 需求③：历史记录翻页器 */
+.follow-up-history-pager {
+  display: grid;
+  gap: 8px;
+}
+
+.follow-up-history-pager-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.follow-up-history-pager-actions button {
+  min-height: 28px;
+  padding: 4px 12px;
+  color: #1769c2;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 113, 227, 0.07);
+  border: 1px solid rgba(0, 113, 227, 0.16);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.follow-up-history-pager-actions button:disabled {
+  color: #9aa3ad;
+  background: #f3f4f6;
+  border-color: #e3e6ea;
+  cursor: default;
+}
+
+.follow-up-history-pager-actions span {
+  color: var(--paper-muted, #7a8698);
+  font-size: 11px;
+}
+
+/* 需求⑨：提问环节"查看讲义"按钮 */
+.lecture-peek-toggle {
+  min-height: 30px;
+  padding: 5px 12px;
+  color: #1769c2;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(0, 113, 227, 0.08);
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.lecture-peek-toggle:hover {
+  background: rgba(0, 113, 227, 0.14);
+}
+
+/* 闭环五后继：追问区原始任务折叠锚 */
+.follow-up-task-anchor.is-collapsed summary {
+  color: #86868b;
+  font-size: 11.5px;
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+
+.follow-up-task-anchor.is-collapsed summary:hover {
+  color: #0071e3;
+}
+
+/* 闭环五：data_present 画像代执行提示 */
+.training-task-station .live-action-block .data-present-notice {
+  border-left-color: #5856d6;
+}
+
+/* 闭环五：追问区顶部的代执行结果表 */
+.data-present-result-wrapper {
+  margin: 12px 0;
+}
+
+.data-present-result-wrapper .task-inline-result {
+  border: 1px solid rgba(88, 86, 214, 0.3);
+}
+
+/* 需求⑤②：生成等待为单一整板块——外层隐藏画像栏并单列（内层同步单列） */
+/* ②③：生成等待与自动链——隐藏画像栏，单列整板块 */
+.live-workspace:has(.generation-pending) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.live-workspace:has(.generation-pending) > .profile-panel {
+  display: none !important;
+}
+
+/* ①：pending 板块内定位锚 */
+.live-practice {
+  position: relative;
+}
+
+
+.training-workbench-body:has(.generation-pending) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.training-workbench-body:has(.generation-pending) .training-lesson-station {
+  display: none;
+}
+
+/* ①：pending 在板块内居中（不霸全屏，顶栏保留） */
+.generation-pending-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 51;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: inherit;
+}
+
+.generation-pending-overlay .generation-pending {
+  color: #3c4657;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.8;
+  text-align: center;
+  white-space: pre-line;
+}
+
+.training-task-station .live-action-block .generation-progress {
+  max-width: 460px;
+  margin: 2px auto 0;
+  color: var(--paper-muted, #7a8698);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.training-task-station .live-action-block .answer-feedback-card {
+  max-width: 560px;
+}
+
+.diagnostic-route-preview {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #f5f5f7;
+  border-left: 3px solid var(--blue);
+  border-radius: 10px;
+}
+
+.diagnostic-route-preview strong {
+  display: grid;
+  gap: 3px;
+  color: #1f2b3a;
+  font-size: 13px;
+}
+
+.diagnostic-route-preview p {
+  max-width: 560px;
+  margin: 0;
+  color: #66717f;
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .sql-task-brief {
@@ -246,7 +572,7 @@
 
 .pretest-progress-copy {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto auto auto;
   align-items: baseline;
   justify-items: end;
   column-gap: 4px;
@@ -269,8 +595,10 @@
 }
 
 .pretest-page-dots {
+  /* 题号单行排布：列数随题量自适应（原 repeat(5) 固定五列导致 6/7 题换行） */
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 7px;
   padding: 0;
   margin: 0;
@@ -322,7 +650,7 @@
 
 .pretest-page-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
 }
 
@@ -346,7 +674,8 @@
 .path-progress-summary {
   min-width: 142px;
   display: grid;
-  justify-items: end;
+  /* 百分比居于"下一步"小字正上方居中。 */
+  justify-items: center;
   gap: 2px;
 }
 
@@ -368,6 +697,12 @@
 
 .follow-up-actions small.needs-evidence {
   color: #b54708;
+  font-weight: 600;
+}
+
+/* 0818：不知道引导句——黑色（同正文墨色），粗细与其他引导提示一致 */
+.follow-up-actions small.dont-know-hint {
+  color: var(--paper-ink);
   font-weight: 600;
 }
 
@@ -515,6 +850,16 @@
       "resource";
   }
 
+  /* 上一条的区域表只面向单画像协同工作台。三画像在协同视图下必须保留
+     comparison 命名区：否则对比面板失去网格锚点，会被自动放置挤到隐式
+     轨道（实测右移 96px、下移 72px 且缩窄）。优先级 (0,4,0) 压过上一条。 */
+  .workspace-grid.is-collaboration-view.is-comparison:not(.live-workspace) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "comparison"
+      "path";
+  }
+
   .workspace-grid.is-collaboration-view:not(.live-workspace) > .profile-panel {
     display: none;
   }
@@ -528,8 +873,15 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* 协作记录是深色卡片面板：钉住深色文字语境与深蓝黑底色（与实时协同、
+     运行拓扑、效能证据同一配色家族）。外层浅色主题会把 --text 覆盖成
+     纸面墨色，导致深灰卡片上出现深字（不可读）。 */
+  --text: #f0f2f4;
+  --muted: #aab1ba;
+  --panel: #0b2434;
+  --border: rgba(120, 213, 255, 0.13);
   color: var(--text);
-  background: #fff;
+  background: linear-gradient(180deg, #081d2c, #061827);
 }
 
 .collaboration-workbench .trace-panel > * {
@@ -543,7 +895,7 @@
   align-items: stretch;
   padding: 12px 14px;
   overflow: hidden;
-  background: #f5f5f7;
+  background: #071b2a;
 }
 
 .trace-record-slide {
@@ -566,17 +918,24 @@
 }
 
 .trace-record-pager button {
+  min-width: 92px;
   min-height: 32px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   padding: 0 10px;
-  color: #3f3f42;
+  color: #bfe0f2;
   font-size: 12px;
-  background: #f2f2f5;
-  border: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(108, 201, 238, 0.22);
   border-radius: 9px;
   cursor: pointer;
+}
+
+/* 左右按钮对称：均按内容列对齐并固定最小宽度，避免 grid 拉伸导致一大一小。 */
+.trace-record-pager button:first-child {
+  justify-self: start;
 }
 
 .trace-record-pager button:last-child {
@@ -630,24 +989,23 @@
 
   .live-workspace {
     height: calc(100dvh - 114px);
-    grid-template-rows: 96px minmax(0, 1fr);
+    /* 培养路径条已按需求删除，去掉原 96px 顶行（协同视图同理） */
+    grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     gap: 14px;
   }
 
   .live-workspace.is-student-view {
     grid-template-columns: minmax(0, 1fr) 300px;
-    grid-template-rows: 96px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     grid-template-areas:
-      "path path"
       "resource profile";
   }
 
   .live-workspace.is-collaboration-view {
     grid-template-columns: minmax(0, 1fr) 300px;
-    grid-template-rows: 96px minmax(620px, calc(100dvh - 210px)) minmax(680px, calc(100dvh - 54px));
+    grid-template-rows: minmax(620px, calc(100dvh - 210px)) minmax(680px, calc(100dvh - 54px));
     grid-template-areas:
-      "path path"
       "trace profile"
       "resource resource";
     height: auto;
@@ -672,112 +1030,6 @@
   .live-workspace.is-collaboration-view > .profile-panel {
     min-height: 620px;
     height: calc(100dvh - 210px);
-  }
-
-  .live-workspace > .learning-path {
-    height: 96px;
-    min-height: 0;
-    grid-template-columns: 300px minmax(0, 1fr) 190px;
-    gap: 18px;
-    padding: 11px 16px;
-    overflow: hidden;
-  }
-
-  .live-workspace > .learning-path:not(:has(.achievement-card)) {
-    grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-areas: "heading nodes";
-  }
-
-  .live-workspace .path-heading {
-    align-self: stretch;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding-right: 16px;
-    border-right: 1px solid var(--border);
-  }
-
-  .live-workspace .path-heading > div:first-child {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  .live-workspace .path-heading h2 {
-    display: -webkit-box;
-    max-height: 36px;
-    overflow: hidden;
-    font-size: 12px;
-    line-height: 1.45;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .live-workspace .path-progress-summary {
-    min-width: 54px;
-    flex: 0 0 54px;
-  }
-
-  .live-workspace .path-progress-summary small {
-    display: none;
-  }
-
-  .live-workspace .path-nodes {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0;
-    padding: 0;
-    overflow: visible;
-  }
-
-  .live-workspace .path-nodes li {
-    flex: 1 1 0;
-    min-width: 0;
-    gap: 3px;
-    font-size: 10px;
-  }
-
-  .live-workspace .planned-node-copy {
-    min-width: 0;
-    max-width: 150px;
-  }
-
-  .live-workspace .planned-node-copy strong,
-  .live-workspace .planned-node-copy small {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .live-workspace .path-current-stage {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.25;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .live-workspace .path-node-icon {
-    width: 24px;
-    height: 24px;
-  }
-
-  .live-workspace .path-nodes li:not(:last-child)::after {
-    top: 12px;
-    left: calc(50% + 13px);
-    width: calc(100% - 26px);
-  }
-
-  .live-workspace .achievement-card {
-    width: 190px;
-    min-width: 0;
-    padding: 9px 11px;
   }
 
   .live-workspace .live-training-stage {
@@ -839,7 +1091,8 @@
   .live-workspace .training-task-station .task-inline-result {
     height: 108px;
     min-height: 80px;
-    max-height: min(36dvh, 280px);
+    /* 拖拽手柄要能拉到完整表格；默认高度不变。 */
+    max-height: min(72dvh, 620px);
     margin: 0 0 12px;
     padding: 12px 14px;
     overflow: auto;
@@ -851,6 +1104,19 @@
 
   .live-workspace .training-task-station .task-inline-result .sql-result-heading {
     margin-bottom: 4px;
+  }
+
+  /* 左栏约束在自身空间内省略截断；右栏（行数徽章/专注分析按钮）
+     永不收缩换行——竖排与重叠都来自左栏溢出挤压右栏。 */
+  .live-workspace .training-task-station .task-inline-result .sql-result-heading > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .live-workspace .training-task-station .task-inline-result .sql-result-heading-actions {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .live-workspace .training-task-station .task-inline-result h3 {
@@ -915,12 +1181,12 @@
 
   .live-workspace .follow-up-history-panel {
     flex: 0 0 auto;
-    max-height: 94px;
-    overflow: auto;
   }
 
+  /* 需求③：翻页式记录不再需要面板内滚动 */
   .live-workspace .follow-up-history-panel.is-expanded {
-    max-height: 132px;
+    max-height: none;
+    overflow: visible;
   }
 
   .live-workspace .follow-up-history-toggle {
@@ -942,7 +1208,7 @@
   }
 
   .live-workspace .follow-up-history-panel .follow-up-history {
-    max-height: 98px;
+    max-height: none;
     padding: 0 7px 7px;
   }
 
@@ -1221,24 +1487,27 @@
   bottom: 0;
   width: min(100%, 960px);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  justify-content: center;
+  gap: 12px;
   margin: 0 auto;
-  padding: 12px 14px;
+  padding: 14px;
+  text-align: center;
   background: rgba(229, 241, 231, 0.96);
   border-top: 1px solid rgba(23, 77, 37, 0.14);
   backdrop-filter: blur(12px);
 }
 
 .training-report-next p {
+  max-width: 560px;
   margin: 0;
-  text-align: left;
+  text-align: center;
 }
 
 .training-report-next .live-next-action {
   width: auto;
-  min-width: 168px;
+  min-width: 200px;
   flex: 0 0 auto;
 }
 
@@ -1515,4 +1784,824 @@ body:has(.sql-result.is-focus-mode) {
   .live-workspace .training-workbench-body.is-lesson-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ============ 0818 需求 1/2：头像下拉扩展 + 修改密码居中弹窗 ============ */
+.user-menu-import-input {
+  display: none;
+}
+
+.user-modal-overlay {
+  position: fixed;
+  inset: 0;
+  /* 0819 bug8：高于顶栏 2400——弹窗打开时头像区不可交互 */
+  z-index: 2500;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+}
+
+.user-modal {
+  width: min(360px, calc(100vw - 48px));
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px 20px 20px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.28);
+}
+
+.user-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.user-modal-head strong {
+  font-size: 15px;
+}
+
+.user-modal-close {
+  border: 0;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.user-modal-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.user-modal .user-menu-pwd {
+  display: grid;
+  gap: 10px;
+}
+
+.user-modal-enter-active,
+.user-modal-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.user-modal-enter-from,
+.user-modal-leave-to {
+  opacity: 0;
+}
+
+/* ============ 0818 需求 5/6：学习记录页 ============ */
+.records-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* 优化4：与顶栏/工作台同宽对齐（app-shell 内 1440px 版心） */
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+  padding: 22px clamp(16px, 4vw, 40px) 40px;
+  align-content: start;
+}
+
+.records-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.records-head h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+}
+
+.records-kicker {
+  font-size: 12px;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+}
+
+.records-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.records-back:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.records-placeholder {
+  background: #fff;
+  border-radius: 12px;
+  padding: 36px 24px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.records-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.records-list {
+  display: grid;
+  gap: 10px;
+  max-height: 62vh;
+  overflow: auto;
+}
+
+.records-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.records-item.is-active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.records-item-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.records-item-main strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-item-main small,
+.records-item-side small {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.records-item-side {
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  flex-shrink: 0;
+}
+
+.records-tier {
+  font-size: 12px;
+  color: #b54708;
+  background: #fff7ed;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.records-detail {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.records-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.records-detail-head h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+}
+
+.records-radar {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+}
+
+.records-mastery {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.records-mastery li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed #e5e7eb;
+  padding: 5px 2px;
+}
+
+.records-mastery strong {
+  color: #b54708;
+}
+
+.records-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.records-meta span {
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.records-mistakes strong,
+.records-summary-mistakes strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.records-mistakes ul,
+.records-summary-mistakes ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: #374151;
+}
+
+.records-mistakes small,
+.records-summary-mistakes small {
+  color: #9ca3af;
+}
+
+.records-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.records-summary h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.records-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.records-summary-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.records-summary-card header {
+  display: grid;
+  gap: 3px;
+}
+
+.records-summary-card small {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.records-summary-empty {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* ============ 0818 需求 3：训练报告增强 + 下载 ============ */
+.training-report-mastery,
+.training-report-mistakes {
+  margin-top: 12px;
+}
+
+.training-report-mastery strong,
+.training-report-mistakes strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.training-report-mastery ul,
+.training-report-mistakes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.training-report-mastery li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed #e5e7eb;
+  padding: 4px 2px;
+}
+
+.training-report-mastery b {
+  color: #b54708;
+}
+
+.training-report-mistakes li {
+  color: #374151;
+}
+
+.training-report-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.report-download {
+  border: 1px solid #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.report-download:hover {
+  background: #dbeafe;
+}
+
+/* ============ 0819 bug7：登录门"跳过"按钮（卡片右上角） ============ */
+.auth-gate-brand {
+  position: relative;
+}
+
+.auth-gate-skip {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.auth-gate-skip:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+/* ============ 0819 bug5：SQL 输错唯一红色提示横幅 ============ */
+.sql-hint-banner {
+  display: grid;
+  gap: 4px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.sql-hint-banner strong {
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.sql-hint-banner p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+/* ============ 0819：五连错脚手架直通——标答与解析卡片 ============ */
+.scaffold-reveal {
+  display: grid;
+  gap: 8px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #2563eb;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.scaffold-reveal header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scaffold-reveal header strong {
+  font-size: 13px;
+  color: #1d4ed8;
+}
+
+.scaffold-reveal header small {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.scaffold-sql {
+  margin: 0;
+  padding: 10px 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.scaffold-analysis {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #1f2937;
+}
+
+/* ============ 优化2：三画像整体大板块（信息条 + 蛛网/折线/扇形 + 底部对照条） ============ */
+.comparison-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.comparison-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.comparison-chip {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-top: 3px solid var(--chip-color, #94a3b8);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.comparison-chip.is-current {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip-color, #2563eb) 28%, transparent);
+}
+
+.comparison-chip-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.comparison-chip-top strong {
+  font-size: 14px;
+}
+
+.comparison-chip-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.comparison-background {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #475569;
+}
+
+.comparison-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.chart-block {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.chart-block h3 {
+  margin: 0;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.chart-note {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.chart-canvas {
+  width: 100%;
+}
+
+.chart-canvas.is-radar { height: 300px; }
+.chart-canvas.is-line { height: 300px; }
+.chart-canvas.is-donut { height: 300px; }
+
+.comparison-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.comparison-strip-item {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.comparison-strip-item.is-current {
+  border-color: #bfdbfe;
+  background: #f8fafd;
+}
+
+@media (max-width: 1180px) {
+  .comparison-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ============ 优化8：三画像仅保留全宽蛛网 ============ */
+.comparison-radar-only {
+  display: grid;
+  gap: 6px;
+  padding: 8px 4px 4px;
+}
+
+.comparison-radar-only .comparison-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.chart-canvas.is-radar-full {
+  width: 100%;
+  height: min(560px, 62vh);
+}
+
+/* ============ 优化10：学习记录页头区与误区条形图 ============ */
+.records-head {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 6px 0 10px;
+  background: linear-gradient(to bottom, rgba(245, 246, 248, 0.98) 78%, rgba(245, 246, 248, 0));
+}
+
+.records-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* 与页标题同一样式规格（优化10：统一"岗位学习档案"与"画像学习总览"） */
+.records-summary h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.records-mistake-chart {
+  width: 100%;
+  height: 168px;
+}
+
+/* ============ 优化11：回放命令条铺满整行 ============ */
+.session-commandbar.is-fullrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.session-commandbar.is-fullrow .trace-selector {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.session-commandbar.is-fullrow .playback-controls {
+  flex: 2 1 480px;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+/* 优化14：三画像副标题字体调大 */
+.comparison-radar-only .comparison-subtitle.is-large {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* ============ 优化15：等待提示波浪动画（逐字跳动，含省略号） ============ */
+.wave-text {
+  display: inline;
+}
+
+.wave-line {
+  display: inline;
+}
+
+.wave-line.is-multiline {
+  display: block;
+}
+
+.wave-char {
+  display: inline-block;
+  white-space: pre;
+  animation: wave-bounce var(--wave-duration, 1100ms) ease-in-out infinite;
+}
+
+.wave-char.is-space {
+  animation: none;
+}
+
+@keyframes wave-bounce {
+  0%, 55%, 100% {
+    transform: translateY(0);
+    color: inherit;
+  }
+  20% {
+    transform: translateY(-0.38em);
+    color: #2563eb;
+  }
+  35% {
+    transform: translateY(0.06em);
+  }
+}
+
+/* 深色底的按钮文字波幅小一档 */
+.primary-action .wave-char {
+  animation-name: wave-bounce-small;
+}
+
+@keyframes wave-bounce-small {
+  0%, 55%, 100% {
+    transform: translateY(0);
+  }
+  20% {
+    transform: translateY(-0.22em);
+  }
+  35% {
+    transform: translateY(0.04em);
+  }
+}
+
+/* ============ 优化19：回放命令条紧凑排布（消除中部大片空白） ============ */
+.session-commandbar.is-fullrow {
+  /* 优化25：整行内容水平居中 */
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.session-commandbar.is-fullrow .trace-selector {
+  flex: 0 1 auto;
+  min-width: 300px;
+}
+
+.session-commandbar.is-fullrow .playback-controls {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+
+/* ============ 优化22：前测选项字体调大 ============ */
+.pretest-form .pretest-question label {
+  font-size: 14.5px;
+}
+
+.pretest-form .option-copy {
+  line-height: 1.7;
+}
+
+/* 优化21：前测中协同视图禁用态 */
+.audience-switch button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ============ 优化26：游客"登录/注册"按钮（头像位） ============ */
+.guest-login-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guest-login-btn:hover {
+  background: #dbeafe;
+}
+
+/* ============ 优化27：学习记录独立完整页面（无顶栏） ============ */
+.records-standalone {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f6f8;
+}
+
+/* ============ 优化：标答解析并入查询结果组（不再夹在提问页中间） ============ */
+.sql-result-group {
+  display: grid;
+  gap: 0;
+}
+
+.sql-result-group .task-inline-result {
+  border-radius: 12px 12px 0 0;
+}
+
+.sql-result-group .scaffold-reveal.is-attached {
+  border-radius: 0 0 12px 12px;
+  border-top: 0;
+  background: #f0f7ff;
+}
+
+.scaffold-analysis {
+  white-space: pre-line;
+}
+
+/* ============ 修复：波浪动画豁免全局 reduced-motion 压制 ============
+ * styles.css 的 @media(prefers-reduced-motion:reduce) 用 * 选择器把所有
+ * animation-duration 压到 0.01ms——用户系统关闭动画效果时波浪被全局杀死
+ * （提示字恒静态）。类选择器特异性高于 *，同 !important 下本规则胜出：
+ * 等待提示的跳动是"运行中"的唯一信号，属必要动态，不做无障碍降级。 */
+@media (prefers-reduced-motion: reduce) {
+  .wave-char {
+    animation-duration: var(--wave-duration, 1100ms) !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/* ============ 修复3/4：提示横幅按钮下方 + 标答解析工作台位 ============ */
+.sql-hint-banner.is-below-button {
+  margin-top: 10px;
+}
+
+.scaffold-reveal.is-workbench {
+  margin-top: 18px;
+}
+
+/* ============ 定稿：标答覆盖原 SQL 输入框/按钮位 ============ */
+.scaffold-reveal.is-replacing {
+  min-height: 220px;
+  align-content: start;
 }

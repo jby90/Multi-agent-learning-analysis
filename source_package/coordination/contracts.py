@@ -255,7 +255,15 @@ class LearningContract:
                 domain_package_sha256, "domain_package_sha256"
             ),
             target_knowledge_points=_unique_strings(
-                content.get("blind_spots"), "diagnosis.blind_spots"
+                # v4 画像路由：前测全对时 blind_spots 为空（培养清单仍非空），
+                # 目标点回退为培养清单；v3 盲区恒非空，行为不变。
+                content.get("blind_spots")
+                or [
+                    item["knowledge_point"]
+                    for item in content.get("knowledge_point_plan", [])
+                    if isinstance(item, Mapping) and item.get("knowledge_point")
+                ],
+                "diagnosis.blind_spots",
             ),
             misconceptions=_unique_strings(
                 content.get("hit_misconceptions"),

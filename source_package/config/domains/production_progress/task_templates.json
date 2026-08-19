@@ -171,26 +171,32 @@
       "knowledge_point": "跨工序归因方法",
       "difficulty": "advanced",
       "payload_type": "quiz_set",
-      "question_template": "核验{ship}2025-04至{month2}三道工序×月份表，处理多候选与混合情形并输出传导证据×本地叠加两轴结论",
+      "question_template": "核验{ship}2025-02至{month2}三道工序×月份表，处理多候选与混合情形并输出传导证据×本地叠加两轴结论",
       "family": "Q6",
-      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-04-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
+      "standard_sql": "SELECT process_code, DATE_FORMAT(period_date,'%Y-%m') AS month_label, ROUND(SUM(actual_qty)/SUM(plan_qty),4) AS complete_rate FROM fact_production_progress WHERE ship_no='H2601' AND period_date>='2025-02-01' AND period_date<'2025-08-01' GROUP BY process_code, month_label ORDER BY process_code, month_label",
       "expected_rows": [
+        {"process_code": "AZTP", "month_label": "2025-02", "complete_rate": "0.9789"},
+        {"process_code": "AZTP", "month_label": "2025-03", "complete_rate": "0.9890"},
         {"process_code": "AZTP", "month_label": "2025-04", "complete_rate": "0.9522"},
         {"process_code": "AZTP", "month_label": "2025-05", "complete_rate": "0.9149"},
         {"process_code": "AZTP", "month_label": "2025-06", "complete_rate": "0.9901"},
         {"process_code": "AZTP", "month_label": "2025-07", "complete_rate": "0.8501"},
+        {"process_code": "YCL", "month_label": "2025-02", "complete_rate": "0.9435"},
+        {"process_code": "YCL", "month_label": "2025-03", "complete_rate": "0.9534"},
         {"process_code": "YCL", "month_label": "2025-04", "complete_rate": "0.9061"},
         {"process_code": "YCL", "month_label": "2025-05", "complete_rate": "0.6236"},
         {"process_code": "YCL", "month_label": "2025-06", "complete_rate": "1.0067"},
         {"process_code": "YCL", "month_label": "2025-07", "complete_rate": "0.9698"},
+        {"process_code": "ZZTP", "month_label": "2025-02", "complete_rate": "0.9142"},
+        {"process_code": "ZZTP", "month_label": "2025-03", "complete_rate": "0.9085"},
         {"process_code": "ZZTP", "month_label": "2025-04", "complete_rate": "0.9326"},
         {"process_code": "ZZTP", "month_label": "2025-05", "complete_rate": "1.0249"},
         {"process_code": "ZZTP", "month_label": "2025-06", "complete_rate": "0.7545"},
         {"process_code": "ZZTP", "month_label": "2025-07", "complete_rate": "0.9981"}
       ],
       "expected_points": [
-        "月度序列显示YCL 2025-05、ZZTP 2025-06、AZTP 2025-07时序相容，但缺少对象依赖、齐套暴露、交接及独立本地异常证据，候选源头不能唯一锁定",
-        "两轴结论：传导证据=证据不足；本地叠加=待核；不得把表观收窄当成传导成立或无本地问题的证明"
+        "扩窗后月度序列显示：YCL 2025-05=0.6236、ZZTP 2025-06=0.7545、AZTP 2025-07=0.8501时序相容；但ZZTP 2025-02=0.9142、2025-03=0.9085连续偏低，YCL 2025-04=0.9061也早于链前——2025-06的ZZTP低点存在自身趋势延续的本地叠加候选，不能只按时序归于上游传导",
+        "两轴结论：传导证据=证据不足；本地叠加=待核（ZZTP自身偏低历史增强叠加候选）；缺少对象依赖、齐套暴露与交接证据前，不得把表观收窄当成传导成立，也不得忽略本地历史直接排除叠加"
       ]
     },
     {

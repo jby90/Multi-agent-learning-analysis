@@ -35,6 +35,88 @@ MAX_LEARNER_TEXT_LENGTH = 500
 MAX_QUESTION_LENGTH = 180
 UNKNOWN_MISCONCEPTION = "UNKNOWN"
 NO_NEXT_TARGET = "NO_NEXT_TARGET"
+# 闭环六：三层递进（口径记忆 → 机理理解 → 归因应用）。层只决定下一问的认知深度与
+# 措辞，绝不参与掌握判定/完成/路由裁决——那些仍由确定性证据判定决定。
+FOLLOW_UP_LAYER_NAMES = {1: "口径记忆", 2: "机理理解", 3: "归因应用"}
+MIN_FOLLOW_UP_LAYER = 1
+MAX_FOLLOW_UP_LAYER = 3
+MAX_LECTURE_DIGEST_LENGTH = 1200
+MAX_DATA_DIGEST_LENGTH = 900
+# 闭环六：画像风格映射（对齐 profiles 的 lecture_style 口径）。只影响措辞与侧重，
+# 不改变证据边界与评分合同。
+_PERSONA_QUESTION_STYLES = {
+    "planner_new": (
+        "面向新入职生产计划员：优先问工艺语义与口径含义——这个数在生产上意味着什么、"
+        "口径为什么这样定，用词贴近排产与计划场景"
+    ),
+    "craft_engineer": (
+        "面向转岗数字化的工艺工程师：优先问方法选择与理由——为什么用这个口径或指标判断、"
+        "换一种算法会怎样，鼓励对比与论证"
+    ),
+    "line_leader": (
+        "面向一线班组长：步骤化短问，一次只问一个检查点，用词口语化贴近车间现场"
+    ),
+}
+
+
+def resolve_follow_up_layer(
+    current_layer: int,
+    *,
+    assessment: str,
+) -> int:
+    """Deterministically pick the cognitive layer for the NEXT question.
+
+    答对进深层（封顶归因应用）、答错或未知停留原层。由后端在确定性守卫
+    修正后的 assessment 上调用，LLM 不参与层的裁决。
+    """
+
+    if not isinstance(current_layer, int) or isinstance(current_layer, bool):
+        raise ValueError("current_layer must be an integer")
+    layer = min(max(current_layer, MIN_FOLLOW_UP_LAYER), MAX_FOLLOW_UP_LAYER)
+    if assessment == "mastered":
+        layer = min(layer + 1, MAX_FOLLOW_UP_LAYER)
+    return layer
+
+
+def _layer_name(layer: int) -> str:
+    return FOLLOW_UP_LAYER_NAMES.get(layer, FOLLOW_UP_LAYER_NAMES[MIN_FOLLOW_UP_LAYER])
+
+
+def _clip_digest(value: Any, *, limit: int) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
+
+
+def _learner_context_payload(
+    learner_context: Mapping[str, Any] | None,
+) -> dict[str, str]:
+    """Normalize the persona context for the model payload.
+
+    None/空值一律省略，保证冻结测试的载荷形状不变。
+    """
+
+    if not isinstance(learner_context, Mapping):
+        return {}
+    payload: dict[str, str] = {}
+    profile_id = str(learner_context.get("profile_id") or "").strip()
+    if not profile_id:
+        return {}
+    payload["profile_id"] = profile_id
+    style = _PERSONA_QUESTION_STYLES.get(profile_id)
+    if style:
+        payload["question_style"] = style
+    for key in ("title", "background", "lecture_style"):
+        value = str(learner_context.get(key) or "").strip()
+        if value:
+            payload[key] = value
+    return payload
+
+
+_HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _DEFAULT_FALLBACK_QUESTIONS = (
     "为回答“{standard_stem}”，查询结果中最关键的字段和值是什么？",
     "请依据查询结果说明“{standard_stem}”可以得到什么结论？",
@@ -416,9 +498,86 @@ def _expected_rows(
     return tuple(values)
 
 
+def _plan_actual_pair(
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[str, str] | None:
+    """Return the first reviewed (plan_qty, actual_qty) textual pair."""
+
+    for row in _expected_rows(evidence):
+        if (
+            _decimal_scalar(row.get("plan_qty")) is not None
+            and _decimal_scalar(row.get("actual_qty")) is not None
+        ):
+            return (
+                str(row["plan_qty"]).strip(),
+                str(row["actual_qty"]).strip(),
+            )
+    return None
+
+
+def _demonstrates_plan_actual_binding(
+    answer_text: str,
+    plan_text: str,
+    actual_text: str,
+) -> bool:
+    text = _normalized_visible_text(answer_text or "")
+    return (
+        "计划" in text
+        and "实际" in text
+        and plan_text in text
+        and actual_text in text
+        and not (
+            _answer_binds_field(text, "计划", actual_text)
+            and _answer_binds_field(text, "实际", plan_text)
+        )
+    )
+
+
+def _q2_binding_redundant(
+    candidate: str,
+    previous_answers: Sequence[str],
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """A binding-style question is redundant once an answer demonstrated it.
+
+    The evidence-gap score cannot see prior answers, so a question re-asking
+    the value-to-field correspondence (or the values themselves) would win
+    on "covers a missing field" even though the learner already bound both
+    values in an earlier round.  This flag demotes such candidates below
+    every non-redundant one regardless of gap score.
+    """
+
+    pair = _plan_actual_pair(evidence)
+    if pair is None:
+        return False
+    plan_text, actual_text = pair
+    normalized = _normalized_visible_text(candidate)
+    binding_style = (
+        "计划" in normalized
+        and "实际" in normalized
+        and plan_text in normalized
+        and actual_text in normalized
+        and ("分别" in normalized or "对应" in normalized)
+    )
+    value_ask_style = (
+        ("计划" in normalized and plan_text not in normalized)
+        or ("实际" in normalized and actual_text not in normalized)
+    ) and "多少" in normalized
+    if not (binding_style or value_ask_style):
+        return False
+    return any(
+        _demonstrates_plan_actual_binding(item, plan_text, actual_text)
+        for item in previous_answers
+        if isinstance(item, str)
+    )
+
+
 def _row_bound_fallback_questions(
     family: str,
     evidence: Sequence[Mapping[str, Any]],
+    *,
+    student_answer: str = "",
+    previous_answers: Sequence[str] = (),
 ) -> tuple[str, ...]:
     """Build three probes from identifiers that literally occur in evidence.
 
@@ -428,14 +587,43 @@ def _row_bound_fallback_questions(
     """
 
     if family == "Q2":
-        rows = _expected_rows(evidence)
-        if any(
-            row.get("plan_qty") is not None
-            and row.get("actual_qty") is not None
-            for row in rows
-        ):
+        pair = _plan_actual_pair(evidence)
+        if pair is not None:
+            plan_value, actual_value = pair
+            binding_demonstrated = _demonstrates_plan_actual_binding(
+                student_answer or "", plan_value, actual_value
+            )
+            binding_in_earlier_rounds = any(
+                _demonstrates_plan_actual_binding(item, plan_value, actual_value)
+                for item in previous_answers
+                if isinstance(item, str)
+            )
+            if binding_demonstrated:
+                # The learner just bound both values in the latest answer,
+                # so the mandatory confirmation round must shift angle: ask
+                # the citation decision (which value to quote for actual
+                # progress) instead of re-asking the binding.
+                return (
+                    f"要说明实际完成进度，应引用{plan_value}还是{actual_value}，为什么？",
+                    f"查询结果中的{plan_value}和{actual_value}分别对应计划量还是实际完成量？",
+                    "查询结果给出的计划量数值是多少？",
+                )
+            if binding_in_earlier_rounds:
+                # An earlier round already bound both values to both fields,
+                # so value re-asks are meaningless across rounds.  Ask the
+                # justification angle (why the actual value indicates
+                # progress) — the single-value phrasing keeps it distinct
+                # from the earlier citation decision round.
+                return (
+                    f"查询结果中的{plan_value}和{actual_value}分别对应计划量还是实际完成量？",
+                    f"查询结果中的{actual_value}为什么能说明实际完成进度？",
+                    f"要说明实际完成进度，应引用{plan_value}还是{actual_value}，为什么？",
+                )
+            # A learner who quoted both values without binding them to
+            # fields has a mapping gap, not a value gap — the first probe
+            # asks the binding directly using the reviewed row values.
             return (
-                "查询结果中的计划量和实际完成量分别是多少？",
+                f"查询结果中的{plan_value}和{actual_value}分别对应计划量还是实际完成量？",
                 "查询结果给出的计划量数值是多少？",
                 "查询结果给出的实际完成量数值是多少？",
             )
@@ -447,9 +635,39 @@ def _row_bound_fallback_questions(
     }.get(family)
     if identifier_key is None:
         return ()
+    rows = _expected_rows(evidence)
+    ordered_rows = rows
+    distinct_identifiers = list(dict.fromkeys(
+        str(row.get(identifier_key) or "").strip()
+        for row in rows
+        if str(row.get(identifier_key) or "").strip()
+        and row.get("complete_rate") is not None
+    ))
+    if len(distinct_identifiers) >= 3:
+        # Interleave one row per identifier first, so the ladder spreads
+        # across the data instead of drilling three months of whichever
+        # identifier happens to sort first.  Fewer identifiers keep the
+        # original sequential order.
+        grouped = [
+            [
+                row
+                for row in rows
+                if str(row.get(identifier_key) or "").strip() == pair
+            ]
+            for pair in distinct_identifiers
+        ]
+        ordered_rows = [
+            row
+            for group in grouped
+            for row in group[:1]
+        ] + [
+            row
+            for group in grouped
+            for row in group[1:]
+        ]
     questions: list[str] = []
     seen: set[tuple[str, str]] = set()
-    for row in _expected_rows(evidence):
+    for row in ordered_rows:
         identifier = str(row.get(identifier_key) or "").strip()
         if not identifier or row.get("complete_rate") is None:
             continue
@@ -463,6 +681,71 @@ def _row_bound_fallback_questions(
         if len(questions) == 3:
             break
     return tuple(questions) if len(questions) == 3 else ()
+
+
+_IDENTIFIER_COLUMN_NOUNS: dict[str, tuple[str, ...]] = {
+    "process_code": ("工序",),
+    "workshop_code": ("责任单元",),
+    "ship_no": ("船号", "船"),
+}
+
+
+def _discriminator_variants(value: str) -> tuple[str, ...]:
+    """Expand a row value into the surface forms a question may quote."""
+
+    variants = {value, value.replace("-", ""), value.replace("-", "/")}
+    month = re.fullmatch(r"(\d{4})-(\d{1,2})(?:-\d{1,2})?", value)
+    if month:
+        year, month_number = month.group(1), int(month.group(2))
+        variants.add(f"{year}年{month_number}月")
+        variants.add(f"{year}-{month_number:02d}")
+    return tuple(variants)
+
+
+def ambiguous_dimension_reference(
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Reject dimension questions when reviewed rows repeat an identifier.
+
+    When the expected rows distinguish one identifier across another
+    dimension (for example the same process over three months), a question
+    naming that dimension — or naming a repeated identifier value — must
+    also pin a distinguishing value (a month, a ship, a rate); otherwise
+    the learner cannot know which row to answer from.
+    """
+
+    rows = _expected_rows(evidence)
+    if len(rows) < 2:
+        return False
+    per_dimension_quantifiers = ("分别", "每个", "每道", "每船", "各")
+    for column, nouns in _IDENTIFIER_COLUMN_NOUNS.items():
+        values = [
+            str(row.get(column) or "").strip()
+            for row in rows
+        ]
+        values = [value for value in values if value]
+        if len(values) < 2 or len(set(values)) == len(values):
+            continue
+        repeated = {value for value in values if values.count(value) > 1}
+        if not any(noun in question for noun in nouns) and not any(
+            value in question for value in repeated
+        ):
+            continue
+        if any(quantifier in question for quantifier in per_dimension_quantifiers):
+            continue
+        discriminators: set[str] = set()
+        for row in rows:
+            for key, raw in row.items():
+                if key == column:
+                    continue
+                text = str(raw).strip()
+                if text:
+                    discriminators.update(_discriminator_variants(text))
+        if any(variant in question for variant in discriminators):
+            continue
+        return True
+    return False
 
 
 def _answer_requirements(
@@ -855,20 +1138,327 @@ def _matches_reviewed_completion_interpretation(
     )
 
 
+def _answer_binds_field(answer: str, field_term: str, value: str) -> bool:
+    return (
+        re.search(
+            re.escape(field_term) + r"[^。；\n]{0,8}(?:是|为|=|：|:)?\s*"
+            + re.escape(value),
+            answer,
+        )
+        is not None
+    )
+
+
+def _citation_choice_context(
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[bool, bool] | None:
+    """Classify an answer to the citation decision question.
+
+    Returns (cites_correct_value, has_justification) when the active
+    question is the plan/actual citation decision; otherwise None.  The
+    correct citation is the reviewed actual completed value.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question)
+    if "应引用" not in normalized_question or "为什么" not in normalized_question:
+        return None
+    pair = _plan_actual_pair(evidence)
+    if pair is None:
+        return None
+    plan_text, actual_text = pair
+    normalized_answer = unicodedata.normalize("NFKC", answer)
+    cites_actual = actual_text in normalized_answer
+    cites_plan = plan_text in normalized_answer
+    has_justification = any(
+        marker in normalized_answer
+        for marker in (
+            "因为",
+            "由于",
+            "所以",
+            "原因是",
+            "表示",
+            "反映",
+            "说明",
+            "才是",
+            "才能",
+            "实际完成量",
+        )
+    )
+    return cites_actual and not cites_plan, has_justification
+
+
+def _matches_reviewed_citation_justified(
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Correct citation choice WITH justification is deterministically mastered."""
+
+    context = _citation_choice_context(question, answer, evidence)
+    return context is not None and context[0] and context[1]
+
+
+def citation_choice_lacks_reason(
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Correct citation choice WITHOUT justification is never mastered.
+
+    The question explicitly asks "why"; picking the right value alone is
+    half an answer, so a lenient model verdict is deterministically
+    downgraded to needs_support and the next round asks for the reason.
+    """
+
+    context = _citation_choice_context(question, answer, evidence)
+    return context is not None and context[0] and not context[1]
+
+
+def _row_value_target(
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, str] | None:
+    """Find the reviewed row a row-value question asks about.
+
+    Matches questions like "查询结果中AZTP在2025-05的完成率是多少？"
+    against the identifier/month pairs in the reviewed evidence rows.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question)
+    if "完成率" not in normalized_question or "是多少" not in normalized_question:
+        return None
+    for row in _expected_rows(evidence):
+        identifier = str(
+            row.get("process_code")
+            or row.get("workshop_code")
+            or row.get("ship_no")
+            or ""
+        ).strip()
+        month = str(row.get("month_label") or "").strip()
+        # Only the pinned single-row form ("X在Y") — a bare identifier could
+        # false-match multi-value questions like "AZTP和ZZTP的完成率分别是多少".
+        if not identifier or not month or row.get("complete_rate") is None:
+            continue
+        if f"{identifier}在{month}" in normalized_question:
+            return {
+                "identifier": identifier,
+                "month": month,
+                "value": str(row["complete_rate"]).strip(),
+            }
+    return None
+
+
+def _matches_reviewed_row_value(
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """A row-value read answered with the reviewed value is mastered."""
+
+    target = _row_value_target(question, evidence)
+    if target is None:
+        return False
+    return target["value"] in unicodedata.normalize("NFKC", answer)
+
+
+def reviewed_row_value_correction(
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> str | None:
+    """Explain a value quoted from the wrong row without leaking the answer.
+
+    When the learner cites a reviewed value that belongs to a DIFFERENT
+    row than the one the question asks about, point at the row their value
+    actually comes from — teaching row alignment while never revealing the
+    asked row's own value.
+    """
+
+    target = _row_value_target(question, evidence)
+    if target is None:
+        return None
+    normalized_answer = unicodedata.normalize("NFKC", answer)
+    if target["value"] in normalized_answer:
+        return None
+    for row in _expected_rows(evidence):
+        value = str(row.get("complete_rate") or "").strip()
+        if not value or value not in normalized_answer:
+            continue
+        identifier = str(
+            row.get("process_code")
+            or row.get("workshop_code")
+            or row.get("ship_no")
+            or ""
+        ).strip()
+        month = str(row.get("month_label") or "").strip()
+        if not identifier:
+            continue
+        subject = f"{identifier}在{month}" if month else identifier
+        return (
+            f"查询结果中的{value}对应的是{subject}；"
+            f"请重新核对{target['identifier']}在{target['month']}这一行。"
+        )
+    return None
+
+
+def _matches_reviewed_plan_actual_binding(
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Deterministically confirm a fully bound plan/actual answer.
+
+    The graded seed question asks both reviewed values and which one
+    represents the completed quantity.  When the learner binds each value
+    to the correct field — explicitly ("计划量是1855.06") or positionally
+    ("计划量与实际完成量分别是1855.06和1156.87") — and states that the
+    actual completed quantity represents what has been done, the answer is
+    confirmed regardless of a hesitant model verdict.  Swapped bindings
+    never pass.
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    if "计划" not in normalized_question or "实际" not in normalized_question:
+        return False
+    if not any(
+        token in normalized_question
+        for token in ("分别是多少", "哪个", "哪一个", "表示已经完成")
+    ):
+        return False
+    rows = _expected_rows(evidence)
+    row = next(
+        (
+            item
+            for item in rows
+            if _decimal_scalar(item.get("plan_qty")) is not None
+            and _decimal_scalar(item.get("actual_qty")) is not None
+        ),
+        None,
+    )
+    if row is None:
+        return False
+    plan_text = str(row.get("plan_qty")).strip()
+    actual_text = str(row.get("actual_qty")).strip()
+    explicit_binding = (
+        _answer_binds_field(normalized_answer, "计划", plan_text)
+        and _answer_binds_field(normalized_answer, "实际", actual_text)
+    )
+    positional_binding = (
+        re.search(
+            r"计划[^。；\n]{0,16}实际[^。；\n]{0,16}分别是\s*"
+            + re.escape(plan_text)
+            + r"\s*(?:和|与|、)\s*"
+            + re.escape(actual_text),
+            normalized_answer,
+        )
+        is not None
+    )
+    wrong_binding = (
+        _answer_binds_field(normalized_answer, "计划", actual_text)
+        and _answer_binds_field(normalized_answer, "实际", plan_text)
+    )
+    completed_statement = any(
+        phrase in normalized_answer
+        for phrase in ("已经完成", "已完成", "实际做了", "表示完成", "完成了多少")
+    )
+    return (
+        explicit_binding or positional_binding
+    ) and completed_statement and not wrong_binding
+
+
+def _is_meaningless_short_answer(
+    question: str,
+    answer: str,
+) -> bool:
+    """无意义短答（如"bzd"等拼音缩写或乱码）——不是业务语言。
+
+    ≤6字符、无数字、汉字与题目零重叠（或纯拉丁字母非业务代码）。
+    """
+    compact = answer.strip().rstrip("。！!？?")
+    if len(compact) == 0 or len(compact) > 6:
+        return False
+    if any(character.isdigit() for character in compact):
+        return False
+    cjk_chars = [c for c in compact if "一" <= c <= "鿿"]
+    if cjk_chars:
+        question_chars = set(question)
+        return not any(c in question_chars for c in cjk_chars)
+    business = {"ycl", "zztp", "aztp", "sql"}
+    if compact.lower() in business:
+        return False
+    return bool(re.fullmatch(r"[a-zA-Z]+", compact))
+
+
+def _lacks_directional_statement(
+    *,
+    question: str,
+    answer: str,
+) -> bool:
+    """题目要求方向性回答（哪个表示已完成）但答案只给了数值没有方向陈述。
+
+    用于守卫"mastered"判定：两个数字对了只说明查了表，
+    没说"哪个是已完成的"意味着口径理解未验证——降档继续核对。
+    """
+
+    normalized_question = unicodedata.normalize("NFKC", question).casefold()
+    normalized_answer = unicodedata.normalize("NFKC", answer).casefold()
+    directional = any(
+        token in normalized_question
+        for token in ("哪一个", "哪个", "哪个数", "哪一道", "表示已经完成", "意味着什么")
+    )
+    if not directional:
+        return False
+    has_completion = any(
+        phrase in normalized_answer
+        for phrase in (
+            "已经完成", "已完成", "实际做了", "表示完成", "完成了多少",
+            "最低", "最高", "最大", "最小", "最少", "最多",
+            "意味着", "说明", "因为", "由于", "所以", "导致", "影响",
+            "低于", "高于", "超过", "不足", "下滑", "下降",
+        )
+    )
+    has_digits = any(character.isdigit() for character in normalized_answer)
+    # 有字段/工序名绑定（如"计划量"、"完成率"、"YCL"）= 有理解方向
+    has_field_binding = any(
+        token in normalized_answer
+        for token in (
+            "计划量", "计划", "实际完成", "实际", "完成率", "口径",
+            "ycl", "zztp", "aztp", "预处理", "制作", "安装",
+            "上游", "下游", "传导", "工序",
+        )
+    )
+    # 纯数字+无方向词+无字段绑定 = 缺方向；有任一即不触发
+    return bool(has_digits) and not has_completion and not has_field_binding
+
+
 def _matches_reviewed_answer(
     *,
     question: str,
     answer: str,
     evidence: Sequence[Mapping[str, Any]],
 ) -> bool:
-    return _matches_reviewed_completion_extreme(
-        question=question,
-        answer=answer,
-        evidence=evidence,
-    ) or _matches_reviewed_completion_interpretation(
-        question=question,
-        answer=answer,
-        evidence=evidence,
+    return (
+        _matches_reviewed_completion_extreme(
+            question=question,
+            answer=answer,
+            evidence=evidence,
+        )
+        or _matches_reviewed_completion_interpretation(
+            question=question,
+            answer=answer,
+            evidence=evidence,
+        )
+        or _matches_reviewed_plan_actual_binding(
+            question=question,
+            answer=answer,
+            evidence=evidence,
+        )
+        or _matches_reviewed_citation_justified(question, answer, evidence)
+        or _matches_reviewed_row_value(question, answer, evidence)
     )
 
 
@@ -977,6 +1567,81 @@ def _question_history_key(value: str) -> str:
     return key.removesuffix("呢")
 
 
+_QUESTION_SUBJECT_VOCABULARY = (
+    "计划量",
+    "实际完成量",
+    "完成率",
+    "偏差率",
+    "工序",
+    "月份",
+    "船号",
+    "责任单元",
+    "传导",
+    "口径",
+    "趋势",
+    "异常",
+)
+
+
+def _semantic_subject_set(question: str) -> frozenset[str]:
+    """Collect the business objects a question asks about."""
+
+    normalized = _normalized_visible_text(question)
+    subjects = {
+        term
+        for term in _QUESTION_SUBJECT_VOCABULARY
+        if term in normalized
+    }
+    subjects.update(re.findall(r"\d+(?:\.\d+)?", normalized))
+    subjects.update(re.findall(r"[A-Za-z]{2,}", normalized))
+    return frozenset(subjects)
+
+
+def _han_bigrams(question: str) -> frozenset[str]:
+    normalized = _normalized_visible_text(question)
+    return frozenset(
+        normalized[index : index + 2]
+        for index in range(len(normalized) - 1)
+        if _HAN_RE.match(normalized[index])
+        and _HAN_RE.match(normalized[index + 1])
+    )
+
+
+def _repeats_asked_question(
+    question: str,
+    previous_questions: Sequence[str],
+) -> bool:
+    """Reject paraphrases that re-ask the same objects for the same data.
+
+    Two questions count as semantic repeats only when their subject sets
+    are exactly equal (narrowing to one field or switching entity/month is
+    a genuine new question) and their Han bigram containment is at least
+    0.65 — a reworded misconception-confirmation legitimately overlaps the
+    seed it follows (~0.57), while a pure paraphrase clone such as
+    "计划量和实际完成量分别是多少" after "计划量与实际完成量分别是多少，
+    哪一个表示已经完成的数量" overlaps ~0.74 and adds nothing.
+    """
+
+    subjects = _semantic_subject_set(question)
+    if not subjects:
+        return False
+    bigrams = _han_bigrams(question)
+    if not bigrams:
+        return False
+    for previous in previous_questions:
+        if not isinstance(previous, str) or not previous.strip():
+            continue
+        if _semantic_subject_set(previous) != subjects:
+            continue
+        overlap = _han_bigrams(previous)
+        if not overlap:
+            continue
+        containment = len(bigrams & overlap) / min(len(bigrams), len(overlap))
+        if containment >= 0.65:
+            return True
+    return False
+
+
 def _evidence_gap_score(question: str, fields: Sequence[str]) -> int:
     """Score whether a learner-facing question asks for declared evidence gaps."""
 
@@ -1007,6 +1672,8 @@ def _validate_question(
         raise FollowUpGenerationError("question contains engineering text")
     if any(pattern.search(normalized) for pattern in _UNRESOLVED_REFERENCE_PATTERNS):
         raise FollowUpGenerationError("question contains an unresolved reference")
+    if ambiguous_dimension_reference(normalized, evidence):
+        raise FollowUpGenerationError("question is ambiguous over repeated rows")
     if len(re.findall(r"[?？]", normalized)) != 1 or not normalized.endswith(("?", "？")):
         raise FollowUpGenerationError("question must contain exactly one question")
     allowed_source = standard_stem + json.dumps(
@@ -1057,9 +1724,11 @@ class FollowUpAgent:
         completion_allowed: bool = False,
         terminal_round: bool = False,
         previous_questions: Sequence[str] = (),
+        previous_answers: Sequence[str] = (),
         task_agent: TaskAgent | None = None,
         required_target: str | None = None,
         required_evidence_fields: Sequence[str] = (),
+        current_layer: int = MIN_FOLLOW_UP_LAYER,
     ) -> FollowUpTurn:
         """Build one evidence-bound probe when model output fails hard gates.
 
@@ -1126,6 +1795,8 @@ class FollowUpAgent:
         row_bound_questions = _row_bound_fallback_questions(
             family,
             target_evidence,
+            student_answer=student_answer,
+            previous_answers=previous_answers,
         )
         standard_stem = source_standard_stem
         fallback_questions = (
@@ -1148,7 +1819,13 @@ class FollowUpAgent:
             *fallback_questions[:start_index],
         )
         question = ""
-        eligible_questions: list[tuple[int, int, str]] = []
+        # Preference order: (1) not a semantic repeat, (2) not redundant
+        # with a binding an earlier answer already demonstrated — this
+        # outranks the evidence-gap score, which cannot see prior answers,
+        # (3) higher evidence-gap score, (4) rotation position.  Repeats and
+        # redundant candidates stay eligible as a last resort so a small
+        # ladder can never be exhausted.
+        eligible_questions: list[tuple[bool, bool, int, int, str]] = []
         for template in ordered_questions:
             candidate = _validate_question(
                 template.format(
@@ -1160,19 +1837,40 @@ class FollowUpAgent:
             if _question_history_key(candidate) not in previous_keys:
                 eligible_questions.append(
                     (
-                        _evidence_gap_score(candidate, required_evidence_fields),
-                        -len(eligible_questions),
+                        _repeats_asked_question(
+                            candidate,
+                            [
+                                item
+                                for item in previous_questions
+                                if isinstance(item, str) and item.strip()
+                            ],
+                        ),
+                        _q2_binding_redundant(
+                            candidate,
+                            [
+                                item
+                                for item in previous_answers
+                                if isinstance(item, str)
+                            ],
+                            target_evidence,
+                        ),
+                        -_evidence_gap_score(candidate, required_evidence_fields),
+                        len(eligible_questions),
                         candidate,
                     )
                 )
         if eligible_questions:
-            question = max(eligible_questions)[2]
+            question = min(eligible_questions)[4]
         if not question:
             raise FollowUpGenerationError(
                 "no unused evidence-bound fallback question remains"
             )
         evidence = target_evidence
         evidence_refs = [str(item["ref"]) for item in evidence]
+        # 闭环六：回退模板题同样按确定性层盖章（掌握则下一问进深层）。
+        fallback_layer = resolve_follow_up_layer(
+            current_layer, assessment=assessment
+        )
         content: dict[str, Any] = {
             "event": "follow_up_question_ready",
             "question": question,
@@ -1187,6 +1885,8 @@ class FollowUpAgent:
             "target_misconception": required_target or UNKNOWN_MISCONCEPTION,
             "follow_up_round": round_index,
             "max_follow_up_rounds": max_rounds,
+            "follow_up_layer": fallback_layer,
+            "layer_name": _layer_name(fallback_layer),
             "evidence_refs": evidence_refs,
         }
         for key in (
@@ -1267,8 +1967,13 @@ class FollowUpAgent:
         completion_allowed: bool = False,
         terminal_round: bool = False,
         previous_questions: Sequence[str] = (),
+        previous_answers: Sequence[str] = (),
         required_next_targets: Sequence[str] = (),
         required_evidence_fields: Sequence[str] = (),
+        learner_context: Mapping[str, Any] | None = None,
+        lecture_digest: str = "",
+        data_digest: str = "",
+        current_layer: int = MIN_FOLLOW_UP_LAYER,
     ) -> FollowUpTurn:
         answer = normalize_learner_input(student_answer)
         if (
@@ -1283,6 +1988,12 @@ class FollowUpAgent:
             or not MIN_FOLLOW_UP_ROUNDS <= round_index <= max_rounds
         ):
             raise ValueError("round_index must be between 2 and max_rounds")
+        if (
+            not isinstance(current_layer, int)
+            or isinstance(current_layer, bool)
+            or not MIN_FOLLOW_UP_LAYER <= current_layer <= MAX_FOLLOW_UP_LAYER
+        ):
+            raise ValueError("current_layer must be between 1 and 3")
 
         allowed_targets = task_agent.misconception_ids
         required_targets = tuple(
@@ -1354,6 +2065,29 @@ class FollowUpAgent:
             allowed_targets,
             completion_allowed=completion_allowed or terminal_round,
         )
+        # 闭环六：个性化出题输入（缺省省略，保持冻结载荷形状）。层计划由后端
+        # 确定性计算——LLM 只按与自己判定匹配的层措辞，层的最终值以后端盖章为准。
+        learner_payload = _learner_context_payload(learner_context)
+        clipped_lecture = _clip_digest(
+            lecture_digest, limit=MAX_LECTURE_DIGEST_LENGTH
+        )
+        clipped_data = _clip_digest(data_digest, limit=MAX_DATA_DIGEST_LENGTH)
+        layer_plan = {
+            "current_layer": current_layer,
+            "current_layer_name": _layer_name(current_layer),
+            "on_mastered_layer": resolve_follow_up_layer(
+                current_layer, assessment="mastered"
+            ),
+            "on_support_layer": current_layer,
+        }
+        personalization_payload: dict[str, Any] = {}
+        if learner_payload:
+            personalization_payload["learner_context"] = learner_payload
+        if clipped_lecture:
+            personalization_payload["lecture_digest"] = clipped_lecture
+        if clipped_data:
+            personalization_payload["data_digest"] = clipped_data
+        personalization_payload["layer_plan"] = layer_plan
         try:
             result = self._llm_call(
                 model=MODEL,
@@ -1365,6 +2099,11 @@ class FollowUpAgent:
                         "previous_questions": [
                             item
                             for item in previous_questions
+                            if isinstance(item, str) and item.strip()
+                        ],
+                        "previous_answers": [
+                            item
+                            for item in previous_answers
                             if isinstance(item, str) and item.strip()
                         ],
                         "current_task": {
@@ -1411,6 +2150,7 @@ class FollowUpAgent:
                             for item in review_feedback
                             if isinstance(item, str) and item.strip()
                         ],
+                        **personalization_payload,
                     },
                     ensure_ascii=False,
                     sort_keys=True,
@@ -1445,6 +2185,21 @@ class FollowUpAgent:
 
         assessment = str(result.data["assessment"])
         diagnosed = str(result.data["diagnosed_misconception"])
+        if assessment in {"mastered", "unknown"} and citation_choice_lacks_reason(
+            active_question,
+            answer,
+            current_evidence,
+        ):
+            # The citation decision explicitly asks "why" — a correct value
+            # alone is half an answer.  Downgrade lenient or vague verdicts
+            # so the outcome is deterministic across sessions.
+            assessment = "needs_support"
+            if diagnosed == UNKNOWN_MISCONCEPTION:
+                diagnosed = (
+                    str(allowed_targets[0])
+                    if allowed_targets
+                    else UNKNOWN_MISCONCEPTION
+                )
         reviewed_answer_matches = _matches_reviewed_answer(
             question=active_question,
             answer=answer,
@@ -1453,6 +2208,20 @@ class FollowUpAgent:
         if assessment != "mastered" and reviewed_answer_matches:
             assessment = "mastered"
             diagnosed = UNKNOWN_MISCONCEPTION
+
+        # 方向性守卫：题目问"哪个表示已完成"但答案纯数字无方向陈述——
+        # 查表对了不等于理解口径，降为 unknown 继续核对方向
+        if (
+            assessment == "mastered"
+            and not reviewed_answer_matches
+            and _lacks_directional_statement(
+                question=active_question,
+                answer=answer,
+            )
+        ):
+            assessment = "unknown"
+            diagnosed = UNKNOWN_MISCONCEPTION
+            proposed_next = UNKNOWN_MISCONCEPTION
         elif (
             assessment == "mastered"
             and _requires_reviewed_completion_extreme(
@@ -1473,12 +2242,33 @@ class FollowUpAgent:
                 task_agent=task_agent,
                 required_target=(required_targets[0] if required_targets else None),
                 required_evidence_fields=required_evidence_fields,
+                current_layer=current_layer,
             )
         proposed_next = (
             None
             if result.data["next_target_misconception"] == NO_NEXT_TARGET
             else str(result.data["next_target_misconception"])
         )
+        # 宽松“掌握”判定防线（在既有确定性规则之后、放行之前把关）：轮次
+        # 已达上限的最后一轮，答案既没有确定性核验结论，也没有引用任何
+        # 数值（如整轮只答一个词）时，不据此放行升档，按未掌握收尾——
+        # 上限轮的“翻盘掌握”必须有证据支撑。学员下一轮引用具体数值即
+        # 可正常通过；非上限轮不受影响。
+        if (
+            terminal_round
+            and assessment == "mastered"
+            and not reviewed_answer_matches
+            and reviewed_answer_confirmation(
+                question=active_question,
+                answer=answer,
+                evidence=current_evidence,
+            )
+            is None
+            and not any(character.isdigit() for character in answer)
+        ):
+            assessment = "unknown"
+            diagnosed = UNKNOWN_MISCONCEPTION
+            proposed_next = UNKNOWN_MISCONCEPTION
         if completion_allowed and assessment == "mastered":
             return FollowUpTurn(
                 assessment=assessment,
@@ -1562,6 +2352,15 @@ class FollowUpAgent:
             standard_stem=standard_stem,
             evidence=evidence,
         )
+        # 无意义短答守卫：bzd 等乱码不应判"部分有效"或"掌握"（须在题面校验后，
+        # 否则问题校验测试因路由先报错而失败）
+        if (
+            assessment in {"mastered", "needs_support"}
+            and _is_meaningless_short_answer(active_question, answer)
+        ):
+            assessment = "unknown"
+            diagnosed = UNKNOWN_MISCONCEPTION
+            proposed_next = UNKNOWN_MISCONCEPTION
         previous_keys = {
             _question_history_key(item)
             for item in previous_questions
@@ -1569,7 +2368,24 @@ class FollowUpAgent:
         }
         if _question_history_key(question) in previous_keys:
             raise FollowUpGenerationError("follow-up question repeats history")
+        if _repeats_asked_question(question, previous_questions):
+            raise FollowUpGenerationError(
+                "follow-up question semantically repeats history"
+            )
+        if _q2_binding_redundant(
+            question,
+            [item for item in previous_answers if isinstance(item, str)],
+            evidence,
+        ):
+            raise FollowUpGenerationError(
+                "follow-up question re-asks a demonstrated binding"
+            )
         evidence_refs = [str(item["ref"]) for item in evidence]
+        # 闭环六：层的最终值由后端按确定性判定盖章（答对进深层、答错停留），
+        # LLM 的措辞层若与之不一致也不影响该权威值。
+        resolved_layer = resolve_follow_up_layer(
+            current_layer, assessment=assessment
+        )
         content: dict[str, Any] = {
             "event": "follow_up_question_ready",
             "question": question,
@@ -1584,6 +2400,8 @@ class FollowUpAgent:
             "target_misconception": expected_next,
             "follow_up_round": round_index,
             "max_follow_up_rounds": max_rounds,
+            "follow_up_layer": resolved_layer,
+            "layer_name": _layer_name(resolved_layer),
             "evidence_refs": evidence_refs,
         }
         for key in (
@@ -1632,3 +2450,133 @@ class FollowUpAgent:
             latency_ms=result.latency_ms,
             token_usage=result.token_usage.as_dict(),
         )
+
+    def generate_initial(
+        self,
+        *,
+        current_task: Mapping[str, Any],
+        learner_context: Mapping[str, Any] | None = None,
+        lecture_digest: str = "",
+        data_digest: str = "",
+        previous_questions: Sequence[str] = (),
+    ) -> str:
+        """闭环六：第 1 轮追问的个性化变式（口径记忆层）。
+
+        同一知识点在不同画像下的首问措辞与侧重不同；仅出题、不做任何
+        判定。任何失败都抛 ``FollowUpGenerationError``，由调用方回退到
+        既有族模板题（``_INITIAL_FOLLOW_UP_QUESTIONS``），保证不出现空题。
+        """
+
+        content = _payload_content(current_task)
+        evidence = _evidence_items(current_task)
+        standard_stem = str(
+            content.get("standard_stem")
+            or content.get("question")
+            or ""
+        ).strip()
+        if not standard_stem:
+            raise FollowUpGenerationError("follow-up evidence has no standard stem")
+        learner_payload = _learner_context_payload(learner_context)
+        clipped_lecture = _clip_digest(
+            lecture_digest, limit=MAX_LECTURE_DIGEST_LENGTH
+        )
+        clipped_data = _clip_digest(data_digest, limit=MAX_DATA_DIGEST_LENGTH)
+        initial_payload: dict[str, Any] = {
+            "round_kind": "initial",
+            "current_task": {
+                key: content.get(key)
+                for key in (
+                    "question",
+                    "standard_stem",
+                    "contextualized_stem",
+                    "knowledge_point",
+                    "responsibility_scope",
+                    "difficulty",
+                    "family",
+                )
+            },
+            "current_evidence_summary": list(_expected_points(evidence)),
+            "current_evidence_rows": list(_expected_rows(evidence)),
+            "answer_requirements": _answer_requirements(content, evidence),
+            "previous_questions": [
+                item
+                for item in previous_questions
+                if isinstance(item, str) and item.strip()
+            ],
+        }
+        if learner_payload:
+            initial_payload["learner_context"] = learner_payload
+        if clipped_lecture:
+            initial_payload["lecture_digest"] = clipped_lecture
+        if clipped_data:
+            initial_payload["data_digest"] = clipped_data
+        initial_payload["target_layer"] = MIN_FOLLOW_UP_LAYER
+        initial_payload["layer_name"] = _layer_name(MIN_FOLLOW_UP_LAYER)
+        schema = {
+            "type": "object",
+            "required": ["question"],
+            "properties": {
+                "question": {"type": "string", "minLength": 1},
+            },
+        }
+
+        def attempt(repair_hint: str = "") -> str:
+            payload = dict(initial_payload)
+            if repair_hint:
+                payload["repair_hint"] = repair_hint
+            try:
+                result = self._llm_call(
+                    model=MODEL,
+                    system=self._system_prompt,
+                    user=json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    json_schema=schema,
+                    temperature=TEMPERATURE,
+                )
+            except Exception as exc:
+                raise FollowUpGenerationError(
+                    "initial follow-up generation is temporarily unavailable"
+                ) from exc
+            if not isinstance(result, LLMResult):
+                raise FollowUpGenerationError(
+                    "follow-up model returned no metadata"
+                )
+            # 系统提示词规定四字段输出格式，首问调用只消费 question；其余字段
+            # （assessment 等）即使返回也一概忽略——首问不做任何判定。
+            raw_question = result.data.get("question")
+            if not isinstance(raw_question, str) or not raw_question.strip():
+                raise FollowUpGenerationError(
+                    "initial follow-up model output is invalid"
+                )
+            return _validate_question(
+                raw_question,
+                standard_stem=standard_stem,
+                evidence=evidence,
+            )
+
+        # 首问自修复：风格化改写偶发双问句/引用失据，带校验原因重试一次；
+        # 仍失败则抛错，由会话层回退族模板题（不出现空题）。
+        try:
+            question = attempt()
+        except FollowUpGenerationError as first_error:
+            question = attempt(
+                "上一版问题未通过校验（"
+                + str(first_error)
+                + "），请改写为符合全部规则的单一问句。"
+            )
+        previous_keys = {
+            _question_history_key(item)
+            for item in previous_questions
+            if isinstance(item, str) and item.strip()
+        }
+        if _question_history_key(question) in previous_keys:
+            raise FollowUpGenerationError("initial question repeats history")
+        if _repeats_asked_question(question, previous_questions):
+            raise FollowUpGenerationError(
+                "initial question semantically repeats history"
+            )
+        return question

@@ -101,10 +101,12 @@ const collaborationView: TraceView = {
 
 
 describe('TracePanel', () => {
-  it('uses the approved collaboration-view title', () => {
+  it('defers the page title to the workspace header without repeating itself', () => {
     const wrapper = mount(TracePanel, { props: { view } })
 
-    expect(wrapper.get('.trace-heading h2').text()).toBe('协作记录')
+    // 页名与条数由协同工作台头部与页签呈现，面板内不再重复标题。
+    expect(wrapper.find('.trace-heading').exists()).toBe(false)
+    expect(wrapper.find('.message-count').exists()).toBe(false)
     expect(wrapper.find('.protocol-banner').exists()).toBe(false)
   })
 
@@ -122,7 +124,7 @@ describe('TracePanel', () => {
     ])
     expect(wrapper.get('.debate-summary').text()).toContain('发生过驳回复审 · 1次')
     expect(wrapper.get('details.system-records').attributes('open')).toBeUndefined()
-    expect(wrapper.get('details.system-records summary').text()).toContain('流程记录 · 3条')
+    expect(wrapper.get('details.system-records summary').text()).toContain('系统流程事件 · 3条')
     expect(wrapper.findAll('details.system-records .trace-card')).toHaveLength(3)
     expect(wrapper.find('.agent-collaboration-map [aria-current="step"]').exists()).toBe(false)
   })

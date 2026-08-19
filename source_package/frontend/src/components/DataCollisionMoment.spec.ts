@@ -34,21 +34,25 @@ describe('DataCollisionMoment', () => {
     expect(wrapper.get('[data-testid="collision-moment"]').attributes('data-stage')).toBe('verified')
     expect(wrapper.text()).toContain('1156.87')
     expect(wrapper.findAll('.digit-tile')).toHaveLength(7)
-    expect(wrapper.get('.collision-confirmed-label').text())
-      .toBe('数据证实 · 实际完成量')
-    expect(wrapper.find('.collision-result-card > .collision-confirmed-label').exists()).toBe(true)
-    expect(wrapper.find('.collision-flip > .collision-confirmed-label').exists()).toBe(false)
-    expect(wrapper.find('.collision-back > .collision-confirmed-label').exists()).toBe(false)
+    const verifiedCard = wrapper.get('.collision-number.is-verified')
+    expect(verifiedCard.text()).toContain('数据证实')
+    expect(verifiedCard.text()).toContain('实际完成量')
+    expect(verifiedCard.find('small').text()).toBe('实际完成量')
+    expect(verifiedCard.find('.collision-flag.is-confirmed').exists()).toBe(true)
     expect(wrapper.get('.collision-number.is-mistaken').classes()).toContain('is-struck')
     expect(wrapper.get('.collision-correction').text()).toContain('已修正 计划量与实际量的区分')
     expect(wrapper.get('.collision-correction').text()).not.toContain('M-01')
 
+    // 手动关闭：时间流逝后弹窗仍在，只有点"关闭"才消失。
     await vi.advanceTimersByTimeAsync(2200)
+    expect(wrapper.find('[data-testid="collision-moment"]').exists()).toBe(true)
+    expect(wrapper.emitted('complete')).toBeUndefined()
+    await wrapper.get('button[aria-label="关闭数据验证"]').trigger('click')
     expect(wrapper.find('[data-testid="collision-moment"]').exists()).toBe(false)
     expect(wrapper.emitted('complete')).toHaveLength(1)
   })
 
-  it('lets the learner skip the signature animation immediately', async () => {
+  it('lets the learner close the verification card manually', async () => {
     vi.useFakeTimers()
     const wrapper = mount(DataCollisionMoment, {
       props: {
@@ -60,7 +64,7 @@ describe('DataCollisionMoment', () => {
       },
     })
 
-    await wrapper.get('button[aria-label="跳过数据验证动画"]').trigger('click')
+    await wrapper.get('button[aria-label="关闭数据验证"]').trigger('click')
 
     expect(wrapper.find('[data-testid="collision-moment"]').exists()).toBe(false)
     expect(wrapper.emitted('complete')).toHaveLength(1)

@@ -7,14 +7,28 @@ import type { InteractiveState } from '../lib/interactiveApi'
 
 const props = defineProps<{ state?: InteractiveState }>()
 
-const steps = [
+/** 闭环四名实一致：当前知识点前测已验证（微课懒生成）时，第 3 步
+ * 的真实动作是直入实操，步骤名随之切换。 */
+const lectureDeferred = computed(() => {
+  const value = props.state
+  if (!value) return false
+  const artifact = value.artifact as
+    | { payload?: { content?: { knowledge_point_plan?: Array<{ tier?: string }> } } }
+    | null
+    | undefined
+  const plan = artifact?.payload?.content?.knowledge_point_plan
+  const first = Array.isArray(plan) ? plan[0] : undefined
+  return first?.tier === 'correct'
+})
+
+const steps = computed(() => [
   '选择岗位',
   '完成岗前测评',
-  '打开岗位微课',
+  lectureDeferred.value ? '直入实操（已验证）' : '打开岗位微课',
   '领取实操任务',
   '完成数据实操',
   '完成理解核对',
-]
+])
 
 const currentIndex = computed(() => {
   const value = props.state
@@ -28,8 +42,8 @@ const currentIndex = computed(() => {
   return 1
 })
 
-const currentLabel = computed(() => steps[currentIndex.value] ?? steps.at(-1)!)
-const nextLabel = computed(() => steps[currentIndex.value + 1] ?? '完成本次训练')
+const currentLabel = computed(() => steps.value[currentIndex.value] ?? steps.value.at(-1)!)
+const nextLabel = computed(() => steps.value[currentIndex.value + 1] ?? '完成本次训练')
 </script>
 
 <template>

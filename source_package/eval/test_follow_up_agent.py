@@ -10,6 +10,12 @@ from agents.domain_config import load_domain_config
 from agents.follow_up_agent import (
     FollowUpAgent,
     FollowUpGenerationError,
+    _matches_reviewed_answer,
+    _repeats_asked_question,
+    _row_bound_fallback_questions,
+    _validate_question,
+    citation_choice_lacks_reason,
+    reviewed_row_value_correction,
     normalize_learner_input,
     reviewed_answer_confirmation,
     reviewed_answer_correction,
@@ -307,6 +313,288 @@ def test_follow_up_agent_rejects_unsafe_or_ungrounded_questions(
             round_index=2,
             max_rounds=4,
         )
+
+
+def test_follow_up_rejects_dimension_questions_when_rows_repeat_an_identifier() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-03-A")
+    stem = current_task["payload"]["content"]["standard_stem"]
+
+    with pytest.raises(FollowUpGenerationError, match="ambiguous"):
+        _validate_question(
+            "哪一道工序完成率最低？",
+            standard_stem=stem,
+            evidence=current_task["evidence"],
+        )
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "2025-05哪一道工序完成率最低？",
+        "查询结果中YCL在2025-05的完成率是多少？",
+        "三道工序的完成率低点分别出现在哪个月？",
+    ),
+)
+def test_follow_up_accepts_disambiguated_questions_on_repeated_rows(
+    question: str,
+) -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-03-A")
+    stem = current_task["payload"]["content"]["standard_stem"]
+
+    validated = _validate_question(
+        question,
+        standard_stem=stem,
+        evidence=current_task["evidence"],
+    )
+
+    assert validated == question
+
+
+def test_follow_up_keeps_dimension_questions_when_rows_are_unique() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-06")
+    stem = current_task["payload"]["content"]["standard_stem"]
+
+    validated = _validate_question(
+        "哪个责任单元完成率更低？",
+        standard_stem=stem,
+        evidence=current_task["evidence"],
+    )
+
+    assert validated == "哪个责任单元完成率更低？"
+
+
+def test_row_bound_fallback_prefers_a_non_repeat_candidate() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-01")
+    agent = FollowUpAgent("trace-production_progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+        previous_questions=[
+            "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+            "哪一个表示已经完成的数量？",
+        ],
+    )
+
+    question = turn.product["payload"]["content"]["question"]
+    assert question != "查询结果中的计划量和实际完成量分别是多少？"
+
+
+def test_q2_fallback_shifts_angle_when_binding_is_demonstrated() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-01")
+    agent = FollowUpAgent("trace-production_progress")
+
+    bound = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+        student_answer=(
+            "计划量与实际完成量分别是1855.06和1156.87，"
+            "实际完成量表示已经完成的数量"
+        ),
+        previous_questions=[
+            "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+            "哪一个表示已经完成的数量？",
+        ],
+    )
+    assert bound.product["payload"]["content"]["question"] == (
+        "要说明实际完成进度，应引用1855.06还是1156.87，为什么？"
+    )
+
+    unbound = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=2,
+        student_answer="1855.06 1156.87 实际完成量",
+        previous_questions=[
+            "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+            "哪一个表示已经完成的数量？",
+        ],
+    )
+    assert unbound.product["payload"]["content"]["question"] == (
+        "查询结果中的1855.06和1156.87分别对应计划量还是实际完成量？"
+    )
+
+
+def test_fully_bound_plan_actual_answer_is_deterministically_confirmed() -> None:
+    task_agent = _task_agent()
+    evidence = _current_task(task_agent, "T-01")["evidence"]
+    question = (
+        "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+        "哪一个表示已经完成的数量？"
+    )
+
+    assert _matches_reviewed_answer(
+        question=question,
+        answer=(
+            "计划量与实际完成量分别是1855.06和1156.87，"
+            "实际完成量表示已经完成的数量"
+        ),
+        evidence=evidence,
+    )
+    assert _matches_reviewed_answer(
+        question=question,
+        answer="计划量是1855.06，实际完成量为1156.87，实际完成量表示已完成",
+        evidence=evidence,
+    )
+    assert not _matches_reviewed_answer(
+        question=question,
+        answer=(
+            "计划量与实际完成量分别是1156.87和1855.06，"
+            "实际完成量表示已经完成的数量"
+        ),
+        evidence=evidence,
+    )
+    assert not _matches_reviewed_answer(
+        question=question,
+        answer="1855.06 1156.87 实际完成量",
+        evidence=evidence,
+    )
+    assert not _matches_reviewed_answer(
+        question=question,
+        answer="计划量是1855.06，实际完成量是1156.87",
+        evidence=evidence,
+    )
+
+
+def test_q2_fallback_asks_justification_when_binding_shown_in_earlier_round() -> None:
+    task_agent = _task_agent()
+    current_task = _current_task(task_agent, "T-01")
+    agent = FollowUpAgent("trace-production_progress")
+
+    turn = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=3,
+        student_answer="1156.87",
+        previous_questions=[
+            "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+            "哪一个表示已经完成的数量？",
+            "要说明实际完成进度，应引用1855.06还是1156.87，为什么？",
+        ],
+        previous_answers=[
+            "计划量与实际完成量分别是1855.06和1156.87，"
+            "实际完成量表示已经完成的数量",
+            "1156.87",
+        ],
+    )
+
+    assert turn.product["payload"]["content"]["question"] == (
+        "查询结果中的1156.87为什么能说明实际完成进度？"
+    )
+
+    # Even when the evidence-gap score favours the binding question (it
+    # still lists plan_qty as a missing field), the redundancy flag must
+    # outrank the gap score after an earlier round demonstrated binding.
+    gapped = agent.deterministic_fallback(
+        current_task=current_task,
+        round_index=3,
+        student_answer="1156.87",
+        previous_questions=[
+            "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+            "哪一个表示已经完成的数量？",
+            "要说明实际完成进度，应引用1855.06还是1156.87，为什么？",
+        ],
+        previous_answers=[
+            "计划量与实际完成量分别是1855.06和1156.87，"
+            "实际完成量表示已经完成的数量",
+            "1156.87",
+        ],
+        required_evidence_fields=("plan_qty",),
+    )
+    assert gapped.product["payload"]["content"]["question"] == (
+        "查询结果中的1156.87为什么能说明实际完成进度？"
+    )
+
+
+def test_citation_choice_verdict_is_deterministic() -> None:
+    task_agent = _task_agent()
+    evidence = _current_task(task_agent, "T-01")["evidence"]
+    question = "要说明实际完成进度，应引用1855.06还是1156.87，为什么？"
+
+    # Correct value WITH justification is deterministically mastered.
+    assert _matches_reviewed_answer(
+        question=question,
+        answer="应引用1156.87，因为实际完成量才反映实际完成了多少。",
+        evidence=evidence,
+    )
+    # Correct value WITHOUT justification is never mastered.
+    assert citation_choice_lacks_reason(
+        question, "1156.87", evidence
+    )
+    # Wrong value is left to the model verdict (no deterministic downgrade).
+    assert not citation_choice_lacks_reason(
+        question, "1855.06", evidence
+    )
+
+
+def test_row_value_question_has_deterministic_verdict_and_correction() -> None:
+    task_agent = _task_agent()
+    evidence = _current_task(task_agent, "T-03-A")["evidence"]
+    question = "查询结果中AZTP在2025-06的完成率是多少？"
+
+    assert _matches_reviewed_answer(
+        question=question,
+        answer="0.9901",
+        evidence=evidence,
+    )
+    assert not _matches_reviewed_answer(
+        question=question,
+        answer="0.7545",
+        evidence=evidence,
+    )
+    assert reviewed_row_value_correction(
+        question, "0.7545", evidence
+    ) == (
+        "查询结果中的0.7545对应的是ZZTP在2025-06；"
+        "请重新核对AZTP在2025-06这一行。"
+    )
+    # Multi-value questions must not false-match the row-value branch.
+    assert not _matches_reviewed_answer(
+        question="查询结果中AZTP和ZZTP的完成率分别是多少？",
+        answer="0.9149",
+        evidence=evidence,
+    )
+
+
+def test_row_bound_ladder_spreads_across_identifiers() -> None:
+    task_agent = _task_agent()
+    evidence = _current_task(task_agent, "T-03-A")["evidence"]
+    ladder = _row_bound_fallback_questions("Q6", evidence)
+
+    assert ladder == (
+        "查询结果中AZTP在2025-05的完成率是多少？",
+        "查询结果中YCL在2025-05的完成率是多少？",
+        "查询结果中ZZTP在2025-05的完成率是多少？",
+    )
+    identifiers = [item.split("在")[0].replace("查询结果中", "") for item in ladder]
+    assert len(set(identifiers)) == 3
+
+
+def test_semantic_repeat_of_an_asked_question_is_detected() -> None:
+    previous = [
+        "根据刚才的查询结果，计划量与实际完成量分别是多少，"
+        "哪一个表示已经完成的数量？",
+    ]
+
+    assert _repeats_asked_question(
+        "查询结果中的计划量和实际完成量分别是多少？",
+        previous,
+    )
+
+    assert not _repeats_asked_question(
+        "查询结果给出的实际完成量数值是多少？",
+        previous,
+    )
+
+    assert not _repeats_asked_question(
+        "查询结果中YCL在2025-05的完成率是多少？",
+        [
+            "查询结果中ZZTP在2025-06的完成率是多少？",
+        ],
+    )
 
 
 def test_mastered_turn_after_the_minimum_does_not_generate_an_unused_question() -> None:
@@ -704,7 +992,7 @@ def test_plan_actual_correction_uses_only_reviewed_scalar_fields() -> None:
     agent = FollowUpAgent("trace-production-progress")
     current_task = _current_task(task_agent, "T-03-A")
     expected = (
-        "查询结果中的计划量和实际完成量分别是多少？",
+        "查询结果中的1855.06和1156.87分别对应计划量还是实际完成量？",
         "查询结果给出的计划量数值是多少？",
         "查询结果给出的实际完成量数值是多少？",
     )
@@ -858,7 +1146,7 @@ def test_generic_three_process_fallback_only_requests_fields_in_the_active_evide
 
     assert turn.product is not None
     question = turn.product["payload"]["content"]["question"]
-    assert question == "查询结果中AZTP在2025-06的完成率是多少？"
+    assert question == "查询结果中YCL在2025-05的完成率是多少？"
 
     final_turn = agent.deterministic_fallback(
         current_task=current_task,
@@ -866,7 +1154,7 @@ def test_generic_three_process_fallback_only_requests_fields_in_the_active_evide
     )
     assert final_turn.product is not None
     assert final_turn.product["payload"]["content"]["question"] == (
-        "查询结果中AZTP在2025-07的完成率是多少？"
+        "查询结果中ZZTP在2025-05的完成率是多少？"
     )
 
 

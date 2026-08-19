@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpen, CircleAlert, ListChecks, Maximize2, Minimize2 } from '@lucide/vue'
+import { BookOpen, CircleAlert, ListChecks } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
@@ -10,6 +10,7 @@ import {
 } from '../lib/tracePresentation'
 import type { TraceMessage, TraceView } from '../types/trace'
 import EvidenceClaim from './EvidenceClaim.vue'
+import WaveText from './WaveText.vue'
 import SqlResultTable from './SqlResultTable.vue'
 
 
@@ -18,10 +19,30 @@ const props = withDefaults(defineProps<{
   lessonPager?: boolean
   guidanceFeedback?: string
   guidanceNextStepReason?: string
+  autoJumpToTask?: boolean
+  sqlResultStale?: boolean
+  liveOperation?: boolean
+  /** 闭环四后继：实操任务须在学员点击"领取实操任务"后才展示详情 */
+  taskClaimed?: boolean
+  /** 需求⑨：提问环节查阅讲义时展示完整微课（不受"练习态只留任务卡"限制）。 */
+  peekLecture?: boolean
+  chainRunning?: boolean
+  practiceChainActive?: boolean
+  /** 闭环五：画像三 data_present（系统代执行查询）——不展示 SQL 练习素材（查询题目卡/提示）。 */
+  dataPresentMode?: boolean
 }>(), {
   lessonPager: false,
+  autoJumpToTask: true,
+  sqlResultStale: false,
+  liveOperation: false,
+  taskClaimed: true,
+  peekLecture: false,
+  chainRunning: false,
+  practiceChainActive: false,
+  dataPresentMode: false,
 })
 const emit = defineEmits<{
+  startPractice: []
   pageState: [value: {
     index: number
     total: number
@@ -29,12 +50,17 @@ const emit = defineEmits<{
     isLast: boolean
   }]
 }>()
+/* 数据是否属于当前任务：sql_result 的步号早于最新任务消息时，
+   说明数据是上一轮练习查的——新题已出、新数据未到，隐藏旧数据。 */
+const staleTaskResult = computed(() => {
+  const sqlResult = props.view.sqlResult
+  const task = props.view.task
+  if (!sqlResult || !task) return false
+  return sqlResult.step < task.step
+})
 const focusMode = ref(false)
 const guidanceHintLevel = ref(0)
 
-function toggleFocusMode(): void {
-  focusMode.value = !focusMode.value
-}
 
 function leaveFocusMode(event: KeyboardEvent): void {
   if (event.key === 'Escape') focusMode.value = false
@@ -206,24 +232,27 @@ const lectureSections = computed<LectureSection[]>(() => {
   return sections.filter((section) => section.blocks.length > 0)
 })
 
-const lessonPageIndex = ref(0)
 const lessonPages = computed<LessonPage[]>(() => {
   const pages: LessonPage[] = []
-  if (lectureMetrics.value.length) {
+  // 需求⑥：实训叠页只保留帮助学员掌握知识的小节内容，
+  // "本节关键数据""依据要点/数据出处"不展示（回放模式不受影响）。
+  if (!props.lessonPager && lectureMetrics.value.length) {
     pages.push({ key: 'metrics', title: '本节关键数据', kind: 'metrics' })
   }
   lectureSections.value.forEach((section, index) => {
+    const title = section.title || `知识卡片 ${index + 1}`
+    // 需求⑥：面向学员只保留掌握知识点所需内容，"依据要点/数据出处"类溯源小节不展示
+    if (props.lessonPager && /依据要点|数据出处/.test(title)) return
     pages.push({
       key: `section-${index}`,
-      title: section.title || `知识卡片 ${index + 1}`,
+      title,
       kind: 'section',
       section,
     })
   })
-  if (unmatchedClaims.value.length) {
-    pages.push({ key: 'evidence', title: '数据出处', kind: 'evidence' })
-  }
-  if (props.view.task) {
+  // 优化12：数据出处页删除（回放与 live 同口径）
+  // 闭环五：画像三 data_present 系统代执行——学员不写 SQL，任务卡（查询题目/提示）不进入叠页
+  if (props.view.task && !props.dataPresentMode) {
     pages.push({
       key: `task-${props.view.task.msgId}`,
       title: props.view.task.payloadType === 'practice_guide' ? '实操指南' : '练习题',
@@ -232,16 +261,16 @@ const lessonPages = computed<LessonPage[]>(() => {
   }
   return pages
 })
-const currentLessonPage = computed(() => lessonPages.value[lessonPageIndex.value])
-const lessonPanelKicker = computed(() => currentLessonPage.value?.kind === 'task'
-  ? '实操准备'
-  : '分页微课')
-const lessonPanelTitle = computed(() => currentLessonPage.value?.kind === 'task'
-  ? '实操指南'
-  : '知识卡片')
-const lessonFocusLabel = computed(() => currentLessonPage.value?.kind === 'task'
-  ? '专注查看指南'
-  : '专注学习')
+// 叠页模式：微课整页连续呈现，进入练习环节后才切换为"末页（任务页）"语义，
+// 供 App 布局在微课全宽与实操双栏之间切换。
+const practiceEntered = ref(false)
+// 需求③：进入练习后左栏只保留任务卡（讲义内容退场，双栏聚焦题目+查询）；
+// 画像三 data_present 无任务卡——保持整页微课（追问态由 is-followup-focus 让位整宽提问）
+const displayLessonPages = computed(() => (
+  practiceEntered.value && !props.peekLecture && !props.dataPresentMode
+    ? lessonPages.value.filter((page) => page.kind === 'task')
+    : lessonPages.value
+))
 
 const lectureMetrics = computed<KeyMetric[]>(() => {
   const metrics: KeyMetric[] = []
@@ -302,39 +331,66 @@ const unmatchedClaims = computed(() => {
 
 watch(
   () => props.view.lecture?.msgId,
-  () => { lessonPageIndex.value = 0 },
+  () => {
+    practiceEntered.value = false
+  },
 )
+// ①③：前测全对（讲义延期）→ 自动切布局为练习态（practiceEntered+pageState）
+// 但不触发 startPractice——推进由 submitPretest 内部链处理（避免双 advance 竞争）
 watch(
-  () => props.view.task?.msgId,
-  (taskMessageId) => {
-    if (props.lessonPager && taskMessageId) {
-      lessonPageIndex.value = Math.max(0, lessonPages.value.length - 1)
+  [
+    () => props.view.lecture?.content.lecture_deferred,
+    () => Boolean(props.view.task),
+    () => props.liveOperation,
+  ],
+  ([deferred, hasTask, live]) => {
+    if (live && deferred === true && hasTask && !practiceEntered.value) {
+      practiceEntered.value = true
+      emit('pageState', {
+        index: Math.max(0, lessonPages.value.length - 1),
+        total: lessonPages.value.length,
+        kind: 'task',
+        isLast: true,
+      })
     }
   },
+  { immediate: true },
 )
 watch(
-  () => lessonPages.value.length,
-  (length) => {
-    lessonPageIndex.value = Math.min(lessonPageIndex.value, Math.max(0, length - 1))
-  },
-)
-watch(
-  [lessonPageIndex, () => lessonPages.value.length, () => currentLessonPage.value?.kind],
+  [() => lessonPages.value.length, practiceEntered],
   () => emit('pageState', {
-    index: lessonPageIndex.value,
+    index: practiceEntered.value ? Math.max(0, lessonPages.value.length - 1) : 0,
     total: lessonPages.value.length,
-    kind: currentLessonPage.value?.kind,
-    isLast: lessonPageIndex.value === Math.max(0, lessonPages.value.length - 1),
+    kind: practiceEntered.value
+      ? 'task'
+      : (lessonPages.value[0]?.kind ?? 'metrics'),
+    isLast: practiceEntered.value,
   }),
   { immediate: true },
 )
 
-function previousLessonPage(): void {
-  lessonPageIndex.value = Math.max(0, lessonPageIndex.value - 1)
-}
+// 链结束后设 practiceEntered（隐藏讲义内容+"进入练习"按钮）
+// 链中不设（画像三讲义全宽可见）；链尾 state 已到 sql/follow_up，布局自然切
+watch(
+  () => props.practiceChainActive,
+  (running, wasRunning) => {
+    if (wasRunning && !running && !practiceEntered.value && props.liveOperation) {
+      practiceEntered.value = true
+    }
+  },
+)
 
-function nextLessonPage(): void {
-  lessonPageIndex.value = Math.min(lessonPages.value.length - 1, lessonPageIndex.value + 1)
+function enterPractice(): void {
+  // 先 startPractice（链头同步锁布局 lesson→讲义全宽），
+  // 后 pageState（isLast=true 供链尾释放后布局自然切 practice）
+  // 不设 practiceEntered——其 watcher 会立即过滤内容+二次 pageState（闪切）
+  emit('startPractice')
+  emit('pageState', {
+    index: Math.max(0, lessonPages.value.length - 1),
+    total: lessonPages.value.length,
+    kind: 'task',
+    isLast: true,
+  })
 }
 
 function lessonSectionPreview(section: LectureSection): string {
@@ -346,8 +402,10 @@ function lessonSectionPreview(section: LectureSection): string {
 }
 
 function openLessonSection(sectionIndex: number): void {
+  // 叠页模式：滚动定位到对应知识卡片
   const pageIndex = lessonPages.value.findIndex((page) => page.key === `section-${sectionIndex}`)
-  if (pageIndex >= 0) lessonPageIndex.value = pageIndex
+  const target = document.getElementById(`lesson-page-${pageIndex >= 0 ? pageIndex : 0}`)
+  if (target instanceof HTMLElement) target.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
 }
 
 const lectureKnowledgePoint = computed(() => {
@@ -477,6 +535,44 @@ const guideCriteria = computed(() => {
   ))
 })
 
+/** 优化16：quiz_set（查询题）任务同样展示"操作步骤/完成标准"——
+ * 由题面的 query_authority 确定性推导，与 practice_guide 的呈现结构统一。 */
+const quizGuideSteps = computed(() => {
+  const authority = props.view.task?.content.query_authority
+  const record = typeof authority === 'object' && authority !== null && !Array.isArray(authority)
+    ? authority as Record<string, unknown>
+    : undefined
+  const outputs = guideStringList(record?.output_columns).map(dataFieldLabel)
+  const filters = guideStringList(record?.filter_columns).map(dataFieldLabel)
+  const groups = guideStringList(record?.group_by_columns).map(dataFieldLabel)
+  return [
+    filters.length
+      ? `确认题目对象与时间范围，明确要查询的${filters.join('、')}。`
+      : '确认题目对象与时间范围，明确要查询的内容。',
+    outputs.length
+      ? `查询并输出题面要求的字段：${outputs.join('、')}。`
+      : '查询并输出题面要求的结果字段。',
+    groups.length
+      ? `结果按${groups.join('、')}对应，逐行核对数值后再作答。`
+      : '逐行核对查询结果的数值与口径后再作答。',
+  ]
+})
+
+const quizGuideCriteria = computed(() => [
+  '查询结果包含题面要求的全部字段，且数值与结果表一致。',
+  '结论引用了查询结果中的字段名和数值，未混用不同口径。',
+])
+
+const showGuideSections = computed(() => (
+  (isPracticeGuide.value && hasGuideStructure.value) || !isPracticeGuide.value
+))
+const unifiedGuideSteps = computed(() => (
+  isPracticeGuide.value ? guideSteps.value : quizGuideSteps.value
+))
+const unifiedGuideCriteria = computed(() => (
+  isPracticeGuide.value ? guideCriteria.value : quizGuideCriteria.value
+))
+
 function guideStringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
@@ -514,19 +610,6 @@ const taskMisconception = computed(() => {
   return typeof value === 'string' ? misconceptionLabel(value) : undefined
 })
 
-const hasApprovedResource = computed(() => {
-  const resourceIds = new Set([
-    props.view.lecture?.msgId,
-    props.view.task?.msgId,
-    props.view.sqlResult?.msgId,
-  ].filter((value): value is string => typeof value === 'string'))
-  return props.view.visibleMessages.some((message) => (
-    message.payloadType === 'review_verdict'
-    && ['approve', 'approve_with_fix'].includes(message.verdict?.decision ?? '')
-    && typeof message.content.reviewed_msg_id === 'string'
-    && resourceIds.has(message.content.reviewed_msg_id)
-  ))
-})
 
 function claimsFor(message: TraceMessage, text: string) {
   return message.claims.filter((claim) => text.includes(claim.text))
@@ -538,41 +621,25 @@ function claimsFor(message: TraceMessage, text: string) {
     class="panel resource-panel"
     :class="{ 'is-lesson-pager': lessonPager, 'is-focus-mode': focusMode }"
   >
-    <header class="panel-heading resource-heading">
-      <div>
-        <span v-if="lessonPager" class="section-kicker">{{ lessonPanelKicker }}</span>
-        <h2>{{ lessonPager ? lessonPanelTitle : '微课 / 实操' }}</h2>
-      </div>
-      <div class="resource-heading-status">
-        <span v-if="hasApprovedResource" class="professional-review-badge">
-          已通过专业审核 ✓
-        </span>
-        <BookOpen :size="19" aria-hidden="true" />
-        <button
-          type="button"
-          class="content-focus-toggle"
-          :aria-label="focusMode ? currentLessonPage?.kind === 'task' ? '退出实操指南专注模式' : '退出微课专注模式' : currentLessonPage?.kind === 'task' ? '最大化实操指南' : '最大化微课'"
-          :title="focusMode ? '退出专注模式（Esc）' : currentLessonPage?.kind === 'task' ? '最大化实操指南' : '最大化微课'"
-          @click="toggleFocusMode"
-        >
-          <Minimize2 v-if="focusMode" :size="16" aria-hidden="true" />
-          <Maximize2 v-else :size="16" aria-hidden="true" />
-          <span>{{ focusMode ? '还原' : lessonFocusLabel }}</span>
-        </button>
-      </div>
-    </header>
+    <!-- 优化12：面板头行整体删除——live 学员界面无"内容已就绪✓/专注学习"等字样，
+         回放与 live 同口径（2026-08-18 用户口径：回放不得出现 live 中不存在的元素） -->
 
-    <section v-if="lessonPager" class="lesson-pager" aria-label="微课分页阅读">
-      <div v-if="view.lecture && currentLessonPage" class="lesson-page">
-        <header class="lesson-page-heading">
-          <div>
-            <span>{{ learnerText(String(view.lecture.content.knowledge_point ?? '岗位微课')) }}</span>
-            <h3>{{ currentLessonPage.title }}</h3>
-          </div>
-          <b>{{ lessonPageIndex + 1 }} / {{ lessonPages.length }}</b>
+
+    <section v-if="lessonPager" class="lesson-pager lesson-stack" aria-label="微课连续阅读">
+      <template v-if="view.lecture && lessonPages.length">
+        <template v-for="(page, pageIndex) in displayLessonPages" :key="page.key">
+          <!-- 需求④：未进入练习（锁定）的任务页整块隐藏，点击底部按钮后再显示 -->
+          <article
+            v-if="page.kind !== 'task' || taskClaimed"
+            :id="`lesson-page-${pageIndex}`"
+            class="lesson-page"
+          >
+        <!-- 需求②：去页码与重复知识点，仅保留小节标题 -->
+        <header v-if="page.kind !== 'task'" class="lesson-page-heading">
+          <h3>{{ page.title }}</h3>
         </header>
 
-        <div v-if="currentLessonPage.kind === 'metrics'" class="lesson-page-metrics">
+        <div v-if="page.kind === 'metrics'" class="lesson-page-metrics">
           <article v-for="metric in lectureMetrics" :key="`${metric.label}-${metric.value}`">
             <span>{{ metric.label }}</span>
             <strong class="instrument-number">{{ metric.value }}</strong>
@@ -580,7 +647,7 @@ function claimsFor(message: TraceMessage, text: string) {
         </div>
 
         <section
-          v-if="focusMode && currentLessonPage.kind === 'metrics' && lectureSections.length"
+          v-if="focusMode && page.kind === 'metrics' && lectureSections.length"
           class="lesson-page-overview"
           aria-label="本节内容概览"
         >
@@ -609,11 +676,11 @@ function claimsFor(message: TraceMessage, text: string) {
         </section>
 
         <div
-          v-else-if="currentLessonPage.kind === 'section' && currentLessonPage.section"
+          v-else-if="page.kind === 'section' && page.section"
           class="lesson-page-copy"
         >
           <template
-            v-for="(block, index) in currentLessonPage.section.blocks"
+            v-for="(block, index) in page.section.blocks"
             :key="`${index}-${block.text}`"
           >
             <div v-if="block.kind === 'list'" class="markdown-list-item">
@@ -639,7 +706,19 @@ function claimsFor(message: TraceMessage, text: string) {
         </div>
 
         <section
-          v-else-if="currentLessonPage.kind === 'task' && view.task"
+          v-else-if="page.kind === 'task' && view.task && !taskClaimed"
+          id="task-resource"
+          class="lesson-page-task task-card task-locked-card"
+          aria-label="本轮练习题（待进入）"
+        >
+          <div class="task-locked-copy">
+            <ListChecks :size="18" aria-hidden="true" />
+            <p>练习内容已就绪。阅读完上方微课后，点击页面底部<strong>「进入练习环节」</strong>开始本次练习。</p>
+          </div>
+        </section>
+
+        <section
+          v-else-if="page.kind === 'task' && view.task"
           id="task-resource"
           class="lesson-page-task task-card"
           :class="isPracticeGuide ? 'practice-guide-card' : 'quiz-card'"
@@ -648,7 +727,7 @@ function claimsFor(message: TraceMessage, text: string) {
           <div class="task-card-heading">
             <span class="resource-eyebrow">
               <ListChecks :size="14" aria-hidden="true" />
-              {{ isPracticeGuide ? '实操指南' : '练习题' }}
+              查询题目
             </span>
             <div
               v-if="taskDifficulty"
@@ -664,18 +743,19 @@ function claimsFor(message: TraceMessage, text: string) {
             </div>
           </div>
           <h3 :class="{ 'guide-question': isPracticeGuide }">{{ taskQuestion }}</h3>
+          <!-- 优化16：查询题与实操指南统一展示"操作步骤/完成标准"（quiz 由题面授权确定性推导） -->
           <p v-if="isPracticeGuide && hasGuideStructure" class="guide-intro">{{ guideIntro }}</p>
-          <div v-if="isPracticeGuide && hasGuideStructure" class="lesson-guide-sections">
+          <div v-if="showGuideSections" class="lesson-guide-sections">
             <section class="guide-section" aria-label="操作步骤">
               <h4>操作步骤</h4>
               <ol class="guide-steps">
-                <li v-for="(step, index) in guideSteps" :key="`${index}-${step}`">{{ step }}</li>
+                <li v-for="(step, index) in unifiedGuideSteps" :key="`${index}-${step}`">{{ step }}</li>
               </ol>
             </section>
             <section class="guide-section" aria-label="完成标准">
               <h4>完成标准</h4>
               <ul class="guide-criteria">
-                <li v-for="(criterion, index) in guideCriteria" :key="`${index}-${criterion}`">
+                <li v-for="(criterion, index) in unifiedGuideCriteria" :key="`${index}-${criterion}`">
                   {{ criterion }}
                 </li>
               </ul>
@@ -687,7 +767,7 @@ function claimsFor(message: TraceMessage, text: string) {
           </p>
           <section class="practice-coaching" aria-label="实操辅助信息">
             <div class="practice-coaching-heading">
-              <strong>实操老师提示</strong>
+              <strong>提示</strong>
               <button
                 type="button"
                 @click="guidanceHintLevel = guidanceHintLevel >= practiceHints.length ? 0 : guidanceHintLevel + 1"
@@ -717,43 +797,35 @@ function claimsFor(message: TraceMessage, text: string) {
             />
           </li>
         </ul>
-      </div>
+        </article>
+        </template>
+      </template>
       <section v-else class="resource-placeholder">
         <BookOpen :size="20" aria-hidden="true" />
         <p>岗位微课将在本轮测评完成后出现。</p>
       </section>
 
-      <footer v-if="lessonPages.length > 1" class="lesson-pager-actions">
+      <!-- 闭环五：任务已下发（taskClaimed）后按钮不再滞留——链中显示"正在进入…"，
+           链结束即隐藏（画像三 S7 代执行窗口/画像一二 S7+sql 都无需再点"进入练习"）；
+           practiceEntered watcher 兜底失效时由 !taskClaimed 兜住 -->
+      <footer
+        v-if="liveOperation && view.task && lessonPages.length && !practiceEntered && (!taskClaimed || chainRunning)"
+        class="lesson-stack-actions"
+      >
         <button
           type="button"
-          aria-label="上一张微课卡片"
-          :disabled="lessonPageIndex === 0"
-          @click="previousLessonPage"
-        >上一页</button>
-        <span aria-label="微课分页进度">
-          <i
-            v-for="(page, index) in lessonPages"
-            :key="page.key"
-            :class="{ 'is-current': index === lessonPageIndex }"
-          ></i>
-        </span>
-        <button
-          type="button"
-          aria-label="下一张微课卡片"
-          :disabled="lessonPageIndex === lessonPages.length - 1"
-          @click="nextLessonPage"
-        >下一页</button>
+          class="lesson-start-practice"
+          aria-label="进入练习环节"
+          @click="enterPractice"
+        :disabled="props.chainRunning"
+        >{{ props.chainRunning ? '' : '进入练习 →' }}<WaveText v-if="props.chainRunning" text="正在进入…" /></button>
       </footer>
     </section>
 
     <div v-else class="resource-scroll">
       <section v-if="view.lecture" id="lecture-resource" class="lecture-card">
-        <div class="resource-title-row">
-          <span class="resource-eyebrow"><BookOpen :size="14" aria-hidden="true" /> 岗位微课</span>
-          <span v-if="typeof view.lecture.content.knowledge_point === 'string'" class="knowledge-tag">
-            {{ learnerText(view.lecture.content.knowledge_point) }}
-          </span>
-        </div>
+        <!-- 优化12：回放与 live 同口径——删"岗位微课"eyebrow 与知识点角标 -->
+
         <div v-if="lectureMetrics.length" class="lecture-key-numbers" aria-label="本节关键数据">
           <article v-for="metric in lectureMetrics" :key="`${metric.label}-${metric.value}`">
             <span>{{ metric.label }}</span>
@@ -790,24 +862,8 @@ function claimsFor(message: TraceMessage, text: string) {
             </template>
           </section>
         </div>
-        <section
-          v-if="unmatchedClaims.length"
-          class="claim-register"
-          aria-label="结论证据"
-        >
-          <h4>数据出处</h4>
-          <ul>
-            <li v-for="claim in unmatchedClaims" :key="claim.text">
-              <EvidenceClaim
-                :text="claim.text"
-                :claims="[claim]"
-                :evidence="view.lecture.evidence"
-                :knowledge-point="lectureKnowledgePoint"
-                :matches-blind-spot="lectureMatchesBlindSpot"
-              />
-            </li>
-          </ul>
-        </section>
+        <!-- 优化12：删"数据出处"证据登记小节（live 学员界面无此元素） -->
+
       </section>
       <section v-else class="resource-placeholder">
         <BookOpen :size="20" aria-hidden="true" />
@@ -877,13 +933,36 @@ function claimsFor(message: TraceMessage, text: string) {
           </div>
         </div>
         <h3>{{ taskQuestion }}</h3>
+        <!-- 优化16：回放分支查询题同样展示操作步骤/完成标准（与 live 同口径） -->
+        <div v-if="!isPracticeGuide" class="lesson-guide-sections">
+          <section class="guide-section" aria-label="操作步骤">
+            <h4>操作步骤</h4>
+            <ol class="guide-steps">
+              <li v-for="(step, index) in quizGuideSteps" :key="`${index}-${step}`">
+                {{ step }}
+              </li>
+            </ol>
+          </section>
+          <section class="guide-section" aria-label="完成标准">
+            <h4>完成标准</h4>
+            <ul class="guide-criteria">
+              <li v-for="(criterion, index) in quizGuideCriteria" :key="`${index}-${criterion}`">
+                {{ criterion }}
+              </li>
+            </ul>
+          </section>
+        </div>
         <p v-if="taskMisconception" class="probe-notice">
           <CircleAlert :size="15" aria-hidden="true" />
           本题针对：{{ taskMisconception }}
         </p>
       </section>
 
-      <SqlResultTable v-if="view.sqlResult" :message="view.sqlResult" />
+      <SqlResultTable
+        v-if="view.sqlResult && !sqlResultStale && !staleTaskResult"
+        :message="view.sqlResult"
+        :live-operation="liveOperation"
+      />
       <section v-else class="resource-placeholder compact-placeholder">
         <p>数据结果将在查询完成并确认可用后出现。</p>
       </section>
@@ -895,7 +974,8 @@ function claimsFor(message: TraceMessage, text: string) {
 .resource-panel.is-lesson-pager {
   min-height: 0;
   display: grid;
-  grid-template-rows: 62px minmax(0, 1fr);
+  /* 面板头行（原 62px 首行）已删除：叠页独占整行铺满 */
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -927,6 +1007,27 @@ function claimsFor(message: TraceMessage, text: string) {
   grid-template-rows: minmax(0, 1fr) 52px;
   padding: 0 16px;
   overflow: hidden;
+}
+
+/* 需求②：叠页模式整体单滚流——各小节不再独立滚动成"下滑块" */
+.lesson-pager.lesson-stack {
+  display: block;
+  overflow: auto;
+  padding: 8px 16px 0;
+}
+
+.lesson-stack .lesson-page {
+  overflow: visible;
+  gap: 12px;
+  padding: 6px 2px;
+}
+
+.lesson-stack .lesson-page-heading {
+  padding-bottom: 6px;
+}
+
+.lesson-stack .lesson-page-heading h3 {
+  font-size: 15px;
 }
 
 .lesson-page {
@@ -1226,7 +1327,7 @@ function claimsFor(message: TraceMessage, text: string) {
 
 .lesson-guide-sections {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 

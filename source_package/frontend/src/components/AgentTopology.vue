@@ -6,6 +6,7 @@ import type {
   AgentActivityId,
   AgentActivityStatus,
 } from '../lib/interactiveApi'
+import { decisionLabel, payloadTypeLabel } from '../lib/tracePresentation'
 import type { StateId, TraceMessage, TraceView } from '../types/trace'
 
 
@@ -339,6 +340,14 @@ function point(id: TopologyNodeId): TopologyNode {
   return nodeMap.get(id) ?? nodes[0]
 }
 
+function nodeTooltip(node: TopologyNode): string {
+  // 审核节点的角标是规则编号（如 R-02），悬停给出全称与职责说明。
+  if (/^R-\d+$/.test(node.short)) {
+    return `${node.short} · ${node.label}——${node.responsibility}`
+  }
+  return `${node.label}——${node.responsibility}`
+}
+
 const selectedId = ref<TopologyNodeId>('orchestrator')
 
 watch(latestEvent, (event) => {
@@ -367,6 +376,10 @@ function shortValue(value: unknown): string | undefined {
   return normalized.length > 28 ? `${normalized.slice(0, 18)}…${normalized.slice(-6)}` : normalized
 }
 
+const AGGREGATION_LABELS: Record<string, string> = {
+  deterministic: '确定性汇聚',
+}
+
 const selectedMetrics = computed(() => {
   const details = selectedEvent.value?.details
   if (!details) return []
@@ -377,8 +390,11 @@ const selectedMetrics = computed(() => {
     ['artifact_id', '产物编号'], ['evidence_bundle_id', '证据包'],
   ]
   return definitions.flatMap(([key, label]) => {
-    const value = shortValue(details[key])
-    return value ? [{ key, label, value }] : []
+    const raw = shortValue(details[key])
+    if (!raw) return []
+    // 个别英文枚举值映射为学员可读的中文（如汇聚方式 deterministic）。
+    const value = key === 'aggregation' ? AGGREGATION_LABELS[raw] ?? raw : raw
+    return [{ key, label, value }]
   }).slice(0, 4)
 })
 
@@ -386,10 +402,10 @@ const outputSummary = computed(() => {
   const event = selectedEvent.value
   const message = selectedTraceMessage.value
   if (message) {
-    const parts = [`产物类型：${message.payloadType}`]
+    const parts = [`产物类型：${payloadTypeLabel(message.payloadType)}`]
     if (message.evidence.length) parts.push(`绑定 ${message.evidence.length} 条证据`)
     if (message.claims.length) parts.push(`形成 ${message.claims.length} 条可审核主张`)
-    if (message.verdict?.decision) parts.push(`裁决：${message.verdict.decision}`)
+    if (message.verdict?.decision) parts.push(`裁决：${decisionLabel(message.verdict.decision)}`)
     return parts.join(' · ')
   }
   if (event) return event.label
@@ -524,6 +540,7 @@ const completedCount = computed(() => nodes.filter((node) => (
           :class="nodeClass(node)"
           :data-node="node.id"
           :style="{ left: `${node.x}%`, top: `${node.y}%` }"
+          :title="nodeTooltip(node)"
           :aria-pressed="selectedId === node.id"
           @click="selectedId = node.id"
         >
@@ -546,12 +563,18 @@ const completedCount = computed(() => nodes.filter((node) => (
         </div>
 
         <dl class="module-identity">
-          <div><dt>Python 模块</dt><dd>{{ selectedNode.module }}</dd></div>
-          <div><dt>实现单元</dt><dd>{{ selectedNode.className }}</dd></div>
-          <div v-if="debugMode"><dt>模型配置</dt><dd>{{ selectedRuntimeConfig.model }}</dd></div>
-          <div v-if="debugMode"><dt>执行策略</dt><dd>{{ selectedRuntimeConfig.strategy }}</dd></div>
           <div><dt>当前阶段</dt><dd>{{ stageLabels[selectedEvent?.stage ?? view.currentState] ?? selectedEvent?.stage ?? view.currentState }}</dd></div>
         </dl>
+
+        <details class="module-implementation">
+          <summary>技术实现</summary>
+          <dl>
+            <div><dt>Python 模块</dt><dd>{{ selectedNode.module }}</dd></div>
+            <div><dt>实现单元</dt><dd>{{ selectedNode.className }}</dd></div>
+            <div v-if="debugMode"><dt>模型配置</dt><dd>{{ selectedRuntimeConfig.model }}</dd></div>
+            <div v-if="debugMode"><dt>执行策略</dt><dd>{{ selectedRuntimeConfig.strategy }}</dd></div>
+          </dl>
+        </details>
 
         <section v-if="debugMode" class="module-parameters" aria-label="节点运行参数">
           <strong>节点设置与边界</strong>
@@ -659,6 +682,7 @@ const completedCount = computed(() => nodes.filter((node) => (
 .inspector-heading > small { float:right; color:#74a1b5; font-size:9px; }.inspector-heading h3 { margin:8px 0 4px; color:#fff; font-size:20px; }.inspector-heading p { margin:0; color:#96b7c7; font-size:11px; line-height:1.55; }
 .module-identity { display:grid; gap:1px; margin:0; overflow:hidden; border:1px solid rgba(117,197,231,.12); border-radius:9px; }.module-identity div { min-width:0; display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; padding:7px 8px; background:rgba(255,255,255,.025); }.module-identity dt { color:#638ca0; font-size:9px; }.module-identity dd { min-width:0; margin:0; overflow:hidden; color:#c8dfeb; font:500 9px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .module-parameters { padding:8px 9px; background:rgba(159,126,255,.055); border:1px solid rgba(159,126,255,.12); border-radius:9px; }.module-parameters strong { color:#d8cbff; font-size:9px; }.module-parameters ul { display:grid; gap:4px; margin:6px 0 0; padding-left:16px; }.module-parameters li { color:#9db8c6; font-size:9px; line-height:1.4; }
+.module-implementation { border:1px solid rgba(117,197,231,.12); border-radius:9px; background:rgba(255,255,255,.025); }.module-implementation summary { padding:7px 9px; color:#7fa9bd; font-size:9px; cursor:pointer; list-style:none; display:flex; align-items:center; gap:5px; }.module-implementation summary::before { content:'›'; color:#54c8ee; font-weight:700; transition:transform .15s; }.module-implementation[open] summary::before { transform:rotate(90deg); }.module-implementation summary:hover { color:#a9cede; }.module-implementation dl { display:grid; gap:1px; margin:0; overflow:hidden; border-top:1px solid rgba(117,197,231,.1); border-radius:0 0 9px 9px; }.module-implementation dl div { min-width:0; display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; padding:7px 8px; background:rgba(255,255,255,.02); }.module-implementation dt { color:#638ca0; font-size:9px; }.module-implementation dd { min-width:0; margin:0; overflow:hidden; color:#c8dfeb; font:500 9px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .io-summary { display:grid; grid-template-columns:1fr 1fr; gap:7px; }.io-summary article { min-width:0; padding:8px; background:rgba(255,255,255,.035); border:1px solid rgba(124,201,233,.1); border-radius:9px; }.io-summary span { display:block; margin-bottom:4px; color:#5f91a8; font-size:8px; }.io-summary p { margin:0; color:#c7dce6; font-size:9px; line-height:1.45; }
 .module-metrics { display:grid; grid-template-columns:1fr 1fr; gap:5px; }.module-metrics div { min-width:0; display:grid; gap:2px; padding:6px 7px; background:rgba(46,201,242,.055); border-radius:7px; }.module-metrics span { color:#628da1; font-size:8px; }.module-metrics b { overflow:hidden; color:#d8f6ff; font:600 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .module-events { min-height:0; display:flex; flex:1 1 auto; flex-direction:column; overflow:hidden; }.module-events-heading { display:flex; align-items:center; justify-content:space-between; padding:2px 0 6px; border-bottom:1px solid rgba(118,197,231,.12); }.module-events-heading strong { font-size:10px; }.module-events-heading small { color:#638da1; font-size:8px; }.module-events ol { min-height:0; display:grid; align-content:start; gap:1px; margin:0; padding:5px 0 0; overflow:auto; list-style:none; }.module-events li { display:grid; grid-template-columns:8px minmax(0,1fr); gap:7px; padding:5px 3px; }.module-events li > i { width:5px; height:5px; margin-top:4px; border-radius:50%; background:#557585; }.module-events li > i.is-working,.module-events li > i.is-collaborating,.module-events li > i.is-reviewing,.module-events li > i.is-debating { background:#47d8ff; box-shadow:0 0 6px #47d8ff; }.module-events li > i.is-done,.module-events li > i.is-approved { background:#45daa6; }.module-events li > i.is-blocked { background:#ff6474; }.module-events li div { min-width:0; display:grid; gap:2px; }.module-events li b { overflow:hidden; color:#cfe5ef; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.module-events li small { color:#5e899d; font-size:8px; }.empty-events { margin:auto; color:#5b8295; font-size:9px; }

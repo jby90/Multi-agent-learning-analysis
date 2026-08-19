@@ -13,6 +13,7 @@ describe('learner profile build input', () => {
       title: '新入职生产计划员',
       background: '会数据分析工具，需要学习生产口径',
       strengths: ['SQL基础'],
+      knowledge_scope: ['三道工序与传导关系', '计划量与实际量口径'],
       lecture_style: '这是给模型的指令',
       difficulty_start: 'basic',
     }), 'planner_new.json')
@@ -22,6 +23,8 @@ describe('learner profile build input', () => {
       title: '新入职生产计划员',
       background: '会数据分析工具，需要学习生产口径',
       strengths: ['SQL基础'],
+      knowledgeScope: ['三道工序与传导关系', '计划量与实际量口径'],
+      practiceMode: 'sql',
     })
     expect(profile).not.toHaveProperty('lecture_style')
     expect(profile).not.toHaveProperty('difficulty_start')

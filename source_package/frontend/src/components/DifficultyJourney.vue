@@ -70,7 +70,8 @@ function actionLabel(point: DifficultyPoint): string | undefined {
         <strong>难度轨迹</strong>
       </div>
       <div class="difficulty-journey-status">
-        <span class="current-resource-legend">◆ 当前资源</span>
+        <!-- 需求⑨：图例改为正方形 -->
+        <span class="current-resource-legend">■ 当前学习内容</span>
         <span
           v-if="difficultyStatus"
           class="journey-status-note"

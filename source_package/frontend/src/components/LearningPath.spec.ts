@@ -93,21 +93,25 @@ describe('LearningPath', () => {
     expect(wrapper.text()).not.toContain('培养路径会随测评、微课与实操结果逐步更新')
   })
 
-  it('keeps the full summary and appends a data-derived future node', () => {
+  it('shows a structured phrase in the header and appends a data-derived future node', () => {
     const fileName = 'demo-planner_new-20260716133542.jsonl'
-    const source = readFileSync(path.resolve(process.cwd(), '..', 'traces', fileName), 'utf8')
+    const source = readFileSync(path.resolve(process.cwd(), 'src', 'test', 'fixtures', 'traces', fileName), 'utf8')
     const document = parseTraceJsonl(source, fileName)
     const view = buildTraceView(document, document.messages.length)
     const wrapper = mount(LearningPath, {
       props: { view, catalog },
     })
 
-    expect(wrapper.get('.path-heading h2').text()).toBe(
-      '刚才你把计划量当成了实际完成量——你自己查出的数据（计划量1855.06、实际完成量1156.87）纠正了这一点。下一步：完成率计算。',
+    expect(wrapper.get('.path-heading h2').text()).toContain(
+      '当前：三道工序与传导关系 · 已完成',
     )
+    // 优化11：头部"下一知识点：xxx · 档"小字已删（未来节点仍由橙色轨迹节点表达）
+    expect(wrapper.find('.path-summary-next').exists()).toBe(false)
+    expect(wrapper.get('.path-heading h2').text()).not.toContain('刚才你把')
+    expect(wrapper.get('.path-heading h2').text()).not.toContain('下一步：')
     expect(wrapper.get('.path-heading h2').text()).not.toContain('完成岗前测评3/5与岗位微课')
-    expect(wrapper.get('.path-node.is-planned').text()).toContain('下一步：完成率计算')
-    expect(wrapper.get('.path-node.is-planned').text()).toContain('应用档')
+    expect(wrapper.get('.path-node.is-planned').text()).not.toContain('下一知识点：')
+    expect(wrapper.get('.path-node.is-planned').text()).not.toContain('基础档')
     expect(wrapper.findAll('.path-node').length).toBeGreaterThanOrEqual(5)
   })
 

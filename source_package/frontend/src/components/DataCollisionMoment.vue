@@ -42,10 +42,10 @@ function finish(): void {
 }
 
 onMounted(() => {
+  // 只做"误认→证实"的阶段切换；关闭必须由学员手动点，避免没看清就消失。
   timers.push(window.setTimeout(() => {
     stage.value = 'verified'
   }, 700))
-  timers.push(window.setTimeout(finish, 2700))
 })
 
 onBeforeUnmount(() => {
@@ -68,10 +68,10 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="collision-skip"
-        aria-label="跳过数据验证动画"
+        aria-label="关闭数据验证"
         @click="finish"
       >
-        跳过 <X :size="15" aria-hidden="true" />
+        关闭 <X :size="15" aria-hidden="true" />
       </button>
 
       <header class="collision-heading">
@@ -84,38 +84,32 @@ onBeforeUnmount(() => {
           class="collision-number is-mistaken"
           :class="{ 'is-struck': stage === 'verified' }"
         >
-          <span>刚才误认</span>
+          <span class="collision-flag">刚才误认</span>
           <small>{{ safeWrongLabel }}</small>
           <strong>{{ safeWrongValue }}</strong>
         </article>
 
         <ArrowRight class="collision-arrow" :size="24" aria-hidden="true" />
 
-        <div class="collision-result-card">
-          <div class="collision-flip" :class="{ 'is-flipped': stage === 'verified' }">
-            <article class="collision-number collision-face collision-front">
-              <span>正在核对</span>
-              <small>车间报工</small>
-            </article>
-            <article class="collision-number collision-face collision-back">
-              <strong
-                v-if="stage === 'verified'"
-                class="digit-readout"
-                :aria-label="safeCorrectValue"
-              >
-                <span
-                  v-for="(digit, index) in correctDigits"
-                  :key="`${index}-${digit}`"
-                  class="digit-tile"
-                  aria-hidden="true"
-                >{{ digit }}</span>
-              </strong>
-            </article>
-          </div>
-          <strong v-if="stage === 'verified'" class="collision-confirmed-label">
-            数据证实 · {{ safeCorrectLabel }}
+        <article
+          v-if="stage !== 'verified'"
+          class="collision-number is-checking"
+        >
+          <span class="collision-flag">正在核对</span>
+          <small>车间报工</small>
+        </article>
+        <article v-else class="collision-number is-verified">
+          <span class="collision-flag is-confirmed">数据证实</span>
+          <small>{{ safeCorrectLabel }}</small>
+          <strong class="digit-readout" :aria-label="safeCorrectValue">
+            <span
+              v-for="(digit, index) in correctDigits"
+              :key="`${index}-${digit}`"
+              class="digit-tile"
+              aria-hidden="true"
+            >{{ digit }}</span>
           </strong>
-        </div>
+        </article>
       </div>
 
       <p class="collision-correction" :class="{ 'is-visible': stage === 'verified' }">

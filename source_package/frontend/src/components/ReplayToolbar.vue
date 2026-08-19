@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {
   Bookmark,
-  Download,
   Pause,
   Play,
+  RotateCcw,
+  StepBack,
   StepForward,
   Workflow,
-  Upload,
   UserRound,
   Users,
 } from '@lucide/vue'
@@ -15,7 +15,7 @@ import type { Keyframe } from '../types/trace'
 import type { ReplaySpeed } from '../composables/useReplay'
 
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   traces: { fileName: string; label: string }[]
   selectedFile: string
   playing: boolean
@@ -27,11 +27,14 @@ withDefaults(defineProps<{
   canCompare: boolean
   entryMode: 'replay' | 'live'
   viewMode: 'student' | 'collaboration'
-  canExport?: boolean
   hasSession?: boolean
+  authRole?: 'student' | 'admin' | null
+  /** 优化21：前测进行中时禁用协同视图切换 */
+  viewDisabled?: boolean
 }>(), {
-  canExport: true,
+  authRole: null,
   hasSession: false,
+  viewDisabled: false,
 })
 
 const emit = defineEmits<{
@@ -39,13 +42,13 @@ const emit = defineEmits<{
   play: []
   pause: []
   step: []
+  back: []
+  restart: []
   speed: [value: ReplaySpeed]
   jump: [step: number]
   comparison: [value: boolean]
   entry: [value: 'replay' | 'live']
   view: [value: 'student' | 'collaboration']
-  import: [file: File]
-  export: []
   debug: []
 }>()
 
@@ -62,18 +65,6 @@ function selectKeyframe(event: Event): void {
   if (Number.isInteger(value) && value > 0) emit('jump', value)
   ;(event.target as HTMLSelectElement).value = ''
 }
-
-function importSelected(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (file) emit('import', file)
-  input.value = ''
-}
-
-function importDropped(event: DragEvent): void {
-  const file = event.dataTransfer?.files[0]
-  if (file) emit('import', file)
-}
 </script>
 
 <template>
@@ -81,13 +72,18 @@ function importDropped(event: DragEvent): void {
     <header class="replay-toolbar">
       <div class="product-mark">
         <span class="product-symbol" aria-hidden="true">智</span>
+        <!-- 0819：品牌区两行并一行——只留主标题，与徽标同行更简洁 -->
         <span class="product-copy">
-          <span class="product-kicker">智能岗位学习中心</span>
           <strong>船厂数字化岗位培训</strong>
         </span>
       </div>
 
-      <nav class="entry-switch control-cluster" aria-label="训练进入方式">
+      <!-- 优化20：入口切换仅 admin 可见——游客（未登录跳过）按学员对待，不见管理入口 -->
+      <nav
+        v-if="authRole === 'admin'"
+        class="entry-switch control-cluster"
+        aria-label="训练进入方式"
+      >
         <button
           type="button"
           :class="{ 'is-active': entryMode === 'live' }"
@@ -103,11 +99,7 @@ function importDropped(event: DragEvent): void {
       </nav>
 
       <span class="toolbar-spacer" aria-hidden="true"></span>
-
-      <div v-if="entryMode === 'live'" class="live-session-context" aria-label="当前训练数据范围">
-        <span><i aria-hidden="true"></i><strong>H2601</strong> · YCL 预处理</span>
-        <small>实时实操 · 数据截至 2025-07-31</small>
-      </div>
+      <span class="toolbar-spacer toolbar-spacer-half" aria-hidden="true"></span>
 
       <div v-if="entryMode === 'replay' && canCompare" class="view-switch control-cluster" aria-label="画像查看方式">
         <button
@@ -130,9 +122,14 @@ function importDropped(event: DragEvent): void {
         </button>
       </div>
 
+      <!-- 学员模式/协同视图只作用于单画像：三画像下无差异功能，隐藏避免假活
+           （2026-08-16 实测）。优化1：占位隐藏（visibility）而非摘除——
+           否则点"三画像"后整排按钮左移，切回单画像又右移，体验割裂。 -->
       <div
-        v-if="entryMode === 'replay' || hasSession"
+        v-if="(entryMode === 'replay' || hasSession) && authRole === 'admin'"
         class="audience-switch control-cluster"
+        :class="{ 'is-slot-hidden': comparison }"
+        :aria-hidden="comparison ? 'true' : undefined"
         aria-label="页面查看方式"
       >
         <button
@@ -141,16 +138,19 @@ function importDropped(event: DragEvent): void {
           aria-label="切换到学员模式"
           @click="emit('view', 'student')"
         >学员模式</button>
+        <!-- 优化21：实操通道前测答题期间禁用协同视图 -->
         <button
           type="button"
           :class="{ 'is-active': viewMode === 'collaboration' }"
           aria-label="切换到协同视图"
+          :disabled="viewDisabled"
+          :title="viewDisabled ? '前测进行中，暂不可切换协同视图' : undefined"
           @click="emit('view', 'collaboration')"
         >协同视图</button>
       </div>
 
       <button
-        v-if="entryMode === 'live' && hasSession"
+        v-if="entryMode === 'live' && hasSession && authRole === 'admin'"
         type="button"
         class="debug-workspace-action"
         aria-label="打开当前会话调试工作台"
@@ -161,48 +161,15 @@ function importDropped(event: DragEvent): void {
         <span>调试工作台</span>
       </button>
 
-      <div
-        class="trace-transfer control-cluster"
-        data-testid="trace-transfer"
-        aria-label="导入或导出会话记录"
-        @dragover.prevent
-        @drop.prevent="importDropped"
-      >
-        <label class="trace-transfer-action" aria-label="选择要导入的会话记录">
-          <Upload :size="15" aria-hidden="true" />
-          <span>导入</span>
-          <input
-            class="visually-hidden"
-            type="file"
-            accept=".jsonl,application/x-ndjson,application/json"
-            aria-label="导入会话记录"
-            @change="importSelected"
-          />
-        </label>
-        <button
-          type="button"
-          class="trace-transfer-action"
-          aria-label="导出当前会话"
-          :disabled="!canExport"
-          @click="emit('export')"
-        >
-          <Download :size="15" aria-hidden="true" />
-          <span>导出</span>
-        </button>
+      <!-- 0818 需求 1：头像固定最右上角（原 trace-transfer 位置），导入/导出移入头像下拉 -->
+      <div class="toolbar-center-zone toolbar-user-zone">
+        <slot name="user-menu"></slot>
       </div>
     </header>
 
-    <div v-if="entryMode === 'replay'" class="session-commandbar">
-      <div class="workshop-status" aria-label="车间数据状态">
-        <span><b>船号</b> H2601</span>
-        <span><b>工序</b> YCL · 预处理</span>
-        <span><b>数据截至</b> 2025-07-31</span>
-        <span class="session-mode-status">
-          <i aria-hidden="true"></i>
-          回放复盘
-        </span>
-      </div>
-
+    <!-- 优化8：三画像对比时回放命令条无意义，隐藏 -->
+    <!-- 优化11：删"船号/工序/数据截至/回放复盘"数据块，会话选择+回放控制铺满整行 -->
+    <div v-if="entryMode === 'replay' && !comparison" class="session-commandbar is-fullrow">
       <div class="trace-selector control-cluster">
           <label for="trace-select">当前会话</label>
           <select
@@ -218,6 +185,24 @@ function importDropped(event: DragEvent): void {
       </div>
 
       <div class="playback-controls control-cluster" aria-label="回放控制">
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="回到开头"
+            :disabled="cursor <= 0"
+            @click="emit('restart')"
+          >
+            <RotateCcw :size="16" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="回退一步"
+            :disabled="cursor <= 0"
+            @click="emit('back')"
+          >
+            <StepBack :size="17" aria-hidden="true" />
+          </button>
           <button
             v-if="playing"
             type="button"

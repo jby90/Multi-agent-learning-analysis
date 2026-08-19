@@ -1,0 +1,2 @@
+FROM multiagent-decision-frontend:handoff-v3.3-continuous-20260810
+COPY dist/ /usr/share/nginx/html/

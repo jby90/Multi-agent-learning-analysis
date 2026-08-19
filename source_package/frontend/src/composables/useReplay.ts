@@ -55,6 +55,16 @@ export function useReplay(total: Readonly<Ref<number>>, options: ReplayOptions =
     if (cursor.value < total.value) cursor.value += 1
   }
 
+  function stepBack(): void {
+    pause()
+    if (cursor.value > 0) cursor.value -= 1
+  }
+
+  function restart(): void {
+    pause()
+    cursor.value = 0
+  }
+
   function setSpeed(value: ReplaySpeed): void {
     speed.value = value
     if (playing.value) schedule()
@@ -77,6 +87,8 @@ export function useReplay(total: Readonly<Ref<number>>, options: ReplayOptions =
   onScopeDispose(clearTimer)
 
   return {
+    stepBack,
+    restart,
     cursor,
     playing,
     speed,

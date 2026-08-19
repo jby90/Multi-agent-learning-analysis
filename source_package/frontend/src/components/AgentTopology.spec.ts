@@ -76,6 +76,29 @@ describe('AgentTopology', () => {
     expect(wrapper.get('.topology-inspector').text()).toContain('并发分支')
     expect(wrapper.get('.topology-inspector').text()).toContain('3')
     expect(wrapper.get('.topology-inspector').text()).not.toContain('this must never be rendered')
+    // 技术实现细节默认折叠，学员视角只看中文职责与状态。
+    expect((wrapper.get('details.module-implementation').element as HTMLDetailsElement).open).toBe(false)
+    expect(wrapper.get('.topology-inspector').text()).toContain('技术实现')
+  })
+
+  it('maps aggregation enums to learner wording instead of raw english', async () => {
+    const events = [
+      event(
+        9,
+        'review',
+        'waiting',
+        'parallel_quality_review',
+        '四维审核已汇聚，等待确定性裁决',
+        [],
+        { fan_out: 4, aggregation: 'deterministic' },
+      ),
+    ]
+    const wrapper = mount(AgentTopology, { props: { view: baseView, events } })
+
+    await wrapper.get('[data-node="review"]').trigger('click')
+    const inspector = wrapper.get('.topology-inspector').text()
+    expect(inspector).toContain('确定性汇聚')
+    expect(inspector).not.toContain('deterministic')
   })
 
   it('shows sanitized trace output instead of raw prompts or content', async () => {
@@ -93,7 +116,7 @@ describe('AgentTopology', () => {
 
     await wrapper.get('[data-node="knowledge"]').trigger('click')
     const inspector = wrapper.get('.topology-inspector').text()
-    expect(inspector).toContain('产物类型：micro_lesson')
+    expect(inspector).toContain('产物类型：会话内容')
     expect(inspector).toContain('绑定 1 条证据')
     expect(inspector).not.toContain('hidden')
     expect(inspector).not.toContain('private_prompt')

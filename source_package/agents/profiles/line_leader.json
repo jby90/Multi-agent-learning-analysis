@@ -1,9 +1,24 @@
 {
   "profile_id": "line_leader",
   "title": "一线班组长（晋升培训）",
-  "background": "高职毕业一线班组长，现场熟，理论与数据双弱",
-  "strengths": ["现场操作经验"],
-  "gaps_prior": ["计划量与实际量口径", "完成率计算", "异常识别标准", "责任单元定位"],
+  "background": "常年带队的一线班组长，现场经验丰富，需要夯实数据与理论基础",
+  "strengths": [
+    "现场操作经验"
+  ],
+  "gaps_prior": [
+    "计划量与实际量口径",
+    "完成率计算",
+    "异常识别标准",
+    "责任单元定位"
+  ],
   "difficulty_start": "basic",
-  "lecture_style": "步骤化短句、每步带检查点、基础案例优先"
+  "lecture_style": "步骤化短句、每步带检查点、基础案例优先",
+  "knowledge_scope": [
+    "计划量与实际量口径",
+    "完成率计算",
+    "偏差率与风险等级",
+    "异常识别标准",
+    "责任单元定位"
+  ],
+  "practice_mode": "data_present"
 }

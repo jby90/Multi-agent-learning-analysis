@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type {
@@ -65,6 +65,8 @@ function fakeApi(): InteractiveApi {
     })),
     submitSql: vi.fn(async () => sessionState()),
     submitFollowUp: vi.fn(async () => sessionState()),
+    getLearningRecords: vi.fn(async () => ({ guest: true, records: [] })),
+    getLearningSummary: vi.fn(async () => ({ profiles: [] })),
   }
 }
 
@@ -90,10 +92,47 @@ function sqlResultMessage(): TraceMessage {
 }
 
 
+
+async function enterProfileSelectPage(wrapper: VueWrapper): Promise<void> {
+  const cta = wrapper.find('button.profile-picker-cta')
+  if (cta.element instanceof HTMLButtonElement) {
+    await cta.trigger('click')
+  }
+}
+
+/** 闭环一两步式：点岗位卡打开关注点面板，再点"开始训练"真正建会话。 */
+async function chooseProfileAndStart(wrapper: VueWrapper, profileTitle: string): Promise<void> {
+  await wrapper.get(`button[aria-label="选择${profileTitle}"]`).trigger('click')
+  await wrapper.get('.profile-focus-panel .profile-picker-cta').trigger('click')
+}
+
 describe('LivePractice', () => {
   afterEach(() => {
     sessionStorage.clear()
     vi.useRealTimers()
+  })
+
+  it('splits the profile entry into a welcome page and a select page', async () => {
+    const api = fakeApi()
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    expect(wrapper.get('#profile-picker-title').text())
+      .toBe('从岗位任务出发，练出上手就能用的数据能力')
+    expect(wrapper.find('.profile-picker-cta').exists()).toBe(true)
+    expect(wrapper.find('.profile-choice-grid').exists()).toBe(false)
+
+    await wrapper.get('button.profile-picker-cta').trigger('click')
+    expect(wrapper.find('.profile-choice-grid').exists()).toBe(true)
+    // 闭环一两步式：关注点下拉移入选定岗位后的面板，选择页本身不再直接展示
+    expect(wrapper.find('#experience-focus').exists()).toBe(false)
+    expect(wrapper.find('.profile-picker-back').exists()).toBe(true)
+    expect(wrapper.find('.profile-picker-hero').exists()).toBe(false)
+
+    await wrapper.get('button.profile-picker-back').trigger('click')
+    expect(wrapper.find('.profile-picker-hero').exists()).toBe(true)
+    expect(wrapper.find('.profile-choice-grid').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('refreshes the next diagnostic probe and clears the previous answer', async () => {
@@ -137,19 +176,101 @@ describe('LivePractice', () => {
     expect(wrapper.text()).not.toContain('基础探针答案')
     expect(wrapper.get('.diagnostic-probe-question textarea').element)
       .toHaveProperty('value', '')
+    // 优化5：道数进度与小题属性行已删——界面不再出现这些字样
+    expect(wrapper.find('.pretest-progress-copy').exists()).toBe(false)
+    expect(wrapper.find('.diagnostic-probe-question small').exists()).toBe(false)
+  })
+
+  it('keeps the single-probe view minimal without step counters (优化5)', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const diagnosticState = sessionState({
+      awaiting: 'diagnostic_probe',
+      interaction: {
+        kind: 'supplemental_diagnosis',
+        title: '补充诊断',
+        probe_step: 1,
+        probe_total: 1,
+        provisional_route: { knowledge_point: '计划量与实际量口径' },
+        message: '岗前测评未暴露明确错题，请再回答1-2道小题帮助确认学习起点。',
+        questions: [],
+      },
+    })
+    vi.mocked(api.getState).mockResolvedValue(diagnosticState)
+    vi.mocked(api.getDiagnosticProbes).mockResolvedValue([{
+      probe_id: 'AP-02',
+      knowledge_point: '完成率计算',
+      difficulty: 'applied',
+      stem: '应用探针题目',
+    }])
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    // 起点行改口径；题号/属性行/进度条全部不再渲染
+    expect(wrapper.text()).toContain('训练关注点：计划量与实际量口径')
+    expect(wrapper.text()).not.toContain('初步判断的起点')
+    expect(wrapper.find('.pretest-progress-copy').exists()).toBe(false)
+    const legend = wrapper.get('.diagnostic-probe-question legend').text()
+    expect(legend).toContain('应用探针题目')
+    expect(legend).not.toMatch(/^\d/)
+  })
+
+  it('scopes focus options to the chosen profile domain (6/7/5, all in-scope)', async () => {
+    const api = fakeApi()
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await enterProfileSelectPage(wrapper)
+
+    const expectations: Array<[number, string, string[]]> = [
+      [0, '新入职生产计划员', ['三道工序与传导关系', '计划量与实际量口径', '传导时滞分析', '异常衰减规律', '责任单元定位', '跨工序归因方法']],
+      [1, '转岗数字化的工艺工程师', ['计划量与实际量口径', '完成率计算', '偏差率与风险等级', '月度聚合方法', '异常识别标准', '责任单元定位', '跨工序归因方法']],
+      [2, '一线班组长（晋升培训）', ['计划量与实际量口径', '完成率计算', '偏差率与风险等级', '异常识别标准', '责任单元定位']],
+    ]
+    for (const [cardIndex, title, scope] of expectations) {
+      await wrapper.findAll('.profile-choice')[cardIndex]!.trigger('click')
+      const panel = wrapper.get('.profile-focus-panel')
+      expect(panel.text()).toContain(title)
+      // 0819 bug4：下拉说明小字已删——领域过滤仍由选项列表验证（下方断言）
+      const options = wrapper.findAll('#experience-focus option')
+        .map((option) => option.text())
+        .filter((text) => text !== '由岗前测评自动诊断')
+      expect(options).toHaveLength(scope.length)
+      // 每个选项的知识点段都必须落在该画像领域内
+      for (const point of scope) {
+        expect(options.some((text) => text.includes(point))).toBe(true)
+      }
+      await wrapper.get('.profile-picker-heading .profile-picker-back').trigger('click')
+    }
+
+    // 先选 leader 域外标签（如归因）再切岗，应被清空回退"自动诊断"
+    await wrapper.findAll('.profile-choice')[0]!.trigger('click')
+    await wrapper.get('#experience-focus').setValue('decay_pattern_review')
+    await wrapper.get('.profile-picker-heading .profile-picker-back').trigger('click')
+    await wrapper.findAll('.profile-choice')[2]!.trigger('click')
+    const leaderValues = wrapper.findAll('#experience-focus option')
+      .map((option) => (option.element as HTMLOptionElement).value)
+    // leader 域内无"异常衰减"标签——下拉不含它，且当前选择回退默认
+    expect(leaderValues).not.toContain('decay_pattern_review')
+    expect((wrapper.get('#experience-focus').element as HTMLSelectElement).value).toBe('')
+    wrapper.unmount()
   })
 
   it('passes the optional learner experience focus into session creation', async () => {
     const api = fakeApi()
     const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
 
-    await wrapper.get('#experience-focus').setValue('decay_pattern_review')
+    await enterProfileSelectPage(wrapper)
     await wrapper.findAll('.profile-choice')[0]!.trigger('click')
+    // 两步式：选定岗位后出现关注点面板（选项已按 planner 域过滤）
+    expect(wrapper.get('.profile-focus-panel').text()).toContain('新入职生产计划员')
+    await wrapper.get('#experience-focus').setValue('decay_pattern_review')
+    await wrapper.get('.profile-focus-panel .profile-picker-cta').trigger('click')
     await flushPromises()
 
     expect(api.createSession).toHaveBeenCalledWith(
       'planner_new',
       ['decay_pattern_review'],
+      // 0818 需求 5/6：建会话携带登录 token（游客为 null）
+      null,
     )
   })
 
@@ -203,7 +324,7 @@ describe('LivePractice', () => {
     const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
     await flushPromises()
 
-    const support = wrapper.get('.sql-progressive-support')
+    const support = wrapper.get('.sql-hint-banner')
     expect(support.attributes('data-level')).toBe('structured_hint')
     expect(support.text()).toContain('第 3 次提示')
     expect(support.text()).toContain('计划量')
@@ -309,7 +430,7 @@ describe('LivePractice', () => {
     await flushPromises()
 
     expect(wrapper.find('.task-inline-result').exists()).toBe(false)
-    expect(wrapper.get('.training-report-metrics').text()).toContain('岗前评测正确')
+    expect(wrapper.get('.training-report-metrics').text()).toContain('岗前测评正确')
     expect(wrapper.get('.training-report-metrics').text()).toContain('3/5')
     expect(wrapper.get('.training-report-next').text()).toContain('计划量与实际量口径')
     expect(wrapper.find('button[aria-label="开始下一知识点"]').exists()).toBe(true)
@@ -343,27 +464,112 @@ describe('LivePractice', () => {
       props: { api, pollIntervalMs: 0, sqlResult },
     })
 
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
 
-    expect(wrapper.get('.task-inline-result').text()).toContain('按工序查询完成率')
+    expect(wrapper.get('.task-inline-result').text()).toContain('完成率')
+    expect(wrapper.get('.task-inline-result').text()).not.toContain('按工序查询')
     expect(wrapper.get('.task-inline-result').text()).toContain('YCL')
     expect(wrapper.classes()).toContain('has-inline-result')
   })
 
-  it('binds profile cards to approved human-facing profile data only', () => {
+  it('hides the stale query result during the remediation pause', async () => {
+    const api = fakeApi()
+    api.createSession = vi.fn(async () => sessionState({
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+      artifact: {
+        msg_id: 'artifact-t17-control',
+        payload: {
+          type: 'control',
+          content: { action: 'state_transition', transition_id: 'T17' },
+        },
+      } as unknown as InteractiveState['artifact'],
+      interaction: {
+        kind: 'learning_notice',
+        message: '四次理解核对未达成掌握目标，当前已是基础档，系统将更换证据与讲解角度后再练习一次。',
+      },
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, sqlResult: sqlResultMessage() },
+    })
+
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
+    await flushPromises()
+
+    // 需求④⑤：四次未过停驻页显示中央双行提示（学习通知不再露出），结果表隐藏
+    expect(wrapper.get('[data-testid="generation-pending"]').text())
+      .toContain('四次理解核对未达成掌握目标，')
+    expect(wrapper.get('[data-testid="generation-pending"]').text())
+      .toContain('系统将更换证据与讲解角度后再练习一次。')
+    expect(wrapper.get('[data-testid="generation-pending"]').text())
+      .toContain('即将进入学习，请稍候')
+    expect(wrapper.find('[data-testid="learning-notice"]').exists()).toBe(false)
+    expect(wrapper.find('.task-inline-result').exists()).toBe(false)
+    expect(wrapper.classes()).not.toContain('has-inline-result')
+  })
+
+  it('hides the stale query result at the claim gate where the artifact is the lecture', async () => {
+    const api = fakeApi()
+    api.createSession = vi.fn(async () => sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      artifact: {
+        msg_id: 'artifact-new-lecture',
+        payload: { type: 'lecture_note', content: { knowledge_point: '三道工序与传导关系' } },
+      } as unknown as InteractiveState['artifact'],
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, sqlResult: sqlResultMessage() },
+    })
+
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
+    await flushPromises()
+
+    expect(wrapper.find('.task-inline-result').exists()).toBe(false)
+    expect(wrapper.classes()).not.toContain('has-inline-result')
+  })
+
+  it('keeps the verified query result visible while a reviewed artifact is pending', async () => {
+    const api = fakeApi()
+    api.createSession = vi.fn(async () => sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'advance',
+      artifact: {
+        msg_id: 'artifact-approved',
+        payload: { type: 'sql_result', content: { event: 'query_completed' } },
+      } as unknown as InteractiveState['artifact'],
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, sqlResult: sqlResultMessage() },
+    })
+
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
+    await flushPromises()
+
+    expect(wrapper.find('.task-inline-result').exists()).toBe(true)
+    expect(wrapper.classes()).toContain('has-inline-result')
+  })
+
+  it('binds profile cards to approved human-facing profile data only', async () => {
     const wrapper = mount(LivePractice, {
       props: { api: fakeApi(), pollIntervalMs: 0 },
     })
 
     expect(wrapper.get('#profile-picker-title').text())
-      .toBe('从你的岗位出发，建立真正用得上的数字化能力')
+      .toBe('从岗位任务出发，练出上手就能用的数据能力')
+    await enterProfileSelectPage(wrapper)
     expect(wrapper.findAll('.profile-choice')).toHaveLength(3)
-    expect(wrapper.text()).toContain('计算机/信息类背景校招生，会SQL和数据分析工具，不懂船舶工序与口径')
-    expect(wrapper.text()).toContain('船舶工艺背景转数字化岗，精通预处理/托盘工艺，不会数据工具')
-    expect(wrapper.text()).toContain('高职毕业一线班组长，现场熟，理论与数据双弱')
-    expect(wrapper.text()).toContain('SQL基础')
-    expect(wrapper.text()).toContain('现场生产经验')
+    expect(wrapper.text()).toContain('初入船厂计划岗位的新人，熟悉办公与数据工具的使用，正在建立船舶生产口径的概念')
+    expect(wrapper.text()).toContain('由工艺现场转岗数字化的工程师，深耕预处理与托盘工艺，数据分析能力正在起步')
+    expect(wrapper.text()).toContain('常年带队的一线班组长，现场经验丰富，需要夯实数据与理论基础')
+    // 0819 bug3：画像卡下方特长小椭圆已删除
+    expect(wrapper.text()).not.toContain('SQL基础')
+    expect(wrapper.text()).not.toContain('现场生产经验')
     expect(wrapper.text()).not.toContain('重讲工序与口径、少讲SQL')
     expect(wrapper.text()).not.toContain('步骤化短句、每步带检查点')
     expect(wrapper.text()).not.toContain('重点补足')
@@ -371,11 +577,21 @@ describe('LivePractice', () => {
 
   it('collects all five learner choices before submitting the real pretest', async () => {
     const api = fakeApi()
+    vi.mocked(api.advance).mockResolvedValue(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      messages: [{
+        msg_id: 'lecture-deferred',
+        agent: 'knowledge',
+        payload: { type: 'lecture_note', content: { lecture_deferred: true } },
+      }],
+    }))
     const wrapper = mount(LivePractice, {
       props: { api, pollIntervalMs: 0 },
     })
 
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
 
     expect(wrapper.findAll('fieldset.pretest-question')).toHaveLength(1)
@@ -396,12 +612,11 @@ describe('LivePractice', () => {
       'PT-4': 'B',
       'PT-5': 'B',
     })
-    expect(wrapper.text()).toContain('打开岗位微课')
-    expect(wrapper.get('.live-practice-heading h2').text()).toBe('微课准备')
-    expect(wrapper.find('.live-practice-heading p').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('每一步由你亲自完成')
+    // 需求④⑤：提交后直达链自动推进（S2→S3，同态确认后即停），不再出现"打开岗位微课"按钮
+    expect(api.advance).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('打开岗位微课')
     expect(wrapper.emitted('state')?.at(-1)?.[0]).toMatchObject({
-      state: 'S2_KNOWLEDGE',
+      state: 'S3_TASK',
       awaiting: 'advance',
     })
   })
@@ -424,7 +639,8 @@ describe('LivePractice', () => {
       props: { api, pollIntervalMs: 0 },
     })
 
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
 
     const firstQuestion = wrapper.get('fieldset.pretest-question')
@@ -439,7 +655,8 @@ describe('LivePractice', () => {
       props: { api, pollIntervalMs: 0 },
     })
 
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
 
     expect(wrapper.findAll('fieldset.pretest-question')).toHaveLength(1)
@@ -474,8 +691,9 @@ describe('LivePractice', () => {
     await button.trigger('click')
 
     expect(api.advance).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('[role="status"]').text()).toContain('并行生成并通过专业审核')
-    expect(button.text()).toContain('正在生成并审核')
+    // 需求①：等待态为中央友好提示句，按钮隐藏
+    expect(wrapper.get('[data-testid="generation-pending"]').text()).toContain('正在为你准备专属讲义')
+    expect(wrapper.find('button[aria-label="打开岗位微课"]').exists()).toBe(false)
     finishAdvance(sessionState({ state: 'S3_TASK', awaiting: 'advance' }))
     await flushPromises()
   })
@@ -507,7 +725,8 @@ describe('LivePractice', () => {
 
     expect(api.getState).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('领取实操任务')
+    // S3 按钮已隐藏（directPathIdle 对 S3/S9 无条件 true）
+    expect(wrapper.text()).not.toContain('领取实操任务')
   })
 
   it('walks the learner through SQL and a reviewed free-text correction', async () => {
@@ -517,7 +736,15 @@ describe('LivePractice', () => {
       awaiting: 'advance',
     }))
     vi.mocked(api.advance)
-      .mockResolvedValueOnce(sessionState({ state: 'S3_TASK', awaiting: 'advance' }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S3_TASK',
+        awaiting: 'advance',
+        messages: [{
+          msg_id: 'lecture-deferred',
+          agent: 'knowledge',
+          payload: { type: 'lecture_note', content: { lecture_deferred: true } },
+        }],
+      }))
       .mockResolvedValueOnce(sessionState({ state: 'S7_STUDENT', awaiting: 'sql' }))
       .mockResolvedValueOnce(sessionState({
         state: 'S7_STUDENT',
@@ -580,7 +807,8 @@ describe('LivePractice', () => {
     const wrapper = mount(LivePractice, {
       props: { api, pollIntervalMs: 0 },
     })
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
     for (const [index, question] of questions.entries()) {
       await wrapper.get(`input[name="${question.question_id}"][value="B"]`).setValue(true)
@@ -591,34 +819,30 @@ describe('LivePractice', () => {
     await wrapper.get('button[type="submit"]').trigger('submit')
     await flushPromises()
 
-    await wrapper.get('button[aria-label="打开岗位微课"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('button[aria-label="领取实操任务"]').trigger('click')
-    await flushPromises()
+    // 需求④⑤：提交后直达链自动推进（S2→S3→S7 sql 全部自动，无"领取实操任务"按钮页）
+    expect(wrapper.find('button[aria-label="领取实操任务"]').exists()).toBe(false)
     await wrapper.get('textarea[aria-label="输入查询语句"]').setValue('SELECT plan_qty FROM fact_production_progress')
     await wrapper.get('button[aria-label="运行查询"]').trigger('click')
     await flushPromises()
-    await wrapper.get('button[aria-label="判断查询结论"]').trigger('click')
-    await flushPromises()
+    // 需求⑤：查询通过后自动直达提问，"判断查询结论"按钮已删除
     await wrapper.get('textarea[aria-label="输入你的判断"]')
       .setValue('计划量就是已经完成的数量。')
     await wrapper.get('button[aria-label="提交本轮判断"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('第 2 / 最多 4 轮')
+    expect(wrapper.get('.follow-up-current span').text()).toBe('第 2 轮')
     expect(wrapper.text()).toContain('你的回答')
     await wrapper.get('textarea[aria-label="输入你的判断"]')
       .setValue('实际完成量才表示真正做了多少。')
     await wrapper.get('button[aria-label="提交本轮判断"]').trigger('click')
     await flushPromises()
-    await wrapper.get('button[aria-label="查看下一步训练"]').trigger('click')
+    // S9 按钮已隐藏——直接调 advance 消费 mock 链下一响应
+    await wrapper.getComponent(LivePractice).vm.advance()
     await flushPromises()
     expect(wrapper.get('[data-testid="learning-notice"]').text())
       .toBe('根据本次作答表现，已为你提高一档难度。')
     await wrapper.get('textarea[aria-label="输入查询语句"]')
       .setValue('SELECT workshop_code, complete_rate FROM fact_production_progress')
     await wrapper.get('button[aria-label="运行查询"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('button[aria-label="完成本次训练"]').trigger('click')
     await flushPromises()
 
     expect(api.advance).toHaveBeenCalledTimes(5)
@@ -758,8 +982,7 @@ describe('LivePractice', () => {
     })
     await flushPromises()
 
-    expect(wrapper.get('button[aria-label="查看下一步训练"]').text())
-      .toBe('查看下一步训练')
+    expect(wrapper.find('button[aria-label="查看下一步训练"]').exists()).toBe(false)
     expect(isLearnerSafeText(wrapper.text())).toBe(true)
   })
 
@@ -898,6 +1121,7 @@ describe('LivePractice', () => {
     await flushPromises()
 
     expect(sessionStorage.getItem('ref-interactive-session')).toBeNull()
+    await enterProfileSelectPage(wrapper)
     expect(wrapper.find('button[aria-label="选择新入职生产计划员"]').exists()).toBe(true)
     wrapper.unmount()
   })
@@ -914,7 +1138,7 @@ describe('LivePractice', () => {
     })
     await flushPromises()
 
-    await wrapper.get('button[aria-label="重新开始训练"]').trigger('click')
+    await wrapper.get('button[aria-label="重新选择岗位"]').trigger('click')
 
     expect(sessionStorage.getItem('ref-interactive-session')).toBeNull()
     expect(wrapper.find('button[aria-label="选择新入职生产计划员"]').exists()).toBe(true)
@@ -952,8 +1176,8 @@ describe('LivePractice', () => {
     await wrapper.get('button[aria-label="运行查询"]').trigger('click')
     await flushPromises()
 
-    const rejection = wrapper.get('[data-testid="sandbox-rejection"]')
-    expect(rejection.get('strong').text()).toBe('只能做数据查询 · 查询被拦下')
+    const rejection = wrapper.get('.sql-hint-banner')
+    expect(rejection.get('strong').text()).toBe('查询提示')
     expect(rejection.text()).not.toMatch(/S-0\d/u)
     expect(rejection.text()).toContain('只允许查询数据，请使用 SELECT')
     expect(rejection.text()).not.toContain('only SELECT statements are allowed')
@@ -989,8 +1213,8 @@ describe('LivePractice', () => {
     await wrapper.get('button[aria-label="运行查询"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="sandbox-rejection"] strong').text())
-      .toBe('安全规则 · 查询被拦下')
+    expect(wrapper.get('.sql-hint-banner strong').text())
+      .toBe('查询提示')
   })
 
   it('keeps a timed-out raw query available for a smaller retry', async () => {
@@ -1021,7 +1245,7 @@ describe('LivePractice', () => {
     await wrapper.get('button[aria-label="运行查询"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="query-feedback"]').text())
+    expect(wrapper.get('.sql-hint-banner').text())
       .toContain('查询超时，请缩小查询范围')
     expect(wrapper.get('textarea').element.value)
       .toBe('SELECT plan_qty FROM fact_production_progress')
@@ -1056,7 +1280,7 @@ describe('LivePractice', () => {
     await wrapper.get('button[aria-label="运行查询"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="query-feedback"]').text())
+    expect(wrapper.get('.sql-hint-banner').text())
       .toContain('查询未能执行，请稍后重试')
     expect(wrapper.text()).not.toContain('只读')
   })
@@ -1070,7 +1294,8 @@ describe('LivePractice', () => {
       props: { api, pollIntervalMs: 0 },
     })
 
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toBe('实操通道暂时不可用。')
@@ -1260,7 +1485,8 @@ describe('LivePractice', () => {
       props: { api, pollIntervalMs: 0 },
     })
 
-    await wrapper.get('button[aria-label="选择新入职生产计划员"]').trigger('click')
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
     await flushPromises()
 
     expect(isLearnerSafeText(wrapper.text())).toBe(true)
@@ -1350,7 +1576,7 @@ describe('LivePractice', () => {
     const button = wrapper.get('button[aria-label="提交本轮判断"]')
     expect(button.attributes('disabled')).toBeDefined()
     expect(wrapper.get('.follow-up-actions small').text())
-      .toContain('不能只回答“是/否”')
+      .toContain('不能只答“是/否”')
     expect(api.submitFollowUp).not.toHaveBeenCalled()
   })
 
@@ -1398,7 +1624,13 @@ describe('LivePractice', () => {
     await toggle.trigger('click')
 
     expect(toggle.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll('.follow-up-history li')).toHaveLength(2)
+    // 需求③：翻页式——单条展示 + 页码指示（默认最新一条）
+    expect(wrapper.findAll('.follow-up-history li')).toHaveLength(0)
+    expect(wrapper.get('.follow-up-history').text()).toContain('YCL完成率最低 0.6236')
+    expect(wrapper.get('.follow-up-history-pager-actions span').text()).toBe('2 / 2')
+    await wrapper.get('button[aria-label="上一条记录"]').trigger('click')
+    expect(wrapper.get('.follow-up-history').text()).toContain('哪一道工序完成率最低？')
+    expect(wrapper.get('.follow-up-history-pager-actions span').text()).toBe('1 / 2')
     expect(wrapper.get('.follow-up-current').text())
       .toContain('AZTP和ZZTP的完成率')
   })
@@ -1441,12 +1673,11 @@ describe('LivePractice', () => {
     const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
     await flushPromises()
 
-    expect(wrapper.get('.follow-up-task-anchor').text())
-      .toContain('查询2025年5月至7月三道工序月完成率')
-    expect(wrapper.get('.follow-up-task-anchor').text())
-      .not.toContain('题目中的问题')
+    // 需求⑦：追问区不再展示任务锚块
+    expect(wrapper.find('.follow-up-task-anchor').exists()).toBe(false)
     expect(wrapper.get('.follow-up-current').text())
       .toContain('三道工序的最低完成率分别出现在哪个月')
+    expect(wrapper.get('.follow-up-current').text()).toContain('第 2 轮')
   })
 
   it('reconciles a follow-up that completed after its response failed', async () => {
@@ -1496,7 +1727,7 @@ describe('LivePractice', () => {
     await flushPromises()
 
     expect(api.getState).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('第 2 / 最多 4 轮')
+    expect(wrapper.get('.follow-up-current span').text()).toBe('第 2 轮')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
@@ -1639,11 +1870,538 @@ describe('LivePractice', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(api.getState).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('[role="status"]').text())
-      .toBe('正在根据你的回答准备并检查下一步提示…')
+    expect(wrapper.get('.follow-up-progress').text())
+      .toBe('正在根据你的回答生成并审核下一步内容…')
 
     finishSubmission(active)
     await submitting
     await flushPromises()
+  })
+
+  it('shows the lecture-deferred notice for pretest-verified points', async () => {
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      interaction: {
+        kind: 'lecture_deferred',
+        message: '已由前测验证，直入实操（未通过将自动配发微课）',
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    const notice = wrapper.get('[data-testid="lecture-deferred-notice"]')
+    expect(notice.text()).toContain('已由前测验证，直入实操')
+    expect(wrapper.find('[data-testid="learning-notice"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('discards in-flight lecture generation after 重新选择岗位', async () => {
+    // 资源生成中点击"重新选择岗位"（顶栏路径，无 busy 守卫）：迟到的讲义响应
+    // 不得回填界面——页面停在岗位选择，自动链终止（applyState 会话守卫丢弃）。
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    let releaseLecture!: (value: InteractiveState) => void
+    const lectureGate = new Promise<InteractiveState>((resolve) => {
+      releaseLecture = resolve
+    })
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+    }))
+    vi.mocked(api.advance).mockImplementationOnce(() => lectureGate)
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    // 生成讲义中（advance 未返回）点击"重新选择岗位"（顶栏等价于直调 resetSession）
+    const advancing = (wrapper.vm as unknown as { advance: () => Promise<void> }).advance()
+    await flushPromises()
+    ;(wrapper.vm as unknown as { resetSession: () => void }).resetSession()
+    await flushPromises()
+
+    // 已回到岗位选择页（选择画像卡片可见）
+    expect(wrapper.text()).toContain('哪一种经历最接近你')
+    expect(sessionStorage.getItem('ref-interactive-session')).toBeNull()
+
+    // 迟到的讲义响应返回——被 applyState 守卫丢弃，不显示、不恢复会话
+    releaseLecture(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      messages: [{ msg_id: 'lecture-late', agent: 'knowledge', payload: { type: 'lecture_note', content: { lecture_md: '迟到讲义不应显示' } } }],
+    }))
+    await advancing
+    await flushPromises()
+
+    expect(sessionStorage.getItem('ref-interactive-session')).toBeNull()
+    expect(wrapper.text()).not.toContain('迟到讲义不应显示')
+    expect(wrapper.text()).toContain('哪一种经历最接近你')
+    wrapper.unmount()
+  })
+
+  it('runs the data_present chain S3→S7 proxy→S9→follow-up without manual stops', async () => {
+    // 闭环五后继：画像三延时代执行——进入练习一次点击应穿过 S7+advance（系统代执行窗口）
+    // 直达追问，不再出现"查询题目"停驻与"继续训练"按钮
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const lineLeaderProfile = {
+      profile_id: 'line_leader',
+      title: '一线班组长（晋升培训）',
+      practice_mode: 'data_present',
+    }
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      profile: lineLeaderProfile,
+    }))
+    vi.mocked(api.advance)
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT',
+        awaiting: 'advance',
+        profile: lineLeaderProfile,
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S9_PATH_UPDATE',
+        awaiting: 'advance',
+        profile: lineLeaderProfile,
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT',
+        awaiting: 'follow_up',
+        profile: lineLeaderProfile,
+        interaction: {
+          kind: 'free_text_follow_up',
+          prompt: '对照计划量与实际完成量，哪一个说明真正做了多少？',
+          round: 1,
+          max_rounds: 4,
+          turns: [],
+        },
+      }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { startPracticeChain: () => Promise<void> })
+      .startPracticeChain()
+    await flushPromises()
+
+    // 一次点击三连推进：任务下发→代执行→追问，中间不停驻
+    expect(api.advance).toHaveBeenCalledTimes(3)
+    expect(wrapper.text()).not.toContain('继续训练')
+    wrapper.unmount()
+  })
+
+  it('auto-continues a stuck S7 data_present proxy window via the watcher', async () => {
+    // 链断兜底：S7+advance 恒定（代执行窗口卡住）时无手动按钮，pending 常显，
+    // 反应式 watcher 1s 后自动续推
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+    }))
+    vi.mocked(api.advance).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'advance',
+    }))
+    vi.useFakeTimers()
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { startPracticeChain: () => Promise<void> })
+      .startPracticeChain()
+    await flushPromises()
+
+    // 链在第二次同态（S7→S7）后断开：advance 已调用 2 次
+    expect(api.advance).toHaveBeenCalledTimes(2)
+    // 无手动按钮；S7 代执行窗口常显 pending（画像三岗位模式文案）
+    expect(wrapper.text()).not.toContain('继续训练')
+    const overlay = wrapper.get('[data-testid="generation-pending"]')
+    expect(overlay.text()).toContain('岗位模式')
+
+    // watcher 1s 续推：advance 第 3 次被调用
+    await vi.advanceTimersByTimeAsync(1100)
+    await flushPromises()
+    expect(api.advance).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+  })
+
+  it('waits for the learner again when a fresh lecture lands after practice was entered', async () => {
+    // 0818 视频实录根因：hasEnteredPractice 跨会话/跨知识点泄漏——上一轮已进入
+    // 练习后，新讲义落定（S3+advance）被 watcher 1s 自动推进，跳过讲义阅读。
+    // 修复：resetSession 清标志 + 讲义消息 id 变化即重置——新讲义必须重新点击。
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const lectureA = {
+      msg_id: 'lecture-a',
+      agent: 'knowledge',
+      payload: { type: 'lecture_note', content: { lecture_deferred: false } },
+    }
+    const lectureB = {
+      msg_id: 'lecture-b',
+      agent: 'knowledge',
+      payload: { type: 'lecture_note', content: { lecture_deferred: false } },
+    }
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      messages: [lectureA],
+    }))
+    vi.mocked(api.advance).mockResolvedValueOnce(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+      messages: [lectureA],
+    }))
+    vi.useFakeTimers()
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 100 } })
+    await flushPromises()
+
+    // 第一轮：点击进入练习（一次推进停在 S7+sql，画像一/二语义）
+    await (wrapper.vm as unknown as { startPracticeChain: () => Promise<void> })
+      .startPracticeChain()
+    await flushPromises()
+    expect(api.advance).toHaveBeenCalledTimes(1)
+
+    // 新讲义落定（下一知识点/重开训练）：轮询带回 S3+advance + 新讲义消息
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      messages: [lectureB],
+    }))
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="generation-pending"]').exists()).toBe(false)
+
+    // watcher 窗口过后不自动推进：讲义阅读停驻，等待学员点击"进入练习"
+    await vi.advanceTimersByTimeAsync(1600)
+    await flushPromises()
+    expect(api.advance).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('runs the data_present direct path through S7 proxy inside the pretest chain', async () => {
+    // 0818 视频实录（前测全对直入实操）：直达链原只认 S2/S3/S9——画像三任务下发
+    // 落 S7+advance 时链断裂、布局锁释放，闪现空白工作台中间页后靠 watcher 秒级
+    // 续推。修复：直达链与练习链同状态机，S7 一并链内推进，一口气到追问。
+    const api = fakeApi()
+    const deferredLecture = {
+      msg_id: 'lecture-deferred',
+      agent: 'knowledge',
+      payload: { type: 'lecture_note', content: { lecture_deferred: true } },
+    }
+    vi.mocked(api.submitPretest).mockResolvedValue(sessionState({
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+    }))
+    vi.mocked(api.advance)
+      .mockResolvedValueOnce(sessionState({
+        state: 'S3_TASK',
+        awaiting: 'advance',
+        messages: [deferredLecture],
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT',
+        awaiting: 'advance',
+        messages: [deferredLecture],
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S9_PATH_UPDATE',
+        awaiting: 'advance',
+        messages: [deferredLecture],
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT',
+        awaiting: 'follow_up',
+        messages: [deferredLecture],
+        interaction: {
+          kind: 'free_text_follow_up',
+          prompt: '对照计划量与实际完成量，哪一个说明真正做了多少？',
+          round: 1,
+          max_rounds: 4,
+          turns: [],
+        },
+      }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
+    await flushPromises()
+    for (const [index, question] of questions.entries()) {
+      await wrapper.get(`input[name="${question.question_id}"][value="B"]`).setValue(true)
+      if (index < questions.length - 1) {
+        await wrapper.get('.pretest-page-actions .primary-action').trigger('click')
+      }
+    }
+    await wrapper.get('button[type="submit"]').trigger('submit')
+    await flushPromises()
+
+    // 直达链一口气推进四步：讲义延期→任务下发(S7)→系统代执行(S9)→追问
+    expect(api.advance).toHaveBeenCalledTimes(4)
+    expect(wrapper.text()).not.toContain('继续训练')
+    wrapper.unmount()
+  })
+
+  it('keeps one pending message through the direct chain without a next-question page', async () => {
+    // 0818 实录：直达链 S9 结论生成阶段原会切成"正在为你准备下一问"，同一条
+    // 等待被感知为额外中间页——链中（autoChainRunning）文案保持全程同句。
+    const api = fakeApi()
+    const deferredLecture = {
+      msg_id: 'lecture-deferred',
+      agent: 'knowledge',
+      payload: { type: 'lecture_note', content: { lecture_deferred: true } },
+    }
+    vi.mocked(api.submitPretest).mockResolvedValue(sessionState({
+      state: 'S2_KNOWLEDGE',
+      awaiting: 'advance',
+    }))
+    let releaseConclusion!: (value: InteractiveState) => void
+    const conclusionGate = new Promise<InteractiveState>((resolve) => {
+      releaseConclusion = resolve
+    })
+    vi.mocked(api.advance)
+      .mockResolvedValueOnce(sessionState({
+        state: 'S3_TASK',
+        awaiting: 'advance',
+        messages: [deferredLecture],
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S7_STUDENT',
+        awaiting: 'advance',
+        messages: [deferredLecture],
+      }))
+      .mockResolvedValueOnce(sessionState({
+        state: 'S9_PATH_UPDATE',
+        awaiting: 'advance',
+        messages: [deferredLecture],
+      }))
+      .mockImplementationOnce(() => conclusionGate)
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await enterProfileSelectPage(wrapper)
+    await chooseProfileAndStart(wrapper, '新入职生产计划员')
+    await flushPromises()
+    for (const [index, question] of questions.entries()) {
+      await wrapper.get(`input[name="${question.question_id}"][value="B"]`).setValue(true)
+      if (index < questions.length - 1) {
+        await wrapper.get('.pretest-page-actions .primary-action').trigger('click')
+      }
+    }
+    await wrapper.get('button[type="submit"]').trigger('submit')
+    await flushPromises()
+
+    // 链卡在 S9 结论生成（第 4 次 advance 未返回）：等待文案仍是进入句，不切"下一问"
+    const overlay = wrapper.get('[data-testid="generation-pending"]')
+    expect(overlay.text()).toContain('正在为你准备练习题')
+    expect(overlay.text()).not.toContain('下一问')
+
+    releaseConclusion(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      messages: [deferredLecture],
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '对照计划量与实际完成量，哪一个说明真正做了多少？',
+        round: 1,
+        max_rounds: 4,
+        turns: [],
+      },
+    }))
+    await flushPromises()
+    expect(api.advance).toHaveBeenCalledTimes(4)
+    wrapper.unmount()
+  })
+
+  it('shows the retry feedback in live mode when no turn was recorded', async () => {
+    // 0818 实录：答"不知道"触发质量门保留——无 turn 记录、原题重出，
+    // 评价兜底卡原先被 !operationOnly 屏蔽（live 恒 true），学员看不到任何反馈。
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '计划量和实际量分别表示什么，哪一个代表了应该完成的数量？',
+        round: 1,
+        max_rounds: 4,
+        turns: [],
+        feedback: '本轮新追问暂时未能通过质量检查，系统已保留上一道已审核题目；你可以结合查询结果重新作答，本次学习不会结束。',
+        retry_required: true,
+      },
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, operationOnly: true },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('老师评价')
+    expect(wrapper.text()).toContain('本轮新追问暂时未能通过质量检查')
+    // 原题与输入区仍在
+    expect(wrapper.text()).toContain('第 1 轮')
+    expect(wrapper.find('textarea[aria-label="输入你的判断"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps the answer history state purely manual across questions', async () => {
+    // 0818 用户定稿：答题记录默认收起，展开/收起只随学员手点变化——
+    // 答题/换题/轮询不得自动收起（此前的"换题自动收起"已撤销）。
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    const round1Turns = [{
+      round: 1,
+      question: '计划量和实际量分别表示什么？',
+      answer: '不知道',
+      feedback: '不会也没关系。跟着下一问的提示，先在表里找到对应的字段和值。',
+      assessment: 'unknown',
+    }]
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '查询结果中的1855.06对应计划量还是实际完成量？',
+        round: 1,
+        max_rounds: 4,
+        turns: round1Turns,
+      },
+    }))
+    vi.useFakeTimers()
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 100 } })
+    await flushPromises()
+
+    // 默认收起：只见切换钮，不见翻页记录
+    expect(wrapper.find('.follow-up-history-pager').exists()).toBe(false)
+    await wrapper.get('.follow-up-history-toggle').trigger('click')
+    expect(wrapper.find('.follow-up-history-pager').exists()).toBe(true)
+
+    // 轮询带回下一题（round 2）：展开态保持——状态不随答题/换题变化
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '下一题：1855.06 和 1156.87 哪个是实际完成量？',
+        round: 2,
+        max_rounds: 4,
+        turns: [...round1Turns, {
+          round: 2,
+          question: '查询结果中的1855.06对应计划量还是实际完成量？',
+          answer: '1855.06 对应计划量。',
+          feedback: '回答有效：已通过本轮理解核对。',
+          assessment: 'mastered',
+        }],
+      },
+    }))
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(wrapper.find('.follow-up-history-pager').exists()).toBe(true)
+
+    // 仅手点收起才收起
+    await wrapper.get('.follow-up-history-toggle').trigger('click')
+    expect(wrapper.find('.follow-up-history-pager').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('holds the SQL page with the scaffold answer replacing the editor', async () => {
+    // 定稿：五连错代执行后不跳提问页——右半边原输入框/按钮位换"标准答案与解析"，
+    // 点"继续进入提问"才推进；追问页不再显示标答。
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+    }))
+    const scaffoldResult: TraceMessage = {
+      ...sqlResultMessage(),
+      content: {
+        ...sqlResultMessage().content,
+        sql_source: 'system_proxy',
+        scaffold: {
+          standard_sql: 'SELECT plan_qty, actual_qty FROM fact_production_progress',
+          analysis: '题目要求：按口径查询。\n查询需输出 计划量、实际完成量；\n对照上方查询结果逐列核对口径后，再回答提问。',
+        },
+      },
+    }
+    vi.mocked(api.submitSql).mockResolvedValue(sessionState({
+      state: 'S9_PATH_UPDATE',
+      awaiting: 'advance',
+      artifact: {
+        payload: {
+          type: 'sql_result',
+          content: { scaffold: { standard_sql: 'SELECT 1', analysis: '解析' } },
+        },
+      },
+    }))
+    vi.mocked(api.advance).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '对照查询结果，哪道工序完成率最低？',
+        round: 1,
+        max_rounds: 4,
+        turns: [],
+      },
+    }))
+    const wrapper = mount(LivePractice, {
+      props: { api, pollIntervalMs: 0, sqlResult: scaffoldResult },
+    })
+    await flushPromises()
+
+    await wrapper.get('textarea[aria-label="输入查询语句"]').setValue('DELETE FROM x')
+    await wrapper.get('button[aria-label="运行查询"]').trigger('click')
+    await flushPromises()
+
+    // 停在 SQL 实操页：编辑器/运行按钮被标答覆盖，未自动进提问
+    expect(api.advance).not.toHaveBeenCalled()
+    expect(wrapper.find('textarea[aria-label="输入查询语句"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="运行查询"]').exists()).toBe(false)
+    // 定稿：停留页删"查询结果"组与"查询练习"头行，标答置顶
+    expect(wrapper.find('.sql-result-group').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('查询练习')
+    const reveal = wrapper.get('[aria-label="标准答案与解析"]')
+    expect(reveal.text()).toContain('标准答案与解析')
+    expect(reveal.text()).toContain('SELECT plan_qty, actual_qty FROM fact_production_progress')
+    expect(reveal.text()).toContain('查询需输出')
+
+    // 点"继续进入提问"→ 进入提问页，标答不再出现
+    await wrapper.get('button[aria-label="继续进入提问"]').trigger('click')
+    await flushPromises()
+    expect(api.advance).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('对照查询结果，哪道工序完成率最低？')
+    expect(wrapper.find('[aria-label="标准答案与解析"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('styles the dont-know hint the same as the other guidance hints', async () => {
+    // 0818：提示句样式统一——"没关系（不知道引导）"与其他引导句共用
+    // needs-evidence 样式（同色同粗细）；字数计数器保持朴素样式。
+    sessionStorage.setItem('ref-interactive-session', 'session-live')
+    const api = fakeApi()
+    vi.mocked(api.getState).mockResolvedValue(sessionState({
+      state: 'S7_STUDENT',
+      awaiting: 'follow_up',
+      interaction: {
+        kind: 'free_text_follow_up',
+        prompt: '查询结果中的1855.06对应计划量还是实际完成量？',
+        round: 1,
+        max_rounds: 4,
+        turns: [],
+      },
+    }))
+    const wrapper = mount(LivePractice, { props: { api, pollIntervalMs: 0 } })
+    await flushPromises()
+
+    const hint = () => wrapper.get('.follow-up-actions small')
+
+    // 输入"不知道"：引导句 + 黑色专属样式（非琥珀 needs-evidence）
+    await wrapper.get('textarea[aria-label="输入你的判断"]').setValue('不知道')
+    expect(hint().text()).toContain('没关系，直接提交也可以')
+    expect(hint().classes()).toContain('dont-know-hint')
+    expect(hint().classes()).not.toContain('needs-evidence')
+
+    // 正常输入：字数计数器，无 needs-evidence 样式
+    await wrapper.get('textarea[aria-label="输入你的判断"]').setValue('1855.06 是计划量，1156.87 是实际完成量')
+    expect(hint().text()).toContain('/ 500 字')
+    expect(hint().classes()).not.toContain('needs-evidence')
+    wrapper.unmount()
   })
 })
