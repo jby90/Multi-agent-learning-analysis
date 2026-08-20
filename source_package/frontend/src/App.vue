@@ -7,6 +7,7 @@ import CollaborationWorkspace from './components/CollaborationWorkspace.vue'
 import LearningPath from './components/LearningPath.vue'
 import DataCollisionMoment from './components/DataCollisionMoment.vue'
 import DebugWorkspace from './components/DebugWorkspace.vue'
+import FloatingAgentAssistant from './components/FloatingAgentAssistant.vue'
 import LivePractice from './components/LivePractice.vue'
 import LearningRecords from './components/LearningRecords.vue'
 import ProfileComparison from './components/ProfileComparison.vue'
@@ -22,7 +23,7 @@ import { parseTraceJsonl } from './lib/traceParser'
 import { parseImportedTrace, serializeTraceJsonl } from './lib/traceTransfer'
 import type { InteractiveState } from './lib/interactiveApi'
 import { AUTH_TOKEN_KEY, createAuthApi, type AuthRole, type AuthSession } from './lib/authApi'
-import type { DataCollision, TraceDocument, TraceManifestEntry } from './types/trace'
+import type { DataCollision, TraceDocument, TraceManifestEntry, TraceMessage } from './types/trace'
 
 
 const documents = ref<TraceDocument[]>([])
@@ -130,6 +131,54 @@ const view = computed(() => selectedDocument.value
 const liveView = computed(() => liveDocument.value
   ? buildTraceView(liveDocument.value, liveDocument.value.messages.length)
   : undefined)
+
+function currentApprovedTaskArtifact(state: InteractiveState): TraceMessage | undefined {
+  // The interactive service owns `artifact`: while awaiting SQL it points at
+  // the approved task that the learner must execute.  Agent events and the
+  // append-only trace can arrive one poll later, so the learner view needs a
+  // narrow, read-only fallback instead of showing an empty/stale guide.
+  if (state.awaiting !== 'sql') return undefined
+  const raw = state.artifact
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const record = raw as Record<string, unknown>
+  const payload = record.payload
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return undefined
+  const payloadRecord = payload as Record<string, unknown>
+  const content = payloadRecord.content
+  if (typeof content !== 'object' || content === null || Array.isArray(content)) return undefined
+  const contentRecord = content as Record<string, unknown>
+  const payloadType = payloadRecord.type
+  const prompt = contentRecord.question
+    ?? contentRecord.contextualized_stem
+    ?? contentRecord.standard_stem
+  if (
+    record.agent !== 'task'
+    || record.role !== 'produce'
+    || !['quiz_set', 'practice_guide'].includes(String(payloadType))
+    || contentRecord.event !== 'product_ready'
+    || typeof prompt !== 'string'
+    || !prompt.trim()
+    || typeof record.msg_id !== 'string'
+    || typeof record.trace_id !== 'string'
+    || record.trace_id !== state.trace_id
+  ) return undefined
+
+  return {
+    msgId: record.msg_id,
+    traceId: record.trace_id,
+    step: typeof record.step === 'number' ? record.step : state.messages.length + 1,
+    agent: 'task',
+    role: 'produce',
+    payloadType: String(payloadType),
+    content: contentRecord,
+    evidence: [],
+    claims: [],
+    timestamp: typeof record.timestamp === 'string' ? record.timestamp : '',
+    rejectedByBus: false,
+    busErrors: [],
+    raw: record,
+  }
+}
 watch(
   () => liveView.value?.lecture?.msgId,
   () => { liveLessonPage.value = { index: 0, total: 0, isLast: false } },
@@ -139,7 +188,20 @@ const liveLearnerView = computed(() => {
   const state = liveState.value
   if (!current || !state) return current
 
-  const approvedTaskIds = new Set(current.visibleMessages.flatMap((message) => {
+  const artifactTask = currentApprovedTaskArtifact(state)
+  const currentWithArtifact = artifactTask
+    ? {
+        ...current,
+        visibleMessages: current.visibleMessages.some(
+          (message) => message.msgId === artifactTask.msgId,
+        )
+          ? current.visibleMessages
+          : [...current.visibleMessages, artifactTask],
+        task: artifactTask,
+      }
+    : current
+
+  const approvedTaskIds = new Set(currentWithArtifact.visibleMessages.flatMap((message) => {
     const reviewedId = message.content.reviewed_msg_id
     const decision = message.verdict?.decision
     return message.payloadType === 'review_verdict'
@@ -148,7 +210,7 @@ const liveLearnerView = computed(() => {
       ? [reviewedId]
       : []
   }))
-  const latestReviewedTask = [...current.visibleMessages].reverse().find((message) => (
+  const latestReviewedTask = [...currentWithArtifact.visibleMessages].reverse().find((message) => (
     (message.payloadType === 'quiz_set' || message.payloadType === 'practice_guide')
     && approvedTaskIds.has(message.msgId)
   ))
@@ -158,15 +220,15 @@ const liveLearnerView = computed(() => {
     || state.interaction?.kind !== 'free_text_follow_up'
   ) {
     return state.awaiting === 'advance' && latestReviewedTask
-      ? { ...current, task: latestReviewedTask }
-      : current
+      ? { ...currentWithArtifact, task: latestReviewedTask }
+      : currentWithArtifact
   }
 
   const artifactId = typeof state.artifact?.msg_id === 'string'
     ? state.artifact.msg_id
     : undefined
   const prompt = state.interaction.prompt
-  const approvedTask = [...current.visibleMessages].reverse().find((message) => (
+  const approvedTask = [...currentWithArtifact.visibleMessages].reverse().find((message) => (
     (message.payloadType === 'quiz_set' || message.payloadType === 'practice_guide')
     && (!artifactId || message.msgId === artifactId)
     && message.content.question === prompt
@@ -174,7 +236,7 @@ const liveLearnerView = computed(() => {
 
   // The collaboration trace intentionally keeps rejected drafts for auditability.
   // Learners may only see the artifact approved for the current interaction.
-  return { ...current, task: approvedTask }
+  return { ...currentWithArtifact, task: approvedTask }
 })
 const liveHasResource = computed(() => Boolean(
   liveView.value?.lecture || liveView.value?.task || liveView.value?.sqlResult,
@@ -760,6 +822,11 @@ onMounted(() => {
         :resource-bundle="liveState?.resource_bundle ?? undefined"
         :coordination-evidence="liveState?.coordination_evidence"
         learner-workspace-target="#collaboration-learner-workspace"
+      />
+      <FloatingAgentAssistant
+        v-if="entryMode === 'live' && viewMode === 'student' && liveView"
+        :view="liveView"
+        :events="liveAgentEvents"
       />
     </main>
   </div>

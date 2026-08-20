@@ -200,6 +200,35 @@ describe('App', () => {
     expect(wrapper.find('[aria-label="当前训练数据范围"]').exists()).toBe(false)
   })
 
+  it('keeps the draggable Agent assistant visible on the learner operation page', async () => {
+    installFetch()
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+
+    const messages = demoTrace(
+      'interactive-learner-assistant', 'planner_new', '新入职生产计划员',
+      '先理解计划量与实际量。', '1156.87',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, unknown>)
+    wrapper.getComponent(LivePractice).vm.$emit('state', {
+      session_id: 'session-learner-assistant',
+      trace_id: 'interactive-learner-assistant',
+      trace_path: 'traces/interactive-learner-assistant.jsonl',
+      state: 'S3_TASK',
+      awaiting: 'advance',
+      mode: 'live',
+      profile: { profile_id: 'planner_new', title: '新入职生产计划员' },
+      messages,
+      artifact: null,
+      interaction: null,
+    } satisfies InteractiveState)
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="学习助手"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="查看后台助手进度"]').exists()).toBe(true)
+  })
+
   it('hides the journey strip and keeps the workbench only in live mode', async () => {
     installFetch()
     sessionStorage.setItem('ref-auth-role', 'admin')
@@ -538,6 +567,57 @@ describe('App', () => {
       .toContain('已审核：哪个责任单元完成率最低？')
     expect(wrapper.get('[aria-label="学习与实操指南"]').text())
       .not.toContain('未审核候选：请直接猜测原因？')
+  })
+
+  it('renders the server-owned approved task artifact when the trace has not caught up yet', async () => {
+    installFetch()
+    sessionStorage.setItem('ref-auth-role', 'admin')
+    const wrapper = mount(App, {
+      global: { stubs: { DiagnosisRadar: true } },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="进入实操通道"]').trigger('click')
+
+    const messages = demoTrace(
+      'interactive-artifact-task', 'line_leader', '一线班组长（晋升培训）',
+      '先核对责任单元。', '0.6218',
+    ).split('\n').map((line) => JSON.parse(line) as Record<string, any>)
+    const oldTask = messages.find((message) => message.payload?.type === 'quiz_set')
+    expect(oldTask).toBeTruthy()
+    const advancedArtifact = JSON.parse(JSON.stringify(oldTask)) as Record<string, any>
+    advancedArtifact.msg_id = 'interactive-artifact-task-advanced'
+    advancedArtifact.payload.content = {
+      ...advancedArtifact.payload.content,
+      event: 'product_ready',
+      knowledge_point: '责任单元定位',
+      difficulty: 'advanced',
+      question: '核验H26012025-05YCL各责任单元完成率差异，并判断能否仅凭差异直接归因。',
+    }
+    const state: InteractiveState = {
+      session_id: 'session-artifact-task',
+      trace_id: 'interactive-artifact-task',
+      trace_path: 'traces/interactive-artifact-task.jsonl',
+      state: 'S7_STUDENT',
+      awaiting: 'sql',
+      mode: 'live',
+      profile: { profile_id: 'line_leader', title: '一线班组长（晋升培训）' },
+      messages,
+      artifact: advancedArtifact,
+      interaction: {
+        kind: 'learning_notice',
+        message: '根据本次作答表现，已为你提高一档难度。',
+      },
+    }
+
+    wrapper.getComponent(LivePractice).vm.$emit('state', state)
+    await flushPromises()
+
+    const guide = wrapper.get('[aria-label="学习与实操指南"]')
+    expect(guide.text()).toContain('核验H26012025-05YCL各责任单元完成率差异')
+    expect(
+      guide.get('[aria-label="题目难度：进阶，三级分阶中的第三级"]')
+        .attributes('aria-label'),
+    ).toBe('题目难度：进阶，三级分阶中的第三级')
   })
 
   it('keeps the full-width lesson while the practice task has not been generated', async () => {

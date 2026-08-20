@@ -1400,3 +1400,12 @@ def test_learner_input_validation_fails_closed(raw: str) -> None:
 def test_learner_input_validation_accepts_business_language_and_nfkc() -> None:
     assert normalize_learner_input("  应以实际完成量判断。  ") == "应以实际完成量判断。"
     assert normalize_learner_input("完成率是４２．３１％。") == "完成率是42.31%。"
+    assert normalize_learner_input(
+        "ship_no 为 H2601，complete_rate 为 0.6236。"
+    ) == "ship_no 为 H2601,complete_rate 为 0.6236。"
+
+
+def test_learner_input_still_rejects_internal_snake_case_fields() -> None:
+    for raw in ("msg_id 是 abc。", "rule_hits 没有命中。", "template_id 是 T-03。"):
+        with pytest.raises(ValueError):
+            normalize_learner_input(raw)

@@ -520,6 +520,48 @@ def test_data_present_task_issuance_stays_at_advance_until_learner_enters_practi
     assert "scaffold" not in content
 
 
+def test_data_present_progression_task_is_also_system_proxied(
+    tmp_path: Path,
+) -> None:
+    """data_present 画像升档后仍应走系统代查询，不能卡在手写 SQL。"""
+    manager = InteractiveSessionManager(
+        trace_dir=tmp_path / "traces",
+        cache_dir=tmp_path / "cache",
+        llm_call=ScriptedLLM(),
+        follow_up_llm_call=mastered_follow_up(),
+        executor_factory=CatalogExecutor,
+        persona_routing=True,
+    )
+    session_id = manager.create_session("line_leader")["session_id"]
+    manager.submit_pretest(
+        session_id,
+        {"PT-1": "D", "PT-2": "D", "PT-7": "D", "PT-4": "D", "PT-9": "D"},
+    )
+    manager.advance(session_id)  # lecture
+    task = manager.advance(session_id)
+    assert task["awaiting"] == "advance"
+
+    initial_result = manager.advance(session_id)
+    assert initial_result["artifact"]["payload"]["type"] == "sql_result"
+    manager.advance(session_id)  # conclusion task
+    manager.submit_follow_up(session_id, "查询结果中的最低值为0.6236。", "data-present-1")
+    answered = manager.submit_follow_up(
+        session_id,
+        "完成率字段为0.6236，表示实际完成量达到计划量的62.36%。",
+        "data-present-2",
+    )
+    assert answered["state"] == "S9_PATH_UPDATE"
+
+    upgraded = manager.advance(session_id)
+    assert upgraded["state"] == "S7_STUDENT"
+    assert upgraded["awaiting"] == "advance"
+
+    proxied = manager.advance(session_id)
+    assert proxied["artifact"]["payload"]["type"] == "sql_result"
+    assert proxied["artifact"]["payload"]["content"]["sql_source"] == "system_proxy"
+    assert proxied["artifact"]["payload"]["content"]["rows"]
+
+
 def test_sql_persona_under_routing_keeps_awaiting_sql(
     tmp_path: Path,
 ) -> None:

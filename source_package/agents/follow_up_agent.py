@@ -260,9 +260,23 @@ _ENGINEERING_PATTERNS = (
     re.compile(r"\b(?:http)\s*\d{3}\b", re.I),
     re.compile(r"/api(?:/|\b)", re.I),
     re.compile(r"\b[tmrsq]-?\d+(?:-[a-z0-9]+)*\b", re.I),
-    re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]+\b", re.I),
     re.compile(r"(?:状态机|协议字段|转移名|工程实现|审核智能体)"),
 )
+_SNAKE_CASE_TOKEN_RE = re.compile(r"\b[a-z][a-z0-9]*_[a-z0-9_]+\b", re.I)
+# Learners may legitimately quote column labels shown by the read-only query
+# result.  Keep the generic engineering-token gate, but exempt only the small
+# set of business fields rendered in the production training tasks.
+_LEARNER_VISIBLE_BUSINESS_FIELDS = frozenset({
+    "ship_no",
+    "process_code",
+    "period_date",
+    "plan_qty",
+    "actual_qty",
+    "complete_rate",
+    "completion_rate",
+    "workshop_code",
+    "month_label",
+})
 _ANSWER_LEAK_PATTERNS = (
     re.compile(r"(?:答案|正确结论)\s*(?:是|为|：|:)"),
     re.compile(r"(?:直接记住|标准答案)"),
@@ -297,8 +311,13 @@ def _normalized_visible_text(value: str) -> str:
 
 def contains_engineering_text(value: str) -> bool:
     normalized = _normalized_visible_text(value)
-    return bool(_ZERO_WIDTH_RE.search(normalized)) or any(
+    if bool(_ZERO_WIDTH_RE.search(normalized)) or any(
         pattern.search(normalized) for pattern in _ENGINEERING_PATTERNS
+    ):
+        return True
+    return any(
+        token.lower() not in _LEARNER_VISIBLE_BUSINESS_FIELDS
+        for token in _SNAKE_CASE_TOKEN_RE.findall(normalized)
     )
 
 

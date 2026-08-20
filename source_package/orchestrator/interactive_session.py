@@ -2792,7 +2792,16 @@ class InteractiveSessionManager:
             "kind": "learning_notice",
             "message": "根据本次作答表现，已为你提高一档难度。",
         }
-        session.awaiting = "sql"
+        # 升档任务必须沿用初始任务的画像实操分流。data_present 画像不要求
+        # 学员手写 SQL；保持 awaiting=advance，交给 S7 分支代执行经审核的
+        # 标准只读查询。否则初始任务可达、升档任务却会卡在禁用的 SQL 框。
+        if (
+            self._persona_routing
+            and str(session.runtime.profile.get("practice_mode")) == "data_present"
+        ):
+            session.awaiting = "advance"
+        else:
+            session.awaiting = "sql"
         return self.get_state(session.session_id)
 
     def _complete_training(
